@@ -57,3 +57,50 @@ my_flatten([HeadList | Tail], Flattened) :-
     my_flatten(HeadList, FlatHeadList),
     my_flatten(Tail, FlatTail),
     append(FlatHeadList, FlatTail, Flattened).
+
+% P08
+my_compress_acc([], A, A).
+
+my_compress_acc([X | T], [X | Acc], Compressed) :-
+    my_compress_acc(T, [X | Acc], Compressed).
+
+my_compress_acc([X | T], [Y | Acc], Compressed) :-
+    X \= Y,
+    my_compress_acc(T, [X, Y | Acc], Compressed).
+
+my_compress([H | T], Compressed) :-
+    my_compress_acc(T, [H], ReverseCompressed),
+    my_reverse(ReverseCompressed, Compressed).
+
+their_compress([],[]).
+their_compress([X],[X]).
+their_compress([X,X|Xs],Zs) :- compress([X|Xs],Zs).
+their_compress([X,Y|Ys],[X|Zs]) :- X \= Y, compress([Y|Ys],Zs).
+
+% P09
+my_pack([], []).
+my_pack([X], [[X]]).
+
+my_pack([X | Tail], [[X] | ResultTail]) :-
+    my_pack(Tail, ResultTail),
+    ResultTail = [[Y | _] | _],
+    X \= Y.
+
+my_pack([X | Tail], [[X, X | XS] | ResultTail]) :-
+    my_pack(Tail, [[X | XS] | ResultTail]).
+
+their_pack([],[]).
+their_pack([X | Tail], [Chunk | PackedTail]) :-
+    their_transfer(X, [X | Tail], Remaining, Chunk),
+    their_pack(Remaining, PackedTail).
+
+% transfer(X,Xs,Ys,Z) Ys is the list that remains from the list Xs
+%    when all leading copies of X are removed and transfered to Z
+
+their_transfer(_, [], [], []).
+
+their_transfer(X, [Y | Ys], [Y | Ys], []) :-
+    X \= Y.
+
+their_transfer(X, [X | Xs], Ys, [X | Zs]) :-
+    their_transfer(X, Xs, Ys, Zs).
