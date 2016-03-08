@@ -3,6 +3,7 @@
   (:export #:hello))
 
 (defpackage #:bones.paip
-  (:use #:cl)
-  (:export #:foo))
+  (:use #:cl #:defstar #:bones.utils)
+  (:export #:unify
+           #:fail #:no-bindings))
 

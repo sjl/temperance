@@ -10,11 +10,13 @@
 
   :depends-on (#:defstar
                #:optima
+               #:trivial-types
                #:fare-quasiquote-optima
                #:fare-quasiquote-readtable)
 
   :serial t
-  :components ((:file "package")
+  :components ((:file "src/utils") ; quickutils package ordering crap
+               (:file "package")
                (:module "src"
                 :components ((:file "paip")
                              (:file "bones")))))

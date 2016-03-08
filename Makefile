@@ -5,6 +5,9 @@ docfiles = $(shell ls docs/*.markdown)
 test:
 	sbcl --noinform --load test/run.lisp  --eval '(quit)'
 
+src/utils.lisp: src/make-utilities.lisp
+	cd src && sbcl --noinform --load make-utilities.lisp  --eval '(quit)'
+
 docs: docs/build/index.html
 
 docs/build/index.html: $(docfiles)
