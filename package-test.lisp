@@ -1,3 +1,5 @@
 (defpackage #:bones-test
-  (:use #:cl #:bones #:5am))
+  (:use #:cl #:5am #:bones))
 
+(defpackage #:bones-test.paip
+  (:use #:cl #:5am #:bones.paip))

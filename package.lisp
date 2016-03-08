@@ -1,5 +1,8 @@
 (defpackage #:bones
   (:use #:cl)
-  (:export :hello)
-  )
+  (:export #:hello))
+
+(defpackage #:bones.paip
+  (:use #:cl)
+  (:export #:foo))
 

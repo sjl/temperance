@@ -16,5 +16,6 @@
   :serial t
   :components ((:file "package")
                (:module "src"
-                :components ((:file "bones")))))
+                :components ((:file "paip")
+                             (:file "bones")))))
 

@@ -2,5 +2,5 @@
   (ql:quickload "bones-test"))
 
 
-(in-package #:bones-test)
-(run!)
+(5am:run! :bones)
+(5am:run! :bones.paip)
