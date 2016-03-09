@@ -3,6 +3,7 @@
 (def-suite :bones.paip)
 (in-suite :bones.paip)
 
+;;;; Utils
 (defun alist-equal (x y)
   (set-equal x y :test #'equal))
 
@@ -15,6 +16,8 @@
 (defmacro not-unifies (x y)
   `(is (eql bones.paip:fail (unify ',x ',y))))
 
+
+;;;; Unification
 (test constant-unification
   (unifies 1 1 no-bindings)
   (unifies foo foo no-bindings)
@@ -44,7 +47,15 @@
            (10 + (1 + 2))
            ((:x . 10)
             (:y . 1)
-            (:z . 2)))
-  )
+            (:z . 2))))
 
-
+(test occurs-unification
+  (not-unifies :x (f :x))
+  (not-unifies :x (f (:x 1)))
+  (not-unifies :x (:x :x))
+  (not-unifies :x (:x :y))
+  (let ((*check-occurs* nil))
+    (unifies :x (f :x)     ((:x . (f :x))))
+    (unifies :x (f (:x 1)) ((:x . (f (:x 1)))))
+    (unifies :x (:x :x)    ((:x . (:x :x))))
+    (unifies :x (:x :y)    ((:x . (:x :y))))))
