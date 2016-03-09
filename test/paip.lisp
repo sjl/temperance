@@ -27,14 +27,13 @@
   (not-unifies foo bar)
   (not-unifies a (a))
   (not-unifies (a) (a b))
-  (not-unifies () (a))
-  )
+  (not-unifies () (a)))
 
 (test variable-unification
   (unifies :x 1 ((:x . 1)))
-  (unifies :x 2 ((:x . 2)))
   (unifies :x a ((:x . a)))
   (unifies :x :y ((:x . :y)))
+  (unifies (:x (f :x)) (2 (f 2)) ((:x . 2)))
   (unifies (likes sally :thing)
            (likes :person cats)
            ((:thing . cats)
@@ -47,7 +46,9 @@
            (10 + (1 + 2))
            ((:x . 10)
             (:y . 1)
-            (:z . 2))))
+            (:z . 2)))
+  (not-unifies (:x :x) (1 2))
+  (not-unifies (:x :y :x) (1 1 3)))
 
 (test occurs-unification
   (not-unifies :x (f :x))
