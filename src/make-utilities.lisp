@@ -2,5 +2,6 @@
 
 (qtlc:save-utils-as "utils.lisp"
                     :utilities '(:define-constant
-                                 :set-equal)
+                                 :set-equal
+                                 :curry)
                     :package "BONES.UTILS")

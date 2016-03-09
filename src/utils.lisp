@@ -2,7 +2,7 @@
 ;;;; See http://quickutil.org for details.
 
 ;;;; To regenerate:
-;;;; (qtlc:save-utils-as "utils.lisp" :utilities '(:DEFINE-CONSTANT :SET-EQUAL) :ensure-package T :package "BONES.UTILS")
+;;;; (qtlc:save-utils-as "utils.lisp" :utilities '(:DEFINE-CONSTANT :SET-EQUAL :CURRY) :ensure-package T :package "BONES.UTILS")
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (unless (find-package "BONES.UTILS")
@@ -13,7 +13,9 @@
 (in-package "BONES.UTILS")
 
 (when (boundp '*utilities*)
-  (setf *utilities* (union *utilities* '(:DEFINE-CONSTANT :SET-EQUAL))))
+  (setf *utilities* (union *utilities* '(:DEFINE-CONSTANT :SET-EQUAL
+                                         :MAKE-GENSYM-LIST :ENSURE-FUNCTION
+                                         :CURRY))))
 
   (defun %reevaluate-constant (name value test)
     (if (not (boundp name))
@@ -65,6 +67,49 @@ every element of `list2` matches some element of `list1`. Otherwise returns fals
                  (return nil))))))
   
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (export '(define-constant set-equal)))
+  (defun make-gensym-list (length &optional (x "G"))
+    "Returns a list of `length` gensyms, each generated as if with a call to `make-gensym`,
+using the second (optional, defaulting to `\"G\"`) argument."
+    (let ((g (if (typep x '(integer 0)) x (string x))))
+      (loop repeat length
+            collect (gensym g))))
+  )                                        ; eval-when
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  ;;; To propagate return type and allow the compiler to eliminate the IF when
+  ;;; it is known if the argument is function or not.
+  (declaim (inline ensure-function))
+
+  (declaim (ftype (function (t) (values function &optional))
+                  ensure-function))
+  (defun ensure-function (function-designator)
+    "Returns the function designated by `function-designator`:
+if `function-designator` is a function, it is returned, otherwise
+it must be a function name and its `fdefinition` is returned."
+    (if (functionp function-designator)
+        function-designator
+        (fdefinition function-designator)))
+  )                                        ; eval-when
+
+  (defun curry (function &rest arguments)
+    "Returns a function that applies `arguments` and the arguments
+it is called with to `function`."
+    (declare (optimize (speed 3) (safety 1) (debug 1)))
+    (let ((fn (ensure-function function)))
+      (lambda (&rest more)
+        (declare (dynamic-extent more))
+        ;; Using M-V-C we don't need to append the arguments.
+        (multiple-value-call fn (values-list arguments) (values-list more)))))
+
+  (define-compiler-macro curry (function &rest arguments)
+    (let ((curries (make-gensym-list (length arguments) "CURRY"))
+          (fun (gensym "FUN")))
+      `(let ((,fun (ensure-function ,function))
+             ,@(mapcar #'list curries arguments))
+         (declare (optimize (speed 3) (safety 1) (debug 1)))
+         (lambda (&rest more)
+           (apply ,fun ,@curries more)))))
+  
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (export '(define-constant set-equal curry)))
 
 ;;;; END OF utils.lisp ;;;;

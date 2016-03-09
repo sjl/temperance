@@ -59,17 +59,6 @@
           nil
           bindings)))
 
-(defun* match-variable ((variable logic-variable)
-                        (input t)
-                        (bindings binding-list))
-  "Match the var with input, using (possibly updating) and returning bindings."
-  (let ((binding (get-binding variable bindings)))
-    (cond ((not binding)
-           (extend-bindings variable input bindings))
-          ((equal input (binding-value binding))
-           bindings)
-          (t fail))))
-
 (defun* check-occurs ((variable logic-variable)
                       (target t)
                       (bindings binding-list))
@@ -151,3 +140,19 @@
      (t fail))))
 
 
+;;;; Substitution
+(defun* substitute-bindings ((bindings binding-list)
+                             (form t))
+  "Substitute (recursively) the bindings into the given form."
+  (cond ((eq bindings fail) fail)
+        ((eq bindings no-bindings) form)
+        ((and (variable-p form) (get-binding form bindings))
+         (substitute-bindings bindings
+                              (lookup form bindings)))
+        ((listp form)
+         (mapcar (curry #'substitute-bindings bindings) form))
+        (t form)))
+
+(defun unifier (x y)
+  "Unify x with y and substitute in the bindings to get the result."
+  (substitute-bindings (unify x y) x))
