@@ -6,5 +6,8 @@
   (:use #:cl #:defstar #:bones.utils)
   (:export #:unify
            #:fail #:no-bindings
-           #:*check-occurs*))
+           #:*check-occurs*
+           #:clear-db
+           #:fact #:rule
+           #:find-all #:query))
 

@@ -2,7 +2,7 @@
 
 ;;;; Types
 (deftype logic-variable ()
-  'keyword)
+  'symbol)
 
 (deftype binding ()
   '(cons logic-variable t))
@@ -27,13 +27,22 @@
 (defun* variable-p (term)
   (:returns boolean)
   "Return whether the given term is a logic variable."
-  (keywordp term))
+  (and (symbolp term)
+       (equal (char (symbol-name term) 0)
+              #\?)))
+
 
 (defun* get-binding ((variable logic-variable)
                      (bindings binding-list))
   (:returns (or binding null))
   "Return the binding (var . val) for the given variable, or nil."
   (assoc variable bindings))
+
+(defun* has-binding ((variable logic-variable)
+                     (bindings binding-list))
+  (:returns boolean)
+  (not (null (get-binding variable bindings))))
+
 
 (defun* binding-variable ((binding binding))
   (:returns logic-variable)
@@ -43,6 +52,7 @@
 (defun* binding-value ((binding binding))
   "Return the value part of a binding."
   (cdr binding))
+
 
 (defun* lookup ((variable logic-variable)
                 (bindings binding-list))
@@ -55,9 +65,10 @@
   (:returns binding-list)
   "Add a binding (var . val) to the binding list (nondestructively)."
   (cons (cons variable value)
-        (if (and (eq bindings no-bindings))
+        (if (and (equal bindings no-bindings))
           nil
           bindings)))
+
 
 (defun* check-occurs ((variable logic-variable)
                       (target t)
@@ -228,65 +239,97 @@
   (mapc #'clear-predicate *db-predicates*))
 
 
+(defun unique-find-anywhere-if (predicate tree &optional acc)
+  (if (atom tree)
+    (if (funcall predicate tree)
+      (adjoin tree acc)
+      acc)
+    (unique-find-anywhere-if predicate
+                             (first tree)
+                             (unique-find-anywhere-if predicate (rest tree) acc))))
+
+(defun variables-in (expr)
+  (unique-find-anywhere-if #'variable-p expr))
+
 (defun rename-variables (form)
   "Replace all variables in the form with new (unique) ones."
-  (sublis (mapcar #'(lambda (variable) (cons variable (gensym (string var))))
+  (sublis (mapcar #'(lambda (variable)
+                      (cons variable (gensym (string variable))))
                   (variables-in form))
           form))
 
+(defun prove-single-clause (goal bindings clause)
+  (let ((new-clause (rename-variables clause)))
+    (prove-all (clause-body new-clause)
+               (unify goal (clause-head new-clause) bindings))))
+
+(defun prove (goal bindings)
+  ;; We look up all the possible clauses for the goal and try proving
+  ;; each individually.  Each one will give us back a list of possible
+  ;; solutions.
+  ;;
+  ;; Then we concatenate the results to return all the possible
+  ;; solutions.
+  (mapcan (curry #'prove-single-clause goal bindings)
+          (get-clauses (predicate goal))))
+
 (defun prove-all (goals bindings)
   "Returns a list of solutions to the conjunction of goals."
-  ;; strap in, here we go.
-  (labels ((prove-single-clause
-            (goal clause bindings)
-            "Try to prove a goal against a single clause using the given bindings.
+  (cond
+   ;; If something failed further up the pipeline, bail here.
+   ((eq bindings fail) fail)
 
-            Return all possible solutions as a list of binding-lists.
+   ;; If there's nothing to prove, it's vacuously true.  Return a list of the
+   ;; bindings as the result.
+   ((null goals) (list bindings))
 
-            "
-            ;; Try to prove a goal against a specific clause:
-            ;;
-            ;;     (likes sally kim)
-            ;;     ((likes sally :x) (likes :x cats))
-            ;;
-            ;; To do this, we try to unify the goal with the head of the clause,
-            ;; and then use the resulting bindings to prove the rest of the
-            ;; items in the clause.
-            ;;
-            ;; First rename the variables in the clause, because they stand on
-            ;; their own and shouldn't be confused with ones in the bindings.
-            (let ((new-clause (rename-variables clause)))
-              (prove-all (clause-body new-clause)
-                         (unify goal (clause-head new-clause) bindings))))
-           (prove
-            (goal bindings)
-            "Try to prove a goal, using the given bindings.
+   ;; Otherwise we try to prove the first thing in the list.  This gives us
+   ;; back a list of possible bindings we could use.
+   ;;
+   ;; For each possible solution to the head, we try using it to prove the
+   ;; rest of the goals and concatenate all the results.  Failed attempts are
+   ;; represented as FAIL which is nil, so will collapse in the concatenation.
+   (t (mapcan #'(lambda (possible-solution)
+                 (prove-all (rest goals) possible-solution))
+              (prove (first goals) bindings)))))
 
-            Return all possible solutions as a list of binding-lists.
+(defun show-variables (variables solution)
+  (if (null variables)
+    (format t "~&Yes")
+    (dolist (var variables)
+      (format t "~&~A = ~A"
+              var (substitute-bindings solution var))))
+  (princ ";"))
 
-            "
-            ;; We look up all the possible clauses for the goal and try proving
-            ;; each individually.  Each one will give us back a list of possible
-            ;; solutions.
-            ;;
-            ;; Then we concatenate the results to return all the possible
-            ;; solutions.
-            (mapcan #'prove-single-clause (get-clauses (predicate goal)))))
-    (cond
-     ;; If something failed further up the pipeline, bail here.
-     ((eq bindings fail) fail)
+(defun clean-variables (variables solution)
+  (mapcar #'(lambda (var)
+             (cons var (substitute-bindings solution var)))
+    variables))
 
-     ;; If there's nothing to prove, it's vacuously true.  Return a list of the
-     ;; bindings as the result.
-     ((null goals) (list bindings))
+(defun show-solutions (variables solutions)
+  (if (null solutions)
+    (format t "~&No.")
+    (mapc (curry #'show-variables variables)
+          solutions))
+  (values))
 
-     ;; Otherwise we try to prove the first thing in the list.  This gives us
-     ;; back a list of possible bindings we could use.
-     ;;
-     ;; For each possible solution to the head, we try using it to prove the
-     ;; rest of the goals and concatenate all the results.  Failed attempts are
-     ;; represented as FAIL which is nil, so will collapse in the concatenation.
-     (t (mapcan #'(lambda (possible-solution)
-                   (prove-all (rest goals) possible-solution))
-                (prove (first goals) bindings))))))
+(defun clean-solutions (variables solutions)
+  (mapcar (curry #'clean-variables variables)
+          solutions))
+
+(defun top-level-prove (goals)
+  (show-solutions
+    (variables-in goals)
+    (prove-all goals no-bindings)))
+
+(defun top-level-find (goals)
+  (clean-solutions
+    (variables-in goals)
+    (prove-all goals no-bindings)))
+
+(defmacro query (&rest goals)
+  `(top-level-prove ',goals))
+
+(defmacro find-all (&rest goals)
+  `(top-level-find ',goals))
 
