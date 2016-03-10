@@ -156,3 +156,137 @@
 (defun unifier (x y)
   "Unify x with y and substitute in the bindings to get the result."
   (substitute-bindings (unify x y) x))
+
+
+;;;; Database
+;;; A clause is an assertion in the database.  There are two types.
+;;;
+;;; A fact is the "base" clause:
+;;;
+;;;   (likes kim cats)
+;;;
+;;; A rule is a way to deduce new facts from existing information:
+;;;
+;;;   ((likes sally :x)
+;;;    (likes :x cats))
+;;;
+;;; Clauses are stored as lists.  The head is the first item in the list, and
+;;; it's "the thing you're trying to prove".  You prove it by proving all the
+;;; things in the tail of the list.  For facts the tail is empty, so they are
+;;; trivially proven.
+;;;
+;;; A predicate is the named head of a part of a clause.  In `(likes sally :x)`
+;;; the predicate is `likes`.
+;;;
+;;; Predicates are stored in the plists of their symbols, which is a little
+;;; insane, but it's how Norvig did it so I'll do it like this for now.
+(defvar *db-predicates* nil
+  "A list of all the predicates in the database.")
+
+(defconstant clause-key 'bones.paip-clauses
+  "The key to use in the symbol plist for the clauses.")
+
+(defun clause-head (clause)
+  (first clause))
+
+(defun clause-body (clause)
+  (rest clause))
+
+
+(defun get-clauses (pred)
+  (get pred clause-key))
+
+(defun set-clauses (pred clauses)
+  (setf (get pred clause-key) clauses))
+
+
+(defun predicate (relation)
+  (first relation))
+
+
+(defun add-clause (clause)
+  (let ((pred (predicate (clause-head clause))))
+    (assert (and (symbolp pred)
+                 (not (variable-p pred))))
+    (pushnew pred *db-predicates*)
+    (set-clauses pred
+                 (nconc (get-clauses pred) (list clause)))
+    pred))
+
+
+(defmacro rule (&rest clause)
+  `(add-clause ',clause))
+
+(defmacro fact (&rest body)
+  `(add-clause '(,body)))
+
+
+(defun clear-predicate (predicate)
+  (setf (get predicate clause-key) nil))
+
+(defun clear-db ()
+  (mapc #'clear-predicate *db-predicates*))
+
+
+(defun rename-variables (form)
+  "Replace all variables in the form with new (unique) ones."
+  (sublis (mapcar #'(lambda (variable) (cons variable (gensym (string var))))
+                  (variables-in form))
+          form))
+
+(defun prove-all (goals bindings)
+  "Returns a list of solutions to the conjunction of goals."
+  ;; strap in, here we go.
+  (labels ((prove-single-clause
+            (goal clause bindings)
+            "Try to prove a goal against a single clause using the given bindings.
+
+            Return all possible solutions as a list of binding-lists.
+
+            "
+            ;; Try to prove a goal against a specific clause:
+            ;;
+            ;;     (likes sally kim)
+            ;;     ((likes sally :x) (likes :x cats))
+            ;;
+            ;; To do this, we try to unify the goal with the head of the clause,
+            ;; and then use the resulting bindings to prove the rest of the
+            ;; items in the clause.
+            ;;
+            ;; First rename the variables in the clause, because they stand on
+            ;; their own and shouldn't be confused with ones in the bindings.
+            (let ((new-clause (rename-variables clause)))
+              (prove-all (clause-body new-clause)
+                         (unify goal (clause-head new-clause) bindings))))
+           (prove
+            (goal bindings)
+            "Try to prove a goal, using the given bindings.
+
+            Return all possible solutions as a list of binding-lists.
+
+            "
+            ;; We look up all the possible clauses for the goal and try proving
+            ;; each individually.  Each one will give us back a list of possible
+            ;; solutions.
+            ;;
+            ;; Then we concatenate the results to return all the possible
+            ;; solutions.
+            (mapcan #'prove-single-clause (get-clauses (predicate goal)))))
+    (cond
+     ;; If something failed further up the pipeline, bail here.
+     ((eq bindings fail) fail)
+
+     ;; If there's nothing to prove, it's vacuously true.  Return a list of the
+     ;; bindings as the result.
+     ((null goals) (list bindings))
+
+     ;; Otherwise we try to prove the first thing in the list.  This gives us
+     ;; back a list of possible bindings we could use.
+     ;;
+     ;; For each possible solution to the head, we try using it to prove the
+     ;; rest of the goals and concatenate all the results.  Failed attempts are
+     ;; represented as FAIL which is nil, so will collapse in the concatenation.
+     (t (mapcan #'(lambda (possible-solution)
+                   (prove-all (rest goals) possible-solution))
+                (prove (first goals) bindings))))))
+
