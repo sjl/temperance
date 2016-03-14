@@ -1,3 +1,4 @@
 syntax: glob
 
 docs/build
+scratch.lisp
