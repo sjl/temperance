@@ -160,9 +160,8 @@
         ((and (variable-p form) (get-binding form bindings))
          (substitute-bindings bindings
                               (lookup form bindings)))
-        ((listp form)
-         (mapcar (curry #'substitute-bindings bindings) form))
-        (t form)))
+        ((atom form) form)
+        (t (mapcar (curry #'substitute-bindings bindings) form))))
 
 (defun unifier (x y)
   "Unify x with y and substitute in the bindings to get the result."
@@ -215,6 +214,16 @@
   (first relation))
 
 
+(defun wildcard-variable-p (form)
+  (and (symbolp form) (string= (symbol-name form) "?")))
+
+(defun replace-wildcard-variables (form)
+  (cond
+   ((wildcard-variable-p form) (gensym "?"))
+   ((atom form) form)
+   (t (mapcar #'replace-wildcard-variables form))))
+
+
 (defun add-clause (clause)
   (let ((pred (predicate (clause-head clause))))
     (assert (and (symbolp pred)
@@ -226,10 +235,10 @@
 
 
 (defmacro rule (&rest clause)
-  `(add-clause ',clause))
+  `(add-clause ',(replace-wildcard-variables clause)))
 
 (defmacro fact (&rest body)
-  `(add-clause '(,body)))
+  `(add-clause '(,(replace-wildcard-variables body))))
 
 
 (defun clear-predicate (predicate)
@@ -239,6 +248,7 @@
   (mapc #'clear-predicate *db-predicates*))
 
 
+;;;; Proving
 (defun unique-find-anywhere-if (predicate tree &optional acc)
   (if (atom tree)
     (if (funcall predicate tree)
@@ -258,78 +268,132 @@
                   (variables-in form))
           form))
 
-(defun prove-single-clause (goal bindings clause)
+
+(defun prove-clause (goal bindings other-goals clause)
   (let ((new-clause (rename-variables clause)))
-    (prove-all (clause-body new-clause)
+    (prove-all (append (clause-body new-clause) other-goals)
                (unify goal (clause-head new-clause) bindings))))
 
-(defun prove (goal bindings)
-  ;; We look up all the possible clauses for the goal and try proving
-  ;; each individually.  Each one will give us back a list of possible
-  ;; solutions.
-  ;;
-  ;; Then we concatenate the results to return all the possible
-  ;; solutions.
-  (mapcan (curry #'prove-single-clause goal bindings)
-          (get-clauses (predicate goal))))
+(defun prove (goal bindings other-goals)
+  "Return a list of possible solutions to the given goal."
+  (let ((clauses (get-clauses (predicate goal))))
+    (if (listp clauses)
+      (some (curry #'prove-clause goal bindings other-goals) clauses)
+      (funcall clauses (rest goal) bindings other-goals))))
 
 (defun prove-all (goals bindings)
-  "Returns a list of solutions to the conjunction of goals."
+  "Return a solution to the conjunction of goals."
   (cond
    ;; If something failed further up the pipeline, bail here.
    ((eq bindings fail) fail)
 
-   ;; If there's nothing to prove, it's vacuously true.  Return a list of the
-   ;; bindings as the result.
-   ((null goals) (list bindings))
+   ;; If there's nothing to prove, it's vacuously true.  Return the bindings as
+   ;; the result.
+   ((null goals) bindings)
 
-   ;; Otherwise we try to prove the first thing in the list.  This gives us
-   ;; back a list of possible bindings we could use.
-   ;;
-   ;; For each possible solution to the head, we try using it to prove the
-   ;; rest of the goals and concatenate all the results.  Failed attempts are
-   ;; represented as FAIL which is nil, so will collapse in the concatenation.
-   (t (mapcan #'(lambda (possible-solution)
-                 (prove-all (rest goals) possible-solution))
-              (prove (first goals) bindings)))))
+   (t (prove (first goals) bindings (rest goals)))))
 
-(defun show-variables (variables solution)
-  (if (null variables)
-    (format t "~&Yes")
-    (dolist (var variables)
-      (format t "~&~A = ~A"
-              var (substitute-bindings solution var))))
-  (princ ";"))
 
+;;;; Cleaning Solutions
 (defun clean-variables (variables solution)
   (mapcar #'(lambda (var)
              (cons var (substitute-bindings solution var)))
     variables))
 
-(defun show-solutions (variables solutions)
-  (if (null solutions)
-    (format t "~&No.")
-    (mapc (curry #'show-variables variables)
-          solutions))
-  (values))
 
-(defun clean-solutions (variables solutions)
-  (mapcar (curry #'clean-variables variables)
-          solutions))
+;;;; Querying Interface
+(defun continue-never ()
+  nil)
 
-(defun top-level-prove (goals)
-  (show-solutions
-    (variables-in goals)
-    (prove-all goals no-bindings)))
+(defun continue-always ()
+  t)
 
-(defun top-level-find (goals)
-  (clean-solutions
-    (variables-in goals)
-    (prove-all goals no-bindings)))
+(defun continue-ask ()
+  (case (read-char)
+    (#\; t)
+    (#\. nil)
+    (#\newline (continue-p))
+    (otherwise
+      (format t " Type ; to see more or . to stop")
+      (continue-p))))
+
+
+(defun show-prolog-vars (variables bindings other-goals continue-p)
+  (if (null variables)
+    (format t "~&Yes")
+    (dolist (var variables)
+      (format t "~&~A = ~A"
+              var (substitute-bindings bindings var))))
+  (finish-output)
+  (if (funcall continue-p)
+    fail
+    (prove-all other-goals bindings)))
+
+
+(defun show-prolog-vars-ask (variables bindings other-goals)
+  (show-prolog-vars variables bindings other-goals #'continue-ask))
+
+(defun show-prolog-vars-all (variables bindings other-goals)
+  (show-prolog-vars variables bindings other-goals #'continue-always))
+
+(defun show-prolog-vars-one (variables bindings other-goals)
+  (show-prolog-vars variables bindings other-goals #'continue-never))
+
+(setf (get 'show-prolog-vars-ask clause-key) 'show-prolog-vars-ask)
+(setf (get 'show-prolog-vars-all clause-key) 'show-prolog-vars-all)
+(setf (get 'show-prolog-vars-one clause-key) 'show-prolog-vars-one)
+
+
+(defun top-level-query (goals primitive)
+  (prove-all `(,@(replace-wildcard-variables goals)
+               (,primitive
+                ,@(remove-if #'wildcard-variable-p (variables-in goals))))
+             no-bindings)
+  (format t "~&No."))
+
 
 (defmacro query (&rest goals)
-  `(top-level-prove ',goals))
+  "Perform the query interactively."
+  `(top-level-query ',goals 'show-prolog-vars-ask))
+
+(defmacro query-all (&rest goals)
+  "Perform the query and automatically show all results."
+  `(top-level-query ',goals 'show-prolog-vars-all))
+
+(defmacro query-one (&rest goals)
+  "Perform the query and just show the first result."
+  `(top-level-query ',goals 'show-prolog-vars-one))
+
+
+;;;; Finding Interface
+(defparameter *results* nil)
+
+
+(defun find-one-result (variables bindings other-goals)
+  (setf *results* (clean-variables variables bindings))
+  (prove-all other-goals bindings))
+
+(defun find-all-results (variables bindings other-goals)
+  (declare (ignore other-goals))
+  (push (clean-variables variables bindings) *results*)
+  fail)
+
+(setf (get 'find-one-result clause-key) 'find-one-result)
+(setf (get 'find-all-results clause-key) 'find-all-results)
+
+
+(defun top-level-find (goals primitive)
+  (let ((*results* (list)))
+    (prove-all `(,@(replace-wildcard-variables goals)
+                 (,primitive
+                  ,@(remove-if #'wildcard-variable-p (variables-in goals))))
+               no-bindings)
+    *results*))
+
+
+(defmacro find-one (&rest goals)
+  `(top-level-find ',goals 'find-one-result))
 
 (defmacro find-all (&rest goals)
-  `(top-level-find ',goals))
+  `(top-level-find ',goals 'find-all-results))
 
