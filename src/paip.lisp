@@ -221,6 +221,8 @@
   (cond
    ((wildcard-variable-p form) (gensym "?"))
    ((atom form) form)
+   ((consp form) (cons (replace-wildcard-variables (car form))
+                       (replace-wildcard-variables (cdr form))))
    (t (mapcar #'replace-wildcard-variables form))))
 
 
@@ -312,10 +314,10 @@
   (case (read-char)
     (#\; t)
     (#\. nil)
-    (#\newline (continue-p))
+    (#\newline (continue-ask))
     (otherwise
       (format t " Type ; to see more or . to stop")
-      (continue-p))))
+      (continue-ask))))
 
 
 (defun show-prolog-vars (variables bindings other-goals continue-p)
@@ -369,17 +371,17 @@
 (defparameter *results* nil)
 
 
-(defun find-one-result (variables bindings other-goals)
+(defun return-one-result (variables bindings other-goals)
   (setf *results* (clean-variables variables bindings))
   (prove-all other-goals bindings))
 
-(defun find-all-results (variables bindings other-goals)
+(defun return-all-results (variables bindings other-goals)
   (declare (ignore other-goals))
   (push (clean-variables variables bindings) *results*)
   fail)
 
-(setf (get 'find-one-result clause-key) 'find-one-result)
-(setf (get 'find-all-results clause-key) 'find-all-results)
+(setf (get 'return-one-result clause-key) 'return-one-result)
+(setf (get 'return-all-results clause-key) 'return-all-results)
 
 
 (defun top-level-find (goals primitive)
@@ -391,9 +393,9 @@
     *results*))
 
 
-(defmacro find-one (&rest goals)
-  `(top-level-find ',goals 'find-one-result))
+(defmacro return-one (&rest goals)
+  `(top-level-find ',goals 'return-one-result))
 
-(defmacro find-all (&rest goals)
-  `(top-level-find ',goals 'find-all-results))
+(defmacro return-all (&rest goals)
+  `(top-level-find ',goals 'return-all-results))
 

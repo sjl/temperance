@@ -26,14 +26,15 @@
 
 
 (defmacro proves (query)
-  `(is-true (find-all ,query)))
+  `(is-true (return-all ,query)))
 
 (defmacro not-proves (query)
-  `(is-false (find-all ,query)))
+  `(is-false (return-all ,query)))
 
 (defmacro proves-with (query results)
-  `(is (set-equal ',results (find-all ,query)
+  `(is (set-equal ',results (return-all ,query)
                   :test #'alist-equal)))
+
 
 ;;;; Unification
 (test constant-unification

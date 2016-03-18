@@ -4,10 +4,25 @@
 
 (defpackage #:bones.paip
   (:use #:cl #:defstar #:bones.utils)
-  (:export #:unify
-           #:fail #:no-bindings
-           #:*check-occurs*
-           #:clear-db
-           #:fact #:rule
-           #:find-all #:query))
+  (:export
+
+   ;; Unification, constants
+   #:unify
+   #:fail #:no-bindings
+   #:*check-occurs*
+
+   ;; Database management
+   #:clear-db
+   #:fact
+   #:rule
+
+   ;; Lisp data structures as results
+   #:return-one
+   #:return-all
+
+   ;; Interactive queries
+   #:query
+   #:query-one
+   #:query-all
+   ))
 

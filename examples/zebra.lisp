@@ -50,5 +50,5 @@
  (member (house ?water-drinker ? ? water ?) ?houses)
  (member (house ?zebra-owner zebra ? ? ?) ?houses))
 
-(time
-  (query-all (zebra ?houses ?water ?zebra)))
+(time (query-all (zebra ?houses ?water ?zebra)))
+; (declaim (optimize (speed 3) (safety 0)))
