@@ -19,5 +19,6 @@
                (:file "package")
                (:module "src"
                 :components ((:file "paip")
+                             (:file "paip-compiled")
                              (:file "bones")))))
 

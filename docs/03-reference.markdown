@@ -16,6 +16,12 @@ Test?
 
 Whether to perform an occurs check.
 
+### BOUND-P (function)
+
+    (BOUND-P VAR)
+
+Return whether the given variable has been bound.
+
 ### CLEAR-DB (function)
 
     (CLEAR-DB)
@@ -62,9 +68,23 @@ Perform the query and just show the first result.
 
     (RULE &REST CLAUSE)
 
+### UNBOUND (variable)
+
+A magic constant representing an unbound variable.
+
 ### UNIFY (function)
 
     (UNIFY X Y &OPTIONAL (BINDINGS NO-BINDINGS))
 
 Unify the two terms and return bindings necessary to do so (or FAIL).
+
+### UNIFY! (function)
+
+    (UNIFY! X Y)
+
+Destructively unify two expressions.
+
+  Any variables in `x` and `y` may have their bindings set.
+
+  
 

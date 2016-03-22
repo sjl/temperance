@@ -12,6 +12,11 @@
    #:fail #:no-bindings
    #:*check-occurs*
 
+   ;; Destructive unification
+   #:unify!
+   #:unbound
+   #:bound-p
+
    ;; Database management
    #:clear-db
    #:fact
