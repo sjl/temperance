@@ -2,9 +2,11 @@
 
 The following is a list of all user-facing parts of Bones.
 
-If there are backwards-incompatible changes to anything listed here, they will be noted in the changelog and the author will feel bad.
+If there are backwards-incompatible changes to anything listed here, they will
+be noted in the changelog and the author will feel bad.
 
-Anything not listed here is subject to change at any time with no warning, so don't touch it.
+Anything not listed here is subject to change at any time with no warning, so
+don't touch it.
 
 [TOC]
 
@@ -82,7 +84,7 @@ Unify the two terms and return bindings necessary to do so (or FAIL).
 
     (UNIFY! X Y)
 
-Destructively unify two expressions.
+Destructively unify two expressions, returning whether it was successful.
 
   Any variables in `x` and `y` may have their bindings set.
 
