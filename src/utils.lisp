@@ -2,7 +2,7 @@
 ;;;; See http://quickutil.org for details.
 
 ;;;; To regenerate:
-;;;; (qtlc:save-utils-as "utils.lisp" :utilities '(:DEFINE-CONSTANT :SET-EQUAL :CURRY) :ensure-package T :package "BONES.UTILS")
+;;;; (qtlc:save-utils-as "utils.lisp" :utilities '(:DEFINE-CONSTANT :SET-EQUAL :CURRY :SWITCH) :ensure-package T :package "BONES.UTILS")
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (unless (find-package "BONES.UTILS")
@@ -15,7 +15,9 @@
 (when (boundp '*utilities*)
   (setf *utilities* (union *utilities* '(:DEFINE-CONSTANT :SET-EQUAL
                                          :MAKE-GENSYM-LIST :ENSURE-FUNCTION
-                                         :CURRY))))
+                                         :CURRY :STRING-DESIGNATOR
+                                         :WITH-GENSYMS :EXTRACT-FUNCTION-NAME
+                                         :SWITCH))))
 
   (defun %reevaluate-constant (name value test)
     (if (not (boundp name))
@@ -109,7 +111,101 @@ it is called with to `function`."
          (lambda (&rest more)
            (apply ,fun ,@curries more)))))
   
+
+  (deftype string-designator ()
+    "A string designator type. A string designator is either a string, a symbol,
+or a character."
+    `(or symbol string character))
+  
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (export '(define-constant set-equal curry)))
+  (defmacro with-gensyms (names &body forms)
+    "Binds each variable named by a symbol in `names` to a unique symbol around
+`forms`. Each of `names` must either be either a symbol, or of the form:
+
+    (symbol string-designator)
+
+Bare symbols appearing in `names` are equivalent to:
+
+    (symbol symbol)
+
+The string-designator is used as the argument to `gensym` when constructing the
+unique symbol the named variable will be bound to."
+    `(let ,(mapcar (lambda (name)
+                     (multiple-value-bind (symbol string)
+                         (etypecase name
+                           (symbol
+                            (values name (symbol-name name)))
+                           ((cons symbol (cons string-designator null))
+                            (values (first name) (string (second name)))))
+                       `(,symbol (gensym ,string))))
+            names)
+       ,@forms))
+
+  (defmacro with-unique-names (names &body forms)
+    "Binds each variable named by a symbol in `names` to a unique symbol around
+`forms`. Each of `names` must either be either a symbol, or of the form:
+
+    (symbol string-designator)
+
+Bare symbols appearing in `names` are equivalent to:
+
+    (symbol symbol)
+
+The string-designator is used as the argument to `gensym` when constructing the
+unique symbol the named variable will be bound to."
+    `(with-gensyms ,names ,@forms))
+  )                                        ; eval-when
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defun extract-function-name (spec)
+    "Useful for macros that want to mimic the functional interface for functions
+like `#'eq` and `'eq`."
+    (if (and (consp spec)
+             (member (first spec) '(quote function)))
+        (second spec)
+        spec))
+  )                                        ; eval-when
+
+  (eval-when (:compile-toplevel :load-toplevel :execute)
+    (defun generate-switch-body (whole object clauses test key &optional default)
+      (with-gensyms (value)
+        (setf test (extract-function-name test))
+        (setf key (extract-function-name key))
+        (when (and (consp default)
+                   (member (first default) '(error cerror)))
+          (setf default `(,@default "No keys match in SWITCH. Testing against ~S with ~S."
+                                    ,value ',test)))
+        `(let ((,value (,key ,object)))
+           (cond ,@(mapcar (lambda (clause)
+                             (if (member (first clause) '(t otherwise))
+                                 (progn
+                                   (when default
+                                     (error "Multiple default clauses or illegal use of a default clause in ~S."
+                                            whole))
+                                   (setf default `(progn ,@(rest clause)))
+                                   '(()))
+                                 (destructuring-bind (key-form &body forms) clause
+                                   `((,test ,value ,key-form)
+                                     ,@forms))))
+                           clauses)
+                 (t ,default))))))
+
+  (defmacro switch (&whole whole (object &key (test 'eql) (key 'identity))
+                    &body clauses)
+    "Evaluates first matching clause, returning its values, or evaluates and
+returns the values of `default` if no keys match."
+    (generate-switch-body whole object clauses test key))
+
+  (defmacro eswitch (&whole whole (object &key (test 'eql) (key 'identity))
+                     &body clauses)
+    "Like `switch`, but signals an error if no key matches."
+    (generate-switch-body whole object clauses test key '(error)))
+
+  (defmacro cswitch (&whole whole (object &key (test 'eql) (key 'identity))
+                     &body clauses)
+    "Like `switch`, but signals a continuable error if no key matches."
+    (generate-switch-body whole object clauses test key '(cerror "Return NIL from CSWITCH.")))
+  
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (export '(define-constant set-equal curry switch eswitch cswitch)))
 
 ;;;; END OF utils.lisp ;;;;

@@ -2,6 +2,10 @@
   (:use #:cl)
   (:export #:hello))
 
+(defpackage #:bones.wam
+  (:use #:cl #:defstar #:bones.utils #:optima)
+  (:import-from #:optima #:match))
+
 (defpackage #:bones.paip
   (:use #:cl #:defstar #:bones.utils)
   (:documentation "Test?")
