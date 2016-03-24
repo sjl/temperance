@@ -180,7 +180,7 @@
              (keywordp term))
            (parse-variable
              (var registers)
-             ;; If we've already seen this variable, just return it's position,
+             ;; If we've already seen this variable, just return its position,
              ;; otherwise allocate a register for it.
              (or (position var registers)
                  (vector-push-extend var registers)))
