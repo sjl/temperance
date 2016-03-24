@@ -173,9 +173,6 @@
       (f :w)))
 
 
-(defun variable-p (term)
-  (keywordp term))
-
 (defun parse-term (term)
   "Parse a term into a series of register assignments."
   (labels ((variable-p
