@@ -76,6 +76,17 @@
     (+tag-functor+ "FUN")))
 
 
+(defun* cell-functor-name ((cell heap-cell))
+  (:returns string)
+  ;; todo
+  "functor")
+
+(defun* cell-functor-arity ((cell heap-cell))
+  (:returns (integer 0))
+  (logand (cell-value cell)
+          functor-arity-bitmask))
+
+
 (defun* make-cell ((tag heap-cell-tag) (value heap-cell-value))
   (:returns heap-cell)
   (logior (ash value +cell-tag-width+)
@@ -96,12 +107,6 @@
 (defun* make-cell-functor ((functor symbol) (arity (integer 0)))
   (:returns heap-cell)
   (make-cell +tag-functor+ arity))
-
-
-; (defun cell-functor-name)
-(defun cell-functor-arity (cell)
-  (logand (cell-value cell)
-          functor-arity-bitmask))
 
 
 ;;;; Heap
