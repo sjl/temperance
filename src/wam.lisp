@@ -7,6 +7,47 @@
   (format t "~B~%" b))
 
 
+;;;; Constants
+(define-constant +cell-width+ 16
+  :documentation "Number of bits in each heap cell.")
+
+(define-constant +cell-tag-width+ 2
+  :documentation "Number of bits reserved for cell type tags.")
+
+(define-constant +cell-value-width+ (- +cell-width+ +cell-tag-width+)
+  :documentation "Number of bits reserved for cell values.")
+
+(define-constant +cell-tag-bitmask+ #b11
+  :documentation "Bitmask for masking the cell type tags.")
+
+
+(define-constant +tag-null+      #b00
+  :documentation "An empty cell.")
+
+(define-constant +tag-structure+ #b01
+  :documentation "A structure cell.")
+
+(define-constant +tag-reference+ #b10
+  :documentation "A pointer to a cell.")
+
+(define-constant +tag-functor+   #b11
+  :documentation "A functor.")
+
+
+(define-constant +functor-arity-width+ 4
+  :documentation "Number of bits dedicated to functor arity.")
+
+(define-constant +functor-arity-bitmask+ #b1111
+  :documentation "Bitmask for the functor arity bits.")
+
+
+(define-constant +register-count+ 16
+  :documentation "The number of registers the WAM has available.")
+
+(define-constant +maximum-arity+ (1- (expt 2 +functor-arity-width+))
+  :documentation "The maximum allowed arity of functors.")
+
+
 ;;;; Heap Cells
 ;;; The cells of the WAM are essentially N bit bytes, with different chunks of
 ;;; bits representing different things.  All cells have type tag bits in the
@@ -33,38 +74,6 @@
 ;;;
 ;;; The index is the index into the WAM's functor table where this functor's
 ;;; symbol lives.  Arity is the arity of the functor.
-(define-constant +cell-width+ 16
-  :documentation "Number of bits in each heap cell.")
-
-(define-constant +cell-tag-width+ 2
-  :documentation "Number of bits reserved for cell type tags.")
-
-(define-constant +cell-value-width+ (- +cell-width+ +cell-tag-width+)
-  :documentation "Number of bits reserved for cell values.")
-
-(define-constant +cell-tag-bitmask+ (1- (ash 1 +cell-tag-width+))
-  :documentation "Bitmask for masking the cell type tags.")
-
-(define-constant +tag-null+      #b00
-  :documentation "An empty cell.")
-
-(define-constant +tag-structure+ #b01
-  :documentation "A structure cell.")
-
-(define-constant +tag-reference+ #b10
-  :documentation "A pointer to a cell.")
-
-(define-constant +tag-functor+   #b11
-  :documentation "A functor.")
-
-
-(defparameter functor-arity-width 4
-  "Number of bits dedicated to functor arity.")
-
-(defparameter functor-arity-bitmask #b1111
-  "Bitmask for the functor arity bits.")
-
-
 (deftype heap-cell ()
   `(unsigned-byte ,+cell-width+))
 
@@ -79,7 +88,13 @@
   `(integer 0 ,(1- array-total-size-limit)))
 
 (deftype register-index ()
-  '(integer 0 15))
+  `(integer 0 ,(1- +register-count+)))
+
+(deftype functor-index ()
+  `(integer 0 ,(1- array-total-size-limit)))
+
+(deftype arity ()
+  `(integer 0 ,+maximum-arity+))
 
 
 (defun* cell-type ((cell heap-cell))
@@ -109,14 +124,15 @@
 
 
 (defun* cell-functor-index ((cell heap-cell))
-  (:returns (integer 0))
+  (:returns functor-index)
   (ash (cell-value cell)
-       (- functor-arity-width)))
+       (- +functor-arity-width+)))
 
 (defun* cell-functor-arity ((cell heap-cell))
-  (:returns (integer 0))
-  (logand (cell-value cell)
-          functor-arity-bitmask))
+  (:returns arity)
+  (values
+    (logand (cell-value cell)
+            +functor-arity-bitmask+)))
 
 
 (defun* cell-aesthetic ((cell heap-cell))
@@ -137,8 +153,9 @@
 
 (defun* make-cell ((tag heap-cell-tag) (value heap-cell-value))
   (:returns heap-cell)
-  (logior (ash value +cell-tag-width+)
-          tag))
+  (values
+    (logior (ash value +cell-tag-width+)
+            tag)))
 
 (defun* make-cell-null ()
   (:returns heap-cell)
@@ -152,15 +169,12 @@
   (:returns heap-cell)
   (make-cell +tag-reference+ value))
 
-(defun* make-cell-functor ((functor-index (integer 0))
-                           (arity (integer 0)))
+(defun* make-cell-functor ((functor-index functor-index)
+                           (arity arity))
   (:returns heap-cell)
   (make-cell
     +tag-functor+
-    ;; Functor cells values are a combination of the functor index and arity:
-    ;;
-    ;;     ffffffffaaaa
-    (logior (ash functor-index functor-arity-width)
+    (logior (ash functor-index +functor-arity-width+)
             arity)))
 
 
@@ -185,7 +199,7 @@
      :documentation "The array of functor symbols in this WAM.")
    (registers
      :reader wam-registers
-     :initform (make-array 16
+     :initform (make-array +register-count+
                            :initial-element (make-cell-null)
                            :element-type 'heap-cell)
      :documentation "An array of the X_i registers.")))
@@ -196,6 +210,12 @@
 
 
 (defun* wam-heap-push! ((wam wam) (cell heap-cell))
+  (:returns heap-cell)
+  "Push the cell onto the WAM heap and increment the heap pointer.
+
+  Returns the cell.
+
+  "
   (with-slots (heap heap-pointer) wam
     (setf (aref heap heap-pointer) cell)
     (incf heap-pointer)
@@ -203,18 +223,27 @@
 
 (defun* wam-register ((wam wam) (register register-index))
   (:returns heap-cell)
+  "Return the WAM register with the given index."
   (aref (wam-registers wam) register))
 
 (defun (setf wam-register) (new-value wam register)
   (setf (aref (wam-registers wam) register) new-value))
 
 
-(defun wam-ensure-functor-index (wam functor)
+(defun* wam-ensure-functor-index ((wam wam) (functor symbol))
+  (:returns functor-index)
+  "Return the index of the functor in the WAM's functor table.
+
+  If the functor is not already in the table it will be added.
+
+  "
   (with-slots (functors) wam
     (or (position functor functors)
         (vector-push-extend functor functors))))
 
-(defun wam-functor-lookup (wam functor-index)
+(defun* wam-functor-lookup ((wam wam) (functor-index functor-index))
+  (:returns symbol)
+  "Return the symbol for the functor with the given index in the WAM."
   (aref (wam-functors wam) functor-index))
 
 
@@ -232,6 +261,7 @@
     (t "")))
 
 (defun dump-heap (wam from to highlight)
+  ;; This code is awful, sorry.
   (let ((heap (wam-heap wam)))
     (format t "HEAP SIZE: ~A~%" (length heap))
     (format t "  +------+-----+--------------+----------------------------+~%")
@@ -281,10 +311,10 @@
             addr))
 
 
-;;;; Machine Instructions
+;;;; WAM Machine Instructions
 (defun* put-structure ((wam wam)
                        (functor symbol)
-                       (arity (integer 0))
+                       (arity arity)
                        (register register-index))
   (:returns :void)
   (let ((structure-cell (make-cell-structure (1+ (wam-heap-pointer wam))))
@@ -309,41 +339,15 @@
   (values))
 
 
-;;;; Transliteration of the book's machine instruction code:
-;;; (defun* put-structure ((wam wam)
-;;;                        functor
-;;;                        (arity (integer 0))
-;;;                        (register (integer 0)))
-;;;   (with-slots (heap registers heap-pointer) wam
-;;;     (setf (aref heap heap-pointer)
-;;;           (make-cell-structure (1+ heap-pointer)))
-;;;     (setf (aref heap (1+ heap-pointer))
-;;;           (make-cell-functor functor arity))
-;;;     (setf (aref registers register)
-;;;           (aref heap heap-pointer))
-;;;     (incf heap-pointer 2)))
-;;;
-;;; (defun* set-variable ((wam wam) (register (integer 0)))
-;;;   (with-slots (heap registers heap-pointer) wam
-;;;     ;; This cell will reference itself (i.e. it's an unbound variable).
-;;;     (setf (aref heap heap-pointer)
-;;;           (make-cell-reference heap-pointer))
-;;;     ;; Set the register to match the cell we just made.
-;;;     (setf (aref registers register)
-;;;           (aref heap heap-pointer))
-;;;     ;; Bump the heap pointer.
-;;;     (incf heap-pointer)))
-;;;
-;;; (defun* set-value ((wam wam) (register (integer 0)))
-;;;   (with-slots (heap registers heap-pointer) wam
-;;;     (setf (aref heap heap-pointer)
-;;;           (aref registers register))
-;;;     (incf heap-pointer)))
-
-
 ;;;; Terms
 (defun parse-term (term)
   "Parse a term into a series of register assignments."
+  ;; Turns p(A, q(A, B)) into something like:
+  ;;
+  ;;   X0 -> p(X1, X2)
+  ;;   X1 -> A
+  ;;   X2 -> q(X1, X3)
+  ;;   X3 -> B
   (labels ((variable-p
              (term)
              (keywordp term))
@@ -377,13 +381,18 @@
             :for reg :across registers
             :collect (cons i reg)))))
 
-(defun dump-parse (term)
-  (loop :for (i . reg) :in (parse-term term)
-        :do (format t "X~A -> ~S~%" i reg)))
-
-
 (defun flatten-register-assignments (registers)
   "Flatten the set of register assignments into a minimal set."
+  ;; Turns:
+  ;;
+  ;;   X0 -> p(X1, X2)
+  ;;   X1 -> A
+  ;;   X2 -> q(X1, X3)
+  ;;   X3 -> B
+  ;;
+  ;; into something like:
+  ;;
+  ;;   X2 -> q(X1, X3), X0 -> p(X1, X2)
   (labels ((variable-assignment-p
              (ass)
              (keywordp (cdr ass)))
@@ -410,6 +419,13 @@
 
 (defun tokenize-assignments (assignments)
   "Tokenize a flattened set of register assignments into a stream."
+  ;; Turns:
+  ;;
+  ;;   X2 -> q(X1, X3), X0 -> p(X1, X2)
+  ;;
+  ;; into something like:
+  ;;
+  ;;   (X2 = q/2), X1, X3, (X0 = p/2), X1, X2
   (mapcan #'(lambda (ass)
              (destructuring-bind (register . (functor . arguments)) ass
                ;; Take a single assignment like:
@@ -423,6 +439,18 @@
 
 (defun generate-actions (tokens)
   "Generate a series of 'machine instructions' from a stream of tokens."
+  ;; Turns:
+  ;;
+  ;;   (X2 = q/2), X1, X3, (X0 = p/2), X1, X2
+  ;;
+  ;; into something like:
+  ;;
+  ;;   (#'put-structure 2 q 2)
+  ;;   (#'set-variable 1)
+  ;;   (#'set-variable 3)
+  ;;   (#'put-structure 0 p 2)
+  ;;   (#'set-value 1)
+  ;;   (#'set-value 2)
   (let ((seen (list)))
     (flet ((handle-structure
              (register functor arity)
