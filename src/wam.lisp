@@ -186,13 +186,89 @@
   (make-instance 'wam))
 
 
+(defun* wam-heap-push! ((wam wam) (cell heap-cell))
+  (with-slots (heap heap-pointer) wam
+    (setf (aref heap heap-pointer) cell)
+    (incf heap-pointer)
+    cell))
+
+(defun* wam-register ((wam wam) (register register-index))
+  (:returns heap-cell)
+  (aref (wam-registers wam) register))
+
+(defun (setf wam-register) (new-value wam register)
+  (setf (aref (wam-registers wam) register) new-value))
+
+
+(defun dump-wam (wam from to highlight)
+  (format t "REGISTERS: ~S~%" (wam-registers wam))
+  (dump-heap (wam-heap wam) from to highlight))
+
+(defun dump-wam-full (wam)
+  (dump-wam wam 0 (length (wam-heap wam)) -1))
+
+(defun dump-wam-around (wam addr width)
+  (dump-wam wam
+            (max 0 (- addr width))
+            (min (length (wam-heap wam))
+                 (+ addr width 1))
+            addr))
+
+
+;;;; Machine Instructions
+(defun* put-structure ((wam wam)
+                       (functor symbol)
+                       (arity (integer 0))
+                       (register (integer 0)))
+  (let ((structure-cell (make-cell-structure (1+ (wam-heap-pointer wam))))
+        (functor-cell (make-cell-functor functor arity)))
+    (wam-heap-push! wam structure-cell)
+    (wam-heap-push! wam functor-cell)
+    (setf (wam-register wam register) structure-cell)))
+
+(defun* set-variable ((wam wam) (register (integer 0)))
+  ;; This cell will reference itself (i.e. it's an unbound variable).
+  (let ((cell (make-cell-reference (wam-heap-pointer wam))))
+    (wam-heap-push! wam cell) ; Push it on top of the heap.
+    (setf (wam-register wam register) cell))) ; Set the register to the cell too.
+
+(defun* set-value ((wam wam) (register (integer 0)))
+  (wam-heap-push! wam (wam-register wam register)))
+
+
+;;;; Transliteration of the book's machine instruction code:
+;;; (defun* put-structure ((wam wam)
+;;;                        functor
+;;;                        (arity (integer 0))
+;;;                        (register (integer 0)))
+;;;   (with-slots (heap registers heap-pointer) wam
+;;;     (setf (aref heap heap-pointer)
+;;;           (make-cell-structure (1+ heap-pointer)))
+;;;     (setf (aref heap (1+ heap-pointer))
+;;;           (make-cell-functor functor arity))
+;;;     (setf (aref registers register)
+;;;           (aref heap heap-pointer))
+;;;     (incf heap-pointer 2)))
+;;;
+;;; (defun* set-variable ((wam wam) (register (integer 0)))
+;;;   (with-slots (heap registers heap-pointer) wam
+;;;     ;; This cell will reference itself (i.e. it's an unbound variable).
+;;;     (setf (aref heap heap-pointer)
+;;;           (make-cell-reference heap-pointer))
+;;;     ;; Set the register to match the cell we just made.
+;;;     (setf (aref registers register)
+;;;           (aref heap heap-pointer))
+;;;     ;; Bump the heap pointer.
+;;;     (incf heap-pointer)))
+;;;
+;;; (defun* set-value ((wam wam) (register (integer 0)))
+;;;   (with-slots (heap registers heap-pointer) wam
+;;;     (setf (aref heap heap-pointer)
+;;;           (aref registers register))
+;;;     (incf heap-pointer)))
+
+
 ;;;; Terms
-(defparameter p
-  '(p :z
-      (h :z :w)
-      (f :w)))
-
-
 (defun parse-term (term)
   "Parse a term into a series of register assignments."
   (labels ((variable-p
@@ -259,7 +335,6 @@
     (remove-if #'variable-assignment-p
                (sort registers #'assignment-less-p))))
 
-
 (defun tokenize-assignments (assignments)
   "Tokenize a flattened set of register assignments into a stream."
   (mapcan #'(lambda (ass)
@@ -272,38 +347,6 @@
                (cons (list register functor (length arguments))
                      arguments)))
           assignments))
-
-
-(defun* put-structure ((wam wam)
-                       functor
-                       (arity (integer 0))
-                       (register (integer 0)))
-  (with-slots (heap registers heap-pointer) wam
-    (setf (aref heap heap-pointer)
-          (make-cell-structure (1+ heap-pointer)))
-    (setf (aref heap (1+ heap-pointer))
-          (make-cell-functor functor arity))
-    (setf (aref registers register)
-          (aref heap heap-pointer))
-    (incf heap-pointer 2)))
-
-(defun* set-variable ((wam wam) (register (integer 0)))
-  (with-slots (heap registers heap-pointer) wam
-    ;; This cell will reference itself (i.e. it's an unbound variable).
-    (setf (aref heap heap-pointer)
-          (make-cell-reference heap-pointer))
-    ;; Set the register to match the cell we just made.
-    (setf (aref registers register)
-          (aref heap heap-pointer))
-    ;; Bump the heap pointer.
-    (incf heap-pointer)))
-
-(defun* set-value ((wam wam) (register (integer 0)))
-  (with-slots (heap registers heap-pointer) wam
-    (setf (aref heap heap-pointer)
-          (aref registers register))
-    (incf heap-pointer)))
-
 
 (defun generate-actions (tokens)
   "Generate a series of 'machine instructions' from a stream of tokens."
@@ -325,23 +368,33 @@
                        (handle-register token))))))
 
 
-(defun build-heap (wam actions)
+(defun parse (term)
+  "Parse a Lisp term into a series of WAM machine instructions."
+  (generate-actions
+    (tokenize-assignments
+      (flatten-register-assignments
+        (parse-term term)))))
+
+(defun run (wam instructions)
+  "Execute the machine instructions on the given WAM."
   (mapc #'(lambda (action)
             (apply (car action) wam (cdr action)))
-        actions)
+        instructions)
   (values))
 
 
-; (defparameter *wam* (make-wam))
+(defparameter p
+  '(p :z
+      (h :z :w)
+      (f :w)))
 
-; (dump-heap-full (wam-heap *wam*))
 
-; (build-heap
-;   *wam*
-;   (generate-actions
-;     (tokenize-assignments
-;       (flatten-register-assignments
-;         (parse-term p)))))
+(defparameter *wam* (make-wam))
 
-; (dump-heap-full (wam-heap *wam*))
+(dump-heap-full (wam-heap *wam*))
+
+(run *wam* (parse p))
+
+(dump-wam-full *wam*)
+(dump-wam-around *wam* 12 3)
 
