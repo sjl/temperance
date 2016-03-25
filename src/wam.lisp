@@ -111,13 +111,15 @@
 
 ;;;; Heap
 (defun heap-debug (addr cell)
-  (cond
-    ((= +tag-reference+ (cell-type cell))
-     (if (= addr (cell-value cell))
-       "unbound variable"
-       "variable pointer"))
-    ((= +tag-functor+ (cell-type cell))
-     (format nil "functor/~D" (cell-functor-arity cell)))
+  (switch ((cell-type cell))
+    (+tag-reference+
+      (if (= addr (cell-value cell))
+        "unbound variable"
+        (format nil "var pointer to ~D" (cell-value cell))))
+    (+tag-functor+
+      (format nil "~A/~D"
+              (cell-functor-name cell)
+              (cell-functor-arity cell)))
     (t "")))
 
 (defun dump-heap (heap from to highlight)
