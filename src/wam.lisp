@@ -382,19 +382,3 @@
         instructions)
   (values))
 
-
-(defparameter p
-  '(p :z
-      (h :z :w)
-      (f :w)))
-
-
-(defparameter *wam* (make-wam))
-
-(dump-heap-full (wam-heap *wam*))
-
-(run *wam* (parse p))
-
-(dump-wam-full *wam*)
-(dump-wam-around *wam* 12 3)
-
