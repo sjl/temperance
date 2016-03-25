@@ -8,6 +8,31 @@
 
 
 ;;;; Heap Cells
+;;; The cells of the WAM are essentially N bit bytes, with different chunks of
+;;; bits representing different things.  All cells have type tag bits in the
+;;; low-order bits and their value in the higher-order bits:
+;;;
+;;;   value         type
+;;;   vvvvvvvvvvvvvvTT
+;;;
+;;; The contents of the value depend on the type of cell.
+;;;
+;;; NULL cells always have a value of zero.
+;;;
+;;; STRUCTURE cell values are an index into the heap, describing where the
+;;; structure starts.
+;;;
+;;; REFERENCE cell values are an index into the heap, pointing at whatever the
+;;; value is bound to.  Unbound variables contain their own heap index as
+;;; a value.
+;;;
+;;; FUNCTOR cell values are again split into two chunks of bits:
+;;;
+;;;   index     arity
+;;;   iiiiiiiiiiAAAA
+;;;
+;;; The index is the index into the WAM's functor table where this functor's
+;;; symbol lives.  Arity is the arity of the functor.
 (define-constant +cell-width+ 16
   :documentation "Number of bits in each heap cell.")
 
