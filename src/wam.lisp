@@ -32,8 +32,13 @@
 (define-constant +tag-functor+   #b11
   :documentation "A functor.")
 
-(defparameter functor-arity-width 4)
-(defparameter functor-arity-bitmask #b1111)
+
+(defparameter functor-arity-width 4
+  "Number of bits dedicated to functor arity.")
+
+(defparameter functor-arity-bitmask #b1111
+  "Bitmask for the functor arity bits.")
+
 
 (deftype heap-cell ()
   `(unsigned-byte ,+cell-width+))
