@@ -110,10 +110,6 @@
 
 
 ;;;; Heap
-(deftype heap-index ()
-  `(integer 0 ,array-total-size-limit))
-
-
 (defun heap-debug (addr cell)
   (cond
     ((= +tag-reference+ (cell-type cell))
@@ -154,6 +150,12 @@
 
 
 ;;;; BEHOLD: THE WAM
+(deftype heap-index ()
+  `(integer 0 ,(1- array-total-size-limit)))
+
+(deftype register-index ()
+  '(integer 0 15))
+
 (defclass wam ()
   ((heap
      :initform (make-array 16
@@ -171,6 +173,7 @@
                            :initial-element (make-cell-null)
                            :element-type 'heap-cell)
      :documentation "An array of the X_i registers.")))
+
 
 (defun make-wam ()
   (make-instance 'wam))
