@@ -123,22 +123,27 @@
     (t "")))
 
 (defun dump-heap (heap from to highlight)
-  (format t "~%Dumping heap...~%")
-  (format t "Heap size: ~A~%~%" (length heap))
-  (format t "+------+-----+--------------+----------------------------+~%")
-  (format t "| ADDR | TYP |        VALUE | DEBUG                      |~%")
-  (format t "+------+-----+--------------+----------------------------+~%")
+  (format t "HEAP SIZE: ~A~%" (length heap))
+  (format t "    +------+-----+--------------+----------------------------+~%")
+  (format t "    | ADDR | TYP |        VALUE | DEBUG                      |~%")
+  (format t "    +------+-----+--------------+----------------------------+~%")
+  (when (> from 0)
+    (format t "    |    ⋮ |  ⋮  |            ⋮ |                            |~%"))
   (flet ((print-cell
            (i cell)
-           (format t "| ~4@A | ~A | ~12@A | ~26A |~A~%"
-                   i
-                   (cell-type-short-name cell)
-                   (cell-value cell)
-                   (heap-debug i cell)
-                   (if (= i highlight) " <===" ""))))
+           (let ((hi (= i highlight)))
+             (format t "~A ~4@A | ~A | ~12@A | ~26A ~A~%"
+                     (if hi "==> <" "    |")
+                     i
+                     (cell-type-short-name cell)
+                     (cell-value cell)
+                     (heap-debug i cell)
+                     (if hi "> <===" "|")))))
     (loop :for i :from from :below to
           :do (print-cell i (aref heap i))))
-  (format t "+------+-----+--------------+----------------------------+~%")
+  (when (< to (length heap))
+    (format t "    |    ⋮ |  ⋮  |            ⋮ |                            |~%"))
+  (format t "    +------+-----+--------------+----------------------------+~%")
   (values))
 
 (defun dump-heap-full (heap)
