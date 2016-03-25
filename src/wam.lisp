@@ -75,6 +75,13 @@
   `(unsigned-byte ,+cell-value-width+))
 
 
+(deftype heap-index ()
+  `(integer 0 ,(1- array-total-size-limit)))
+
+(deftype register-index ()
+  '(integer 0 15))
+
+
 (defun* cell-type ((cell heap-cell))
   (:returns heap-cell-tag)
   (logand cell +cell-tag-bitmask+))
@@ -101,15 +108,31 @@
     (+tag-functor+ "FUN")))
 
 
-(defun* cell-functor-name ((cell heap-cell))
-  (:returns string)
-  ;; todo
-  "functor")
+(defun* cell-functor-index ((cell heap-cell))
+  (:returns (integer 0))
+  (ash (cell-value cell)
+       (- functor-arity-width)))
 
 (defun* cell-functor-arity ((cell heap-cell))
   (:returns (integer 0))
   (logand (cell-value cell)
           functor-arity-bitmask))
+
+
+(defun* cell-aesthetic ((cell heap-cell))
+  "Return a compact, human-friendly string representation of the cell."
+  (format nil "[~A~A]"
+          (cell-type-short-name cell)
+          (eswitch ((cell-type cell))
+            (+tag-null+ "")
+            (+tag-structure+
+              (format nil " ~D" (cell-value cell)))
+            (+tag-functor+
+              (format nil "functor ~D/~D"
+                      (cell-functor-index cell)
+                      (cell-functor-arity cell)))
+            (+tag-reference+
+              (format nil " ~D" (cell-value cell))))))
 
 
 (defun* make-cell ((tag heap-cell-tag) (value heap-cell-value))
@@ -129,65 +152,19 @@
   (:returns heap-cell)
   (make-cell +tag-reference+ value))
 
-(defun* make-cell-functor ((functor symbol) (arity (integer 0)))
+(defun* make-cell-functor ((functor-index (integer 0))
+                           (arity (integer 0)))
   (:returns heap-cell)
-  (make-cell +tag-functor+ arity))
-
-
-;;;; Heap
-(defun heap-debug (addr cell)
-  (switch ((cell-type cell))
-    (+tag-reference+
-      (if (= addr (cell-value cell))
-        "unbound variable"
-        (format nil "var pointer to ~D" (cell-value cell))))
-    (+tag-functor+
-      (format nil "~A/~D"
-              (cell-functor-name cell)
-              (cell-functor-arity cell)))
-    (t "")))
-
-(defun dump-heap (heap from to highlight)
-  (format t "HEAP SIZE: ~A~%" (length heap))
-  (format t "    +------+-----+--------------+----------------------------+~%")
-  (format t "    | ADDR | TYP |        VALUE | DEBUG                      |~%")
-  (format t "    +------+-----+--------------+----------------------------+~%")
-  (when (> from 0)
-    (format t "    |    ⋮ |  ⋮  |            ⋮ |                            |~%"))
-  (flet ((print-cell
-           (i cell)
-           (let ((hi (= i highlight)))
-             (format t "~A ~4@A | ~A | ~12@A | ~26A ~A~%"
-                     (if hi "==> <" "    |")
-                     i
-                     (cell-type-short-name cell)
-                     (cell-value cell)
-                     (heap-debug i cell)
-                     (if hi "> <===" "|")))))
-    (loop :for i :from from :below to
-          :do (print-cell i (aref heap i))))
-  (when (< to (length heap))
-    (format t "    |    ⋮ |  ⋮  |            ⋮ |                            |~%"))
-  (format t "    +------+-----+--------------+----------------------------+~%")
-  (values))
-
-(defun dump-heap-full (heap)
-  (dump-heap heap 0 (length heap) -1))
-
-(defun dump-heap-around (heap addr width)
-  (dump-heap heap
-             (max 0 (- addr width))
-             (min (length heap) (+ addr width 1))
-             addr))
+  (make-cell
+    +tag-functor+
+    ;; Functor cells values are a combination of the functor index and arity:
+    ;;
+    ;;     ffffffffaaaa
+    (logior (ash functor-index functor-arity-width)
+            arity)))
 
 
 ;;;; BEHOLD: THE WAM
-(deftype heap-index ()
-  `(integer 0 ,(1- array-total-size-limit)))
-
-(deftype register-index ()
-  '(integer 0 15))
-
 (defclass wam ()
   ((heap
      :initform (make-array 16
@@ -199,6 +176,13 @@
      :initform 0
      :accessor wam-heap-pointer
      :documentation "The index of the first free cell on the heap (stack).")
+   (functors
+     :initform (make-array 16
+                           :fill-pointer 0
+                           :adjustable t
+                           :element-type 'symbol)
+     :accessor wam-functors
+     :documentation "The array of functor symbols in this WAM.")
    (registers
      :reader wam-registers
      :initform (make-array 16
@@ -225,9 +209,66 @@
   (setf (aref (wam-registers wam) register) new-value))
 
 
+(defun wam-ensure-functor-index (wam functor)
+  (with-slots (functors) wam
+    (or (position functor functors)
+        (vector-push-extend functor functors))))
+
+(defun wam-functor-lookup (wam functor-index)
+  (aref (wam-functors wam) functor-index))
+
+
+;;;; Dumping
+(defun heap-debug (wam addr cell)
+  (switch ((cell-type cell))
+    (+tag-reference+
+      (if (= addr (cell-value cell))
+        "unbound variable"
+        (format nil "var pointer to ~D" (cell-value cell))))
+    (+tag-functor+
+      (format nil "~A/~D"
+              (wam-functor-lookup wam (cell-functor-index cell))
+              (cell-functor-arity cell)))
+    (t "")))
+
+(defun dump-heap (wam from to highlight)
+  (let ((heap (wam-heap wam)))
+    (format t "HEAP SIZE: ~A~%" (length heap))
+    (format t "  +------+-----+--------------+----------------------------+~%")
+    (format t "  | ADDR | TYP |        VALUE | DEBUG                      |~%")
+    (format t "  +------+-----+--------------+----------------------------+~%")
+    (when (> from 0)
+      (format t "  |    ⋮ |  ⋮  |            ⋮ |                            |~%"))
+    (flet ((print-cell
+             (i cell)
+             (let ((hi (= i highlight)))
+               (format t "~A ~4@A | ~A | ~12@A | ~26A ~A~%"
+                       (if hi "==>" "  |")
+                       i
+                       (cell-type-short-name cell)
+                       (cell-value cell)
+                       (heap-debug wam i cell)
+                       (if hi "<===" "|")))))
+      (loop :for i :from from :below to
+            :do (print-cell i (aref heap i))))
+    (when (< to (length heap))
+      (format t "  |    ⋮ |  ⋮  |            ⋮ |                            |~%"))
+    (format t "  +------+-----+--------------+----------------------------+~%")
+    (values)))
+
+
+(defun dump-wam-registers (wam)
+  (format t "REGISTERS:~%")
+  (loop :for i :from 0
+        :for reg :across (wam-registers wam)
+        :do (format t "~5@A -> ~A~%"
+                    (format nil "X~D" i)
+                    (cell-aesthetic reg))))
+
 (defun dump-wam (wam from to highlight)
-  (format t "REGISTERS: ~S~%" (wam-registers wam))
-  (dump-heap (wam-heap wam) from to highlight))
+  (dump-wam-registers wam)
+  (format t "~%")
+  (dump-heap wam from to highlight))
 
 (defun dump-wam-full (wam)
   (dump-wam wam 0 (length (wam-heap wam)) -1))
@@ -244,21 +285,28 @@
 (defun* put-structure ((wam wam)
                        (functor symbol)
                        (arity (integer 0))
-                       (register (integer 0)))
+                       (register register-index))
+  (:returns :void)
   (let ((structure-cell (make-cell-structure (1+ (wam-heap-pointer wam))))
-        (functor-cell (make-cell-functor functor arity)))
+        (functor-cell (make-cell-functor
+                        (wam-ensure-functor-index wam functor)
+                        arity)))
     (wam-heap-push! wam structure-cell)
     (wam-heap-push! wam functor-cell)
-    (setf (wam-register wam register) structure-cell)))
+    (setf (wam-register wam register) structure-cell))
+  (values))
 
-(defun* set-variable ((wam wam) (register (integer 0)))
-  ;; This cell will reference itself (i.e. it's an unbound variable).
+(defun* set-variable ((wam wam) (register register-index))
+  (:returns :void)
   (let ((cell (make-cell-reference (wam-heap-pointer wam))))
-    (wam-heap-push! wam cell) ; Push it on top of the heap.
-    (setf (wam-register wam register) cell))) ; Set the register to the cell too.
+    (wam-heap-push! wam cell)
+    (setf (wam-register wam register) cell))
+  (values))
 
-(defun* set-value ((wam wam) (register (integer 0)))
-  (wam-heap-push! wam (wam-register wam register)))
+(defun* set-value ((wam wam) (register register-index))
+  (:returns :void)
+  (wam-heap-push! wam (wam-register wam register))
+  (values))
 
 
 ;;;; Transliteration of the book's machine instruction code:
