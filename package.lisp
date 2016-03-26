@@ -3,8 +3,9 @@
   (:export #:hello))
 
 (defpackage #:bones.wam
-  (:use #:cl #:defstar #:bones.utils #:optima)
-  (:import-from #:optima #:match))
+  (:use #:cl #:defstar #:bones.utils #:optima #:cl-arrows)
+  (:import-from #:optima #:match)
+  (:shadowing-import-from #:cl-arrows #:->))
 
 (defpackage #:bones.paip
   (:use #:cl #:defstar #:bones.utils)

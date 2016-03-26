@@ -3,7 +3,7 @@
 ;;;; WAM
 (defclass wam ()
   ((heap
-     :initform (make-array 16
+     :initform (make-array 32
                            :initial-element (make-cell-null)
                            :element-type 'heap-cell)
      :reader wam-heap

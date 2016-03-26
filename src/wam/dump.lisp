@@ -46,7 +46,13 @@
                     (format nil "X~D" i)
                     (cell-aesthetic reg))))
 
+(defun dump-wam-functors (wam)
+  (format t "FUNCTORS: ~S~%" (wam-functors wam)))
+
+
 (defun dump-wam (wam from to highlight)
+  (dump-wam-functors wam)
+  (format t "~%")
   (dump-wam-registers wam)
   (format t "~%")
   (dump-heap wam from to highlight))

@@ -11,6 +11,7 @@
   :depends-on (#:defstar
                #:optima
                #:trivial-types
+               #:cl-arrows
                #:fare-quasiquote-optima
                #:fare-quasiquote-readtable)
 
@@ -21,6 +22,7 @@
                 :components ((:file "paip")
                              (:module "wam"
                               :components ((:file "constants")
+                                           (:file "topological-sort")
                                            (:file "cells")
                                            (:file "wam")
                                            (:file "instructions")
