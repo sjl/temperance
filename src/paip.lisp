@@ -102,53 +102,52 @@
 
 (defun unify (x y &optional (bindings no-bindings))
   "Unify the two terms and return bindings necessary to do so (or FAIL)."
-  (flet ((unify-variable
-          (variable target bindings)
-          (cond
-           ;; If we've already got a binding for this variable, we can try to
-           ;; unify its value with the target.
-           ((get-binding variable bindings)
-            (unify (lookup variable bindings) target bindings))
+  (flet ((unify-variable (variable target bindings)
+           (cond
+             ;; If we've already got a binding for this variable, we can try to
+             ;; unify its value with the target.
+             ((get-binding variable bindings)
+              (unify (lookup variable bindings) target bindings))
 
-           ;; If the target is ALSO a variable, and it has a binding, then we
-           ;; can unify this variable with the target's value.
-           ((and (variable-p target) (get-binding target bindings))
-            (unify variable (lookup target bindings) bindings))
+             ;; If the target is ALSO a variable, and it has a binding, then we
+             ;; can unify this variable with the target's value.
+             ((and (variable-p target) (get-binding target bindings))
+              (unify variable (lookup target bindings) bindings))
 
-           ;; If this variable occurs in the target (including in something
-           ;; in its bindings) and we're checking occurrence, bail.
-           ((and *check-occurs* (check-occurs variable target bindings))
-            fail)
+             ;; If this variable occurs in the target (including in something
+             ;; in its bindings) and we're checking occurrence, bail.
+             ((and *check-occurs* (check-occurs variable target bindings))
+              fail)
 
-           ;; Otherwise we can just bind this variable to the target.
-           (t (extend-bindings variable target bindings)))))
+             ;; Otherwise we can just bind this variable to the target.
+             (t (extend-bindings variable target bindings)))))
     (cond
-     ;; Pass failures through.
-     ((eq bindings fail) fail)
+      ;; Pass failures through.
+      ((eq bindings fail) fail)
 
-     ;; Trying to unify two identical objects (constants or variables) can just
-     ;; return the bindings as-is.
-     ;;
-     ;; ex: (unify :y :y) or (unify 'foo 'foo)
-     ((eql x y) bindings)
+      ;; Trying to unify two identical objects (constants or variables) can just
+      ;; return the bindings as-is.
+      ;;
+      ;; ex: (unify :y :y) or (unify 'foo 'foo)
+      ((eql x y) bindings)
 
-     ;; Unifying a variable with something.
-     ((variable-p x) (unify-variable x y bindings))
-     ((variable-p y) (unify-variable y x bindings))
+      ;; Unifying a variable with something.
+      ((variable-p x) (unify-variable x y bindings))
+      ((variable-p y) (unify-variable y x bindings))
 
-     ;; Unifying a non-variable with nil should fail, except for nil itself.
-     ;; But that was handled with (eql x y).
-     ((or (null x) (null y)) fail)
+      ;; Unifying a non-variable with nil should fail, except for nil itself.
+      ;; But that was handled with (eql x y).
+      ((or (null x) (null y)) fail)
 
-     ;; Unifying non-empty compound terms such as
-     ;; (likes :x cats) with (likes sally :y).
-     ((and (listp x) (listp y))
-      (unify (rest x) (rest y) ; Unify the tails with the bindings gotten from...
-             (unify (first x) (first y) bindings))) ; unifying the heads.
+      ;; Unifying non-empty compound terms such as
+      ;; (likes :x cats) with (likes sally :y).
+      ((and (listp x) (listp y))
+       (unify (rest x) (rest y) ; Unify the tails with the bindings gotten from...
+              (unify (first x) (first y) bindings))) ; unifying the heads.
 
-     ;; Otherwise we're looking at different constants, or a constant and a
-     ;; compound term, so just give up.
-     (t fail))))
+      ;; Otherwise we're looking at different constants, or a constant and a
+      ;; compound term, so just give up.
+      (t fail))))
 
 
 ;;;; Substitution

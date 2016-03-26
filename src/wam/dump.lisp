@@ -21,8 +21,7 @@
     (format t "  +------+-----+--------------+----------------------------+~%")
     (when (> from 0)
       (format t "  |    ⋮ |  ⋮  |            ⋮ |                            |~%"))
-    (flet ((print-cell
-             (i cell)
+    (flet ((print-cell (i cell)
              (let ((hi (= i highlight)))
                (format t "~A ~4@A | ~A | ~12@A | ~26A ~A~%"
                        (if hi "==>" "  |")

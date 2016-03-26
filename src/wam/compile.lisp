@@ -8,17 +8,14 @@
   ;;   X1 -> A
   ;;   X2 -> q(X1, X3)
   ;;   X3 -> B
-  (labels ((variable-p
-             (term)
+  (labels ((variable-p (term)
              (keywordp term))
-           (parse-variable
-             (var registers)
+           (parse-variable (var registers)
              ;; If we've already seen this variable, just return its position,
              ;; otherwise allocate a register for it.
              (or (position var registers)
                  (vector-push-extend var registers)))
-           (parse-structure
-             (structure registers)
+           (parse-structure (structure registers)
              (let* ((functor (first structure))
                     (arguments (rest structure))
                     (contents (list functor)))
@@ -32,9 +29,9 @@
                                    (parse arg registers))
                                 arguments)))))
            (parse (term registers)
-                  (if (variable-p term)
-                    (parse-variable term registers)
-                    (parse-structure term registers))))
+             (if (variable-p term)
+               (parse-variable term registers)
+               (parse-structure term registers))))
     (let ((registers (make-array 64 :fill-pointer 0 :adjustable t)))
       (parse term registers)
       (loop :for i :from 0
@@ -53,11 +50,9 @@
   ;; into something like:
   ;;
   ;;   X2 -> q(X1, X3), X0 -> p(X1, X2)
-  (labels ((variable-assignment-p
-             (ass)
+  (labels ((variable-assignment-p (ass)
              (keywordp (cdr ass)))
-           (assignment-less-p
-             (ass1 ass2)
+           (assignment-less-p (ass1 ass2)
              (cond
                ;; If 2 is a variable assignment, nothing can be less than it.
                ((variable-assignment-p ass2) nil)
@@ -112,12 +107,10 @@
   ;;   (#'set-value 1)
   ;;   (#'set-value 2)
   (let ((seen (list)))
-    (flet ((handle-structure
-             (register functor arity)
+    (flet ((handle-structure (register functor arity)
              (push register seen)
              (list #'put-structure functor arity register))
-           (handle-register
-             (register)
+           (handle-register (register)
              (if (member register seen)
                (list #'set-value register)
                (progn
