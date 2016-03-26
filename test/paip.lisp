@@ -19,10 +19,10 @@
 
 (defmacro with-db (rules &rest body)
   `(progn
-     (clear-db)
-     ,@(mapcar #'(lambda (rule) `(rule ,@rule))
-               rules)
-     ,@body))
+    (clear-db)
+    ,@(mapcar (lambda (rule) `(rule ,@rule))
+              rules)
+    ,@body))
 
 
 (defmacro proves (query)

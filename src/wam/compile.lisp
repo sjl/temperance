@@ -36,8 +36,8 @@
                  ;; once we're finished.  The children should handle extending
                  ;; the registers as needed.
                  (nconc contents
-                        (mapcar #'(lambda (arg)
-                                   (parse arg registers))
+                        (mapcar (lambda (arg)
+                                  (parse arg registers))
                                 arguments)))))
            (parse (term registers)
              (cond
@@ -90,14 +90,14 @@
   Each entry will be a cons of `(a . b)` if register `a` depends on `b`.
 
   "
-  (mapcan #'(lambda (assignment)
-             (if (variable-assignment-p assignment)
-               () ; Variable assignments don't depend on anything else
-               (destructuring-bind (target . (functor . reqs))
-                   assignment
-                 (declare (ignore functor))
-                 (loop :for req :in reqs
-                       :collect (cons req target)))))
+  (mapcan (lambda (assignment)
+            (if (variable-assignment-p assignment)
+              () ; Variable assignments don't depend on anything else
+              (destructuring-bind (target . (functor . reqs))
+                  assignment
+                (declare (ignore functor))
+                (loop :for req :in reqs
+                      :collect (cons req target)))))
           registers))
 
 (defun swap-cons (c)
@@ -145,15 +145,15 @@
 
 (defun tokenize-assignments (assignments)
   "Tokenize a flattened set of register assignments into a stream."
-  (mapcan #'(lambda (ass)
-             (destructuring-bind (register . (functor . arguments)) ass
-               ;; Take a single assignment like:
-               ;;   X1 = f(a, b, c)         (1 . (f a b c))
-               ;;
-               ;; And turn it into a stream of tokens:
-               ;;   (X1 = f/3), a, b, c     (1 f 3) a b c
-               (cons (list register functor (length arguments))
-                     arguments)))
+  (mapcan (lambda (ass)
+            (destructuring-bind (register . (functor . arguments)) ass
+              ;; Take a single assignment like:
+              ;;   X1 = f(a, b, c)         (1 . (f a b c))
+              ;;
+              ;; And turn it into a stream of tokens:
+              ;;   (X1 = f/3), a, b, c     (1 f 3) a b c
+              (cons (list register functor (length arguments))
+                    arguments)))
           assignments))
 
 
@@ -194,14 +194,14 @@
 (defun generate-query-actions (tokens)
   (generate-actions tokens
                     #'%put-structure
-                    #'%set-value
-                    #'%set-variable))
+                    #'%set-variable
+                    #'%set-value))
 
 (defun generate-program-actions (tokens)
   (generate-actions tokens
                     #'%get-structure
-                    #'%unify-value
-                    #'%unify-variable))
+                    #'%unify-variable
+                    #'%unify-value))
 
 
 ;;;; UI
@@ -224,8 +224,8 @@
 
 (defun run (wam instructions)
   "Execute the machine instructions on the given WAM."
-  (mapc #'(lambda (action)
-            (apply (car action) wam (cdr action)))
+  (mapc (lambda (action)
+          (apply (car action) wam (cdr action)))
         instructions)
   (values))
 

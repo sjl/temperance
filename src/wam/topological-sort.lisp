@@ -32,8 +32,8 @@
              (funcall key-test val (cdr constraint))))
        (recur (remaining-constraints remaining-elements result)
          (let ((minimal-element
-                 (find-if #'(lambda (el)
-                             (minimal-p el remaining-constraints))
+                 (find-if (lambda (el)
+                            (minimal-p el remaining-constraints))
                           remaining-elements)))
            (if (null minimal-element)
              (if (null remaining-elements)
