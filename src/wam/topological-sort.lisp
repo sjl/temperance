@@ -9,11 +9,10 @@
 
   `elements` should be a sequence of elements to be sorted.
 
-  `constraints` should be a list of `(element . element)` conses where
-  `(foo . bar)` means that element `foo` must precede `bar` in the result.
+  `constraints` should be a list of `(key . key)` conses where `(foo . bar)`
+  means element `foo` must precede `bar` in the result.
 
-  `key` will be used to turn items in `elements` into the items in
-  `constraints`.
+  `key` will be used to turn items in `elements` into the keys in `constraints`.
 
   `key-test` is the equality predicate for keys.
 
