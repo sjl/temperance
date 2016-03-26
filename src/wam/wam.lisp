@@ -1,5 +1,6 @@
 (in-package #:bones.wam)
 
+;;;; WAM
 (defclass wam ()
   ((heap
      :initform (make-array 16
@@ -30,6 +31,12 @@
   (make-instance 'wam))
 
 
+;;;; Heap
+;;; The WAM heap is a fixed-length array of cells and a heap pointer.
+;;;
+;;; TODO: Consider using an adjustable array.  There must still be a max size
+;;; because you can only index so many addresses with N bits.
+
 (defun* wam-heap-push! ((wam wam) (cell heap-cell))
   (:returns heap-cell)
   "Push the cell onto the WAM heap and increment the heap pointer.
@@ -42,6 +49,19 @@
     (incf heap-pointer)
     cell))
 
+
+(defun* wam-heap-cell ((wam wam) (address heap-index))
+  (:returns heap-cell)
+  "Return the heap cell at the given address."
+  (aref (wam-heap wam) address))
+
+(defun (setf wam-heap-cell) (new-value wam address)
+  (setf (aref (wam-heap wam) address) new-value))
+
+
+;;;; Registers
+;;; WAM registers are implemented as an array of a fixed number of registers.
+
 (defun* wam-register ((wam wam) (register register-index))
   (:returns heap-cell)
   "Return the WAM register with the given index."
@@ -50,6 +70,13 @@
 (defun (setf wam-register) (new-value wam register)
   (setf (aref (wam-registers wam) register) new-value))
 
+
+;;;; Functors
+;;; Functors are symbols stored in an adjustable array.  Cells refer to
+;;; a functor using the functor's address in this array.
+;;;
+;;; TODO: Limit the number of functors based on the number of addressable
+;;; functors in the functor cell index bits.
 
 (defun* wam-ensure-functor-index ((wam wam) (functor symbol))
   (:returns functor-index)
