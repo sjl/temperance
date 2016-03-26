@@ -1,9 +1,10 @@
 (in-package #:bones.wam)
 
-(defun* put-structure ((wam wam)
-                       (functor symbol)
-                       (arity arity)
-                       (register register-index))
+;;;; Query Instructions
+(defun* %put-structure ((wam wam)
+                        (functor symbol)
+                        (arity arity)
+                        (register register-index))
   (:returns :void)
   (let ((structure-cell (make-cell-structure (1+ (wam-heap-pointer wam))))
         (functor-cell (make-cell-functor
@@ -14,16 +15,32 @@
     (setf (wam-register wam register) structure-cell))
   (values))
 
-(defun* set-variable ((wam wam) (register register-index))
+(defun* %set-variable ((wam wam) (register register-index))
   (:returns :void)
   (let ((cell (make-cell-reference (wam-heap-pointer wam))))
     (wam-heap-push! wam cell)
     (setf (wam-register wam register) cell))
   (values))
 
-(defun* set-value ((wam wam) (register register-index))
+(defun* %set-value ((wam wam) (register register-index))
   (:returns :void)
   (wam-heap-push! wam (wam-register wam register))
   (values))
 
+
+;;;; Program Instructions
+(defun* %get-structure ((wam wam)
+                        (functor symbol)
+                        (arity arity)
+                        (register register-index))
+  (:returns :void)
+  (values))
+
+(defun* %unify-variable ((wam wam) (register register-index))
+  (:returns :void)
+  (values))
+
+(defun* %unify-value ((wam wam) (register register-index))
+  (:returns :void)
+  (values))
 

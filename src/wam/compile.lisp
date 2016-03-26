@@ -100,21 +100,35 @@
                        :collect (cons req target)))))
           registers))
 
+(defun swap-cons (c)
+  (cons (cdr c) (car c)))
 
-(defun flatten-query (registers)
-  "Flatten the set of register assignments into a minimal set for a query.
 
-  For queries we require that every register is assigned before it is used.
+(defun flatten (registers reverse)
+  "Flatten the set of register assignments into a minimal set.
+
+  `reverse` determines the ordering.  For queries (`nil`) we require that every
+  register be assigned before it is used.  For programs (`t`) we require the
+  opposite.
 
   We also remove the plain old variable assignments because they're not actually
-  needed.
+  needed in the end.
 
   "
   (-<>> registers
-    (topological-sort <> (find-dependencies registers) :key #'car)
+    (topological-sort <>
+                      (let ((dependencies (find-dependencies registers)))
+                        (if reverse
+                          (mapcar #'swap-cons dependencies)
+                          dependencies))
+                      :key #'car)
     (remove-if #'variable-assignment-p <>)))
 
-(defun flatten-program (registers))
+(defun flatten-query (registers)
+  (flatten registers nil))
+
+(defun flatten-program (registers)
+  (flatten registers t))
 
 
 ;;;; Tokenization
@@ -153,35 +167,59 @@
 ;;;
 ;;; into something like:
 ;;;
-;;;   (#'put-structure 2 q 2)
-;;;   (#'set-variable 1)
-;;;   (#'set-variable 3)
-;;;   (#'put-structure 0 p 2)
-;;;   (#'set-value 1)
-;;;   (#'set-value 2)
+;;;   (#'%put-structure 2 q 2)
+;;;   (#'%set-variable 1)
+;;;   (#'%set-variable 3)
+;;;   (#'%put-structure 0 p 2)
+;;;   (#'%set-value 1)
+;;;   (#'%set-value 2)
 
-(defun generate-actions (tokens)
+(defun generate-actions (tokens structure-inst unseen-var-inst seen-var-inst)
   "Generate a series of 'machine instructions' from a stream of tokens."
   (let ((seen (list)))
     (flet ((handle-structure (register functor arity)
              (push register seen)
-             (list #'put-structure functor arity register))
+             (list structure-inst functor arity register))
            (handle-register (register)
              (if (member register seen)
-               (list #'set-value register)
+               (list seen-var-inst register)
                (progn
                  (push register seen)
-                 (list #'set-variable register)))))
+                 (list unseen-var-inst register)))))
       (loop :for token :in tokens
             :collect (if (consp token)
                        (apply #'handle-structure token)
                        (handle-register token))))))
 
+(defun generate-query-actions (tokens)
+  (generate-actions tokens
+                    #'%put-structure
+                    #'%set-value
+                    #'%set-variable))
+
+(defun generate-program-actions (tokens)
+  (generate-actions tokens
+                    #'%get-structure
+                    #'%unify-value
+                    #'%unify-variable))
+
 
 ;;;; UI
 (defun compile-query-term (term)
-  "Parse a Lisp term into a series of WAM machine instructions."
-  (-> term parse-term flatten-query tokenize-assignments generate-actions))
+  "Parse a Lisp query term into a series of WAM machine instructions."
+  (-> term
+      parse-term
+      flatten-query
+      tokenize-assignments
+      generate-query-actions))
+
+(defun compile-program-term (term)
+  "Parse a Lisp program term into a series of WAM machine instructions."
+  (-> term
+      parse-term
+      flatten-program
+      tokenize-assignments
+      generate-program-actions))
 
 
 (defun run (wam instructions)
