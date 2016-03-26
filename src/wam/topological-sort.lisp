@@ -20,30 +20,28 @@
 
   "
   (labels
-      ((find-minimal-elements (elements constraints)
-         ;; An element is minimal if there are no other elements that are
-         ;; required to precede it.
-         (remove-if #'(lambda (element)
-                       (member (funcall key element)
-                               constraints
-                               :key #'cdr
-                               :test key-test))
-                    elements))
+      ((minimal-p (element constraints)
+         ;; An element is minimal if there are no other elements that must
+         ;; precede it.
+         (not (member (funcall key element) constraints
+                      :key #'cdr
+                      :test key-test)))
        (in-constraint (val constraint)
          ;; Return whether val is either part of a constraint.
          (or (funcall key-test val (car constraint))
              (funcall key-test val (cdr constraint))))
        (recur (remaining-constraints remaining-elements result)
-         (let ((minimal-elements (find-minimal-elements remaining-elements
-                                                        remaining-constraints)))
-           (if (null minimal-elements)
+         (let ((minimal-element
+                 (find-if #'(lambda (el)
+                             (minimal-p el remaining-constraints))
+                          remaining-elements)))
+           (if (null minimal-element)
              (if (null remaining-elements)
                result
                (error "Inconsistent constraints."))
-             (let ((choice (car minimal-elements)))
-               (recur (remove (funcall key choice)
-                              remaining-constraints
-                              :test #'in-constraint)
-                      (remove choice remaining-elements :test test)
-                      (cons choice result)))))))
+             (recur (remove (funcall key minimal-element)
+                            remaining-constraints
+                            :test #'in-constraint)
+                    (remove minimal-element remaining-elements :test test)
+                    (cons minimal-element result))))))
     (reverse (recur constraints elements (list)))))
