@@ -71,3 +71,20 @@
                  (+ addr width 1))
             addr))
 
+
+
+(defun extract-thing (wam address)
+  (let ((cell (wam-heap-cell wam (deref wam address))))
+    (cond
+      ((cell-null-p cell)
+       "NULL!")
+      ((cell-reference-p cell)
+       (format nil "var-~D" (cell-value cell)))
+      ((cell-structure-p cell)
+       (extract-thing wam (cell-value cell)))
+      ((cell-functor-p cell)
+       (let ((functor (wam-functor-lookup wam (cell-functor-index cell)))
+             (arity (cell-functor-arity cell)))
+         (list* functor
+                (loop :for i :from (1+ address) :to (+ address arity)
+                      :collect (extract-thing wam i))))))))
