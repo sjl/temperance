@@ -28,19 +28,21 @@
                         arity)))
 
 
-(defun* bound-reference-p ((address heap-index) (cell heap-cell))
+(defun* bound-reference-p ((wam wam) (address heap-index))
   (:returns boolean)
-  "Return whether `cell` is a bound reference, assuming it lives at `address`."
+  "Return whether the cell at `address` is a bound reference."
   (ensure-boolean
-    (and (cell-reference-p cell)
-         (not (= (cell-value cell) address)))))
+    (let ((cell (wam-heap-cell wam address)))
+      (and (cell-reference-p cell)
+           (not (= (cell-value cell) address))))))
 
-(defun* unbound-reference-p ((address heap-index) (cell heap-cell))
+(defun* unbound-reference-p ((wam wam) (address heap-index))
   (:returns boolean)
-  "Return whether `cell` is an unbound reference, assuming it lives at `address`."
+  "Return whether the cell at `address` is an unbound reference."
   (ensure-boolean
-    (and (cell-reference-p cell)
-         (= (cell-value cell) address))))
+    (let ((cell (wam-heap-cell wam address)))
+      (and (cell-reference-p cell)
+           (= (cell-value cell) address)))))
 
 (defun* matching-functor-p ((wam wam)
                             (cell heap-cell)
@@ -64,33 +66,39 @@
   will be returned.
 
   "
-  (let ((cell (wam-heap-cell wam address)))
-    (if (bound-reference-p address cell)
-      (deref wam (cell-value cell))
-      address)))
+  (if (bound-reference-p wam address)
+    (deref wam (cell-value (wam-heap-cell wam address)))
+    address))
 
 
-(defun* bind! ((wam wam) (address heap-index) (target heap-index))
-  "Bind the reference cell at `address` to `target`.
+(defun* bind! ((wam wam) (address-1 heap-index) (address-2 heap-index))
+  (:returns :void)
+  "Bind the unbound reference cell to the other.
 
-  The reference cell must be unbound to begin with.
-  TODO: are we sure about this?
+  `bind!` takes two addresses as arguments.  At least one of these *must* refer
+  to an unbound reference cell.  This unbound reference will be bound to point
+  at the other address.
 
-  `target` doesn't necessarily need to exist yet.
-  TODO: this seems dangerous...
+  If both addresses refer to unbound references, the direction of the binding is
+  chosen arbitrarily.
 
   "
-  (assert (unbound-reference-p address
-                               (wam-heap-cell wam address))
-          ()
-          "Cannot bind address ~D because it is not an unbound reference."
-          address)
-  (setf (wam-heap-cell wam address)
-        (make-cell-reference target)))
+  (cond
+    ((unbound-reference-p wam address-1)
+     (setf (wam-heap-cell wam address-1)
+           (make-cell-reference address-2)))
+    ((unbound-reference-p wam address-2)
+     (setf (wam-heap-cell wam address-2)
+           (make-cell-reference address-1)))
+    (t (error "At least one cell must be an unbound reference when binding.")))
+  (values))
+
 
 (defun* fail! ((wam wam))
+  (:returns :void)
   "Mark a failure in the WAM."
-  (setf (wam-fail wam) t))
+  (setf (wam-fail wam) t)
+  (values))
 
 
 (defun* unify ((wam wam) (a1 heap-index) (a2 heap-index))
@@ -130,19 +138,47 @@
   (let* ((addr (deref wam (wam-register wam register)))
          (cell (wam-heap-cell wam addr)))
     (cond
-      ;; If the register points at a reference cell
+      ;; If the register points at a reference cell, we push two new cells onto
+      ;; the heap:
+      ;;
+      ;;     |   N | STR | N+1 |
+      ;;     | N+1 | FUN | f/n |
+      ;;
+      ;; Then we bind this reference cell to point at the new structure and flip
+      ;; over to write mode.
+      ;;
+      ;; It seems a bit confusing that we don't push the rest of the structure
+      ;; stuff on the heap after it too.  But that's going to happen in the next
+      ;; few instructions (which will be unify-*'s, executed in write mode).
       ((cell-reference-p cell)
-       (bind! wam addr (wam-heap-pointer wam))
-       (push-new-structure! wam)
-       (push-new-functor! wam functor arity)
-       (setf (wam-mode wam) :write))
-      ;; If the register points at a structure cell
+       (let ((new-structure-address (nth-value 1 (push-new-structure! wam))))
+         (push-new-functor! wam functor arity)
+         (bind! wam addr new-structure-address)
+         (setf (wam-mode wam) :write)))
+
+      ;; If the register points at a structure cell, then we look at where that
+      ;; cell points (which will be the functor cell for the structure):
+      ;;
+      ;;     |   N | STR | M   | points at the structure, not necessarily contiguous
+      ;;     |       ...       |
+      ;;     |   M | FUN | f/2 | the functor (hopefully it matches)
+      ;;     | M+1 | ... | ... | pieces of the structure, always contiguous
+      ;;     | M+2 | ... | ... | and always right after the functor
+      ;;
+      ;; If it matches the functor we're looking for, we can proceed.  We set
+      ;; the S register to the address of the first subform we need to match
+      ;; (M+1 in the example above).
+      ;;
+      ;; What about if it's a 0-arity functor?  The S register will be set to
+      ;; garbage.  But that's okay, because we know the next thing in the stream
+      ;; of instructions will be another get-structure and we'll just blow away
+      ;; the S register there.
       ((cell-structure-p cell)
-       (let* ((target-addr (cell-value cell))
-              (target (wam-heap-cell wam target-addr)))
-         (if (matching-functor-p wam target functor arity)
+       (let* ((functor-addr (cell-value cell))
+              (functor-cell (wam-heap-cell wam functor-addr)))
+         (if (matching-functor-p wam functor-cell functor arity)
            (progn
-             (setf (wam-s wam) (1+ target-addr))
+             (setf (wam-s wam) (1+ functor-addr))
              (setf (wam-mode wam) :read))
            (fail! wam))))
       (t (fail! wam))))

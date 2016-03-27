@@ -87,4 +87,5 @@
              (arity (cell-functor-arity cell)))
          (list* functor
                 (loop :for i :from (1+ address) :to (+ address arity)
-                      :collect (extract-thing wam i))))))))
+                      :collect (extract-thing wam i)))))
+      (t (error "What to heck is this?")))))
