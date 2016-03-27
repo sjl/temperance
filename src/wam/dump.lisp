@@ -15,7 +15,6 @@
 (defun dump-heap (wam from to highlight)
   ;; This code is awful, sorry.
   (let ((heap (wam-heap wam)))
-    (format t "HEAP SIZE: ~A~%" (length heap))
     (format t "  +------+-----+--------------+----------------------------+~%")
     (format t "  | ADDR | TYP |        VALUE | DEBUG                      |~%")
     (format t "  +------+-----+--------------+----------------------------+~%")
@@ -40,19 +39,24 @@
 
 (defun dump-wam-registers (wam)
   (format t "REGISTERS:~%")
+  (format t  "~5@A ->~4@A~%" "S" (wam-s wam))
   (loop :for i :from 0
         :for reg :across (wam-registers wam)
-        :do (format t "~5@A -> ~A~%"
+        :for contents = (wam-register-cell wam i)
+        :do (format t "~5@A ->~4@A ~A~%"
                     (format nil "X~D" i)
-                    (cell-aesthetic reg))))
+                    reg
+                    (cell-aesthetic contents))))
 
 (defun dump-wam-functors (wam)
-  (format t "FUNCTORS: ~S~%" (wam-functors wam)))
+  (format t " FUNCTORS: ~S~%" (wam-functors wam)))
 
 
 (defun dump-wam (wam from to highlight)
+  (format t "     FAIL: ~A~%" (wam-fail wam))
+  (format t "     MODE: ~A~%" (wam-mode wam))
   (dump-wam-functors wam)
-  (format t "~%")
+  (format t "HEAP SIZE: ~A~%" (length (wam-heap wam)))
   (dump-wam-registers wam)
   (format t "~%")
   (dump-heap wam from to highlight))

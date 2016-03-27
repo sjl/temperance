@@ -97,11 +97,28 @@
             (+tag-structure+
               (format nil " ~D" (cell-value cell)))
             (+tag-functor+
-              (format nil "functor ~D/~D"
+              (format nil " functor ~D/~D"
                       (cell-functor-index cell)
                       (cell-functor-arity cell)))
             (+tag-reference+
               (format nil " ~D" (cell-value cell))))))
+
+
+(defun* cell-null-p ((cell heap-cell))
+  (:returns boolean)
+  (= (cell-type cell) +tag-null+))
+
+(defun* cell-reference-p ((cell heap-cell))
+  (:returns boolean)
+  (= (cell-type cell) +tag-reference+))
+
+(defun* cell-functor-p ((cell heap-cell))
+  (:returns boolean)
+  (= (cell-type cell) +tag-functor+))
+
+(defun* cell-structure-p ((cell heap-cell))
+  (:returns boolean)
+  (= (cell-type cell) +tag-structure+))
 
 
 (defun* make-cell ((tag heap-cell-tag) (value heap-cell-value))

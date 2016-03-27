@@ -2,7 +2,7 @@
 ;;;; See http://quickutil.org for details.
 
 ;;;; To regenerate:
-;;;; (qtlc:save-utils-as "utils.lisp" :utilities '(:DEFINE-CONSTANT :SET-EQUAL :CURRY :SWITCH) :ensure-package T :package "BONES.UTILS")
+;;;; (qtlc:save-utils-as "utils.lisp" :utilities '(:DEFINE-CONSTANT :SET-EQUAL :CURRY :SWITCH :ENSURE-BOOLEAN) :ensure-package T :package "BONES.UTILS")
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (unless (find-package "BONES.UTILS")
@@ -17,7 +17,7 @@
                                          :MAKE-GENSYM-LIST :ENSURE-FUNCTION
                                          :CURRY :STRING-DESIGNATOR
                                          :WITH-GENSYMS :EXTRACT-FUNCTION-NAME
-                                         :SWITCH))))
+                                         :SWITCH :ENSURE-BOOLEAN))))
 
   (defun %reevaluate-constant (name value test)
     (if (not (boundp name))
@@ -205,7 +205,13 @@ returns the values of `default` if no keys match."
     "Like `switch`, but signals a continuable error if no key matches."
     (generate-switch-body whole object clauses test key '(cerror "Return NIL from CSWITCH.")))
   
+
+  (defun ensure-boolean (x)
+    "Convert `x` into a Boolean value."
+    (and x t))
+  
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (export '(define-constant set-equal curry switch eswitch cswitch)))
+  (export '(define-constant set-equal curry switch eswitch cswitch
+            ensure-boolean)))
 
 ;;;; END OF utils.lisp ;;;;

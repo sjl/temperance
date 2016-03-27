@@ -4,5 +4,7 @@
                     :utilities '(:define-constant
                                  :set-equal
                                  :curry
-                                 :switch)
+                                 :switch
+                                 :ensure-boolean
+                                 )
                     :package "BONES.UTILS")

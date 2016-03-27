@@ -1,9 +1,11 @@
 (in-package #:bones.wam)
 
 ;;;; WAM
+(defparameter *wam-heap-size* 32)
+
 (defclass wam ()
   ((heap
-     :initform (make-array 32
+     :initform (make-array *wam-heap-size*
                            :initial-element (make-cell-null)
                            :element-type 'heap-cell)
      :reader wam-heap
@@ -22,9 +24,26 @@
    (registers
      :reader wam-registers
      :initform (make-array +register-count+
-                           :initial-element (make-cell-null)
-                           :element-type 'heap-cell)
-     :documentation "An array of the X_i registers.")))
+                           ;; Point at the last heap index by default, just to
+                           ;; make it easier to read debug output.
+                           :initial-element (1- *wam-heap-size*)
+                           :element-type 'heap-index)
+     :documentation "An array of the X_i registers.")
+   (fail
+     :accessor wam-fail
+     :initform nil
+     :type boolean
+     :documentation "The failure register.")
+   (s
+     :accessor wam-s
+     :initform nil
+     :type (or null heap-index)
+     :documentation "The S register (address of next subterm to match).")
+   (mode
+     :accessor wam-mode
+     :initform nil
+     :type (or null (member :read :write))
+     :documentation "Current unification mode (:READ or :WRITE (or NIL)).")))
 
 
 (defun make-wam ()
@@ -38,16 +57,16 @@
 ;;; because you can only index so many addresses with N bits.
 
 (defun* wam-heap-push! ((wam wam) (cell heap-cell))
-  (:returns heap-cell)
+  (:returns (values heap-cell heap-index))
   "Push the cell onto the WAM heap and increment the heap pointer.
 
-  Returns the cell.
+  Returns the cell and the address it was pushed to.
 
   "
   (with-slots (heap heap-pointer) wam
     (setf (aref heap heap-pointer) cell)
     (incf heap-pointer)
-    cell))
+    (values cell (1- heap-pointer))))
 
 
 (defun* wam-heap-cell ((wam wam) (address heap-index))
@@ -61,6 +80,7 @@
 
 ;;;; Registers
 ;;; WAM registers are implemented as an array of a fixed number of registers.
+;;; A register contains the address of a cell in the heap.
 
 (defun* wam-register ((wam wam) (register register-index))
   (:returns heap-cell)
@@ -69,6 +89,24 @@
 
 (defun (setf wam-register) (new-value wam register)
   (setf (aref (wam-registers wam) register) new-value))
+
+(defun* wam-register-cell ((wam wam) (register register-index))
+  (:returns heap-cell)
+  "Return the heap cell `register` is pointing at."
+  (->> register
+    (wam-register wam)
+    (wam-heap-cell wam)))
+
+(defun* wam-s-cell ((wam wam))
+  "Retrieve the cell the S register is pointing at.
+
+  If S is unbound, throws an error.
+
+  "
+  (let ((s (wam-s wam)))
+    (if (null s)
+      (error "Cannot dereference unbound S register.")
+      (wam-heap-cell wam s))))
 
 
 ;;;; Functors
