@@ -10,83 +10,63 @@ don't touch it.
 
 [TOC]
 
-## Package BONES.PAIP
+## Package `BONES.PAIP`
 
 Test?
 
-### \*CHECK-OCCURS\* (variable)
+### `*CHECK-OCCURS*` (variable)
 
 Whether to perform an occurs check.
 
-### BOUND-P (function)
-
-    (BOUND-P VAR)
-
-Return whether the given variable has been bound.
-
-### CLEAR-DB (function)
+### `CLEAR-DB` (function)
 
     (CLEAR-DB)
 
-### FACT (macro)
+### `FACT` (macro)
 
     (FACT &REST BODY)
 
-### FAIL (variable)
+### `FAIL` (variable)
 
 Failure to unify
 
-### NO-BINDINGS (variable)
+### `NO-BINDINGS` (variable)
 
 A succesful unification, with no bindings.
 
-### QUERY (macro)
+### `QUERY` (macro)
 
     (QUERY &REST GOALS)
 
 Perform the query interactively.
 
-### QUERY-ALL (macro)
+### `QUERY-ALL` (macro)
 
     (QUERY-ALL &REST GOALS)
 
 Perform the query and automatically show all results.
 
-### QUERY-ONE (macro)
+### `QUERY-ONE` (macro)
 
     (QUERY-ONE &REST GOALS)
 
 Perform the query and just show the first result.
 
-### RETURN-ALL (macro)
+### `RETURN-ALL` (macro)
 
     (RETURN-ALL &REST GOALS)
 
-### RETURN-ONE (macro)
+### `RETURN-ONE` (macro)
 
     (RETURN-ONE &REST GOALS)
 
-### RULE (macro)
+### `RULE` (macro)
 
     (RULE &REST CLAUSE)
 
-### UNBOUND (variable)
-
-A magic constant representing an unbound variable.
-
-### UNIFY (function)
+### `UNIFY` (function)
 
     (UNIFY X Y &OPTIONAL (BINDINGS NO-BINDINGS))
 
 Unify the two terms and return bindings necessary to do so (or FAIL).
-
-### UNIFY! (function)
-
-    (UNIFY! X Y)
-
-Destructively unify two expressions, returning whether it was successful.
-
-  Any variables in `x` and `y` may have their bindings set.
-
-  
 
