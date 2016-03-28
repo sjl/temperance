@@ -6,5 +6,7 @@
                                  :curry
                                  :switch
                                  :ensure-boolean
+                                 :while
+                                 :until
                                  )
                     :package "BONES.UTILS")

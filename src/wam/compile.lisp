@@ -225,7 +225,8 @@
 (defun run (wam instructions)
   "Execute the machine instructions on the given WAM."
   (mapc (lambda (action)
-          (apply (car action) wam (cdr action)))
+          (when (not (wam-fail wam))
+            (apply (car action) wam (cdr action))))
         instructions)
   (values))
 

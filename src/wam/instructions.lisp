@@ -56,6 +56,17 @@
          (eql functor
               (wam-functor-lookup wam (cell-functor-index cell))))))
 
+(defun* functors-match-p ((functor-cell-1 heap-cell)
+                          (functor-cell-2 heap-cell))
+  (:returns boolean)
+  "Return whether the two functor cells represent the same functor."
+  ;; Warning: this is a gross, fast hack.  Functor cell values are a combination
+  ;; of functor index and arity, so the only way they can represent the same
+  ;; functor is if they have the same value.  We don't have to bother actually
+  ;; looking up and comparing the functor symbols themselves.
+  (= (cell-value functor-cell-1)
+     (cell-value functor-cell-2)))
+
 
 (defun* deref ((wam wam) (address heap-index))
   (:returns heap-index)
@@ -94,16 +105,46 @@
   (values))
 
 
-(defun* fail! ((wam wam))
+(defun* fail! ((wam wam) (reason string))
   (:returns :void)
   "Mark a failure in the WAM."
   (setf (wam-fail wam) t)
+  (format *debug-io* "FAIL: ~A~%" reason)
   (values))
 
 
-(defun* unify ((wam wam) (a1 heap-index) (a2 heap-index))
-  nil
-  )
+(defun* unify! ((wam wam) (a1 heap-index) (a2 heap-index))
+  (wam-unification-stack-push! wam a1)
+  (wam-unification-stack-push! wam a2)
+  (setf (wam-fail wam) nil)
+  ;; TODO: refactor this horror show.
+  (until (or (wam-fail wam)
+             (wam-unification-stack-empty-p wam))
+    (let ((d1 (deref wam (wam-unification-stack-pop! wam)))
+          (d2 (deref wam (wam-unification-stack-pop! wam))))
+      (when (not (= d1 d2))
+        (let ((cell-1 (wam-heap-cell wam d1))
+              (cell-2 (wam-heap-cell wam d2)))
+          (if (or (cell-reference-p cell-1)
+                  (cell-reference-p cell-2))
+            ;; If at least one is a reference, bind them.
+            ;;
+            ;; We know that any references we see here will be unbound,
+            ;; because we deref'ed them above.
+            (bind! wam d1 d2)
+            ;; Otherwise we're looking at two structures (hopefully, lol).
+            (let* ((structure-1-addr (cell-value cell-1)) ; find where they
+                   (structure-2-addr (cell-value cell-2)) ; start on the heap
+                   (functor-1 (wam-heap-cell wam structure-1-addr)) ; grab the
+                   (functor-2 (wam-heap-cell wam structure-2-addr))) ;functors
+              (if (functors-match-p functor-1 functor-2)
+                ;; If the functors match, push their pairs of arguments onto
+                ;; the stack to be unified.
+                (loop :for i :from 1 :to (cell-functor-arity functor-1) :do
+                      (wam-unification-stack-push! wam (+ structure-1-addr i))
+                      (wam-unification-stack-push! wam (+ structure-2-addr i)))
+                ;; Otherwise we're hosed.
+                (fail! wam "Functors don't match in unify!")))))))))
 
 
 ;;;; Query Instructions
@@ -180,15 +221,16 @@
            (progn
              (setf (wam-s wam) (1+ functor-addr))
              (setf (wam-mode wam) :read))
-           (fail! wam))))
-      (t (fail! wam))))
+           (fail! wam "Functors don't match in get-struct"))))
+      (t (fail! wam (format nil "get-struct on a non-ref/struct cell ~A"
+                            (cell-aesthetic cell))))))
   (values))
 
 (defun* %unify-variable ((wam wam) (register register-index))
   (:returns :void)
   (ecase (wam-mode wam)
     (:read (setf (wam-register wam register)
-                 (wam-s-cell wam)))
+                 (wam-s wam)))
     (:write (setf (wam-register wam register)
                   (nth-value 1 (push-unbound-reference! wam)))))
   (incf (wam-s wam))
@@ -197,9 +239,9 @@
 (defun* %unify-value ((wam wam) (register register-index))
   (:returns :void)
   (ecase (wam-mode wam)
-    (:read (unify wam
-                  (cell-value (wam-register wam register))
-                  (wam-s wam)))
+    (:read (unify! wam
+                   (cell-value (wam-register wam register))
+                   (wam-s wam)))
     (:write (wam-heap-push! wam (wam-register wam register))))
   (incf (wam-s wam))
   (values))

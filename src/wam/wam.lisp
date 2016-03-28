@@ -1,7 +1,7 @@
 (in-package #:bones.wam)
 
 ;;;; WAM
-(defparameter *wam-heap-size* 32)
+(defparameter *wam-heap-size* 48)
 
 (defclass wam ()
   ((heap
@@ -34,6 +34,13 @@
      :initform nil
      :type boolean
      :documentation "The failure register.")
+   (unification-stack
+     :reader wam-unification-stack
+     :initform (make-array 16
+                           :fill-pointer 0
+                           :adjustable t
+                           :element-type 'heap-index)
+     :documentation "The unification stack.")
    (s
      :accessor wam-s
      :initform nil
@@ -132,3 +139,17 @@
   "Return the symbol for the functor with the given index in the WAM."
   (aref (wam-functors wam) functor-index))
 
+
+;;;; Unification Stack
+(defun* wam-unification-stack-push! ((wam wam) (address heap-index))
+  (:returns :void)
+  (vector-push-extend address (wam-unification-stack wam))
+  (values))
+
+(defun* wam-unification-stack-pop! ((wam wam))
+  (:returns heap-index)
+  (vector-pop (wam-unification-stack wam)))
+
+(defun* wam-unification-stack-empty-p ((wam wam))
+  (:returns boolean)
+  (zerop (length (wam-unification-stack wam))))

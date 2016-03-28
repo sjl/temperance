@@ -2,7 +2,7 @@
 ;;;; See http://quickutil.org for details.
 
 ;;;; To regenerate:
-;;;; (qtlc:save-utils-as "utils.lisp" :utilities '(:DEFINE-CONSTANT :SET-EQUAL :CURRY :SWITCH :ENSURE-BOOLEAN) :ensure-package T :package "BONES.UTILS")
+;;;; (qtlc:save-utils-as "utils.lisp" :utilities '(:DEFINE-CONSTANT :SET-EQUAL :CURRY :SWITCH :ENSURE-BOOLEAN :WHILE :UNTIL) :ensure-package T :package "BONES.UTILS")
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (unless (find-package "BONES.UTILS")
@@ -17,7 +17,7 @@
                                          :MAKE-GENSYM-LIST :ENSURE-FUNCTION
                                          :CURRY :STRING-DESIGNATOR
                                          :WITH-GENSYMS :EXTRACT-FUNCTION-NAME
-                                         :SWITCH :ENSURE-BOOLEAN))))
+                                         :SWITCH :ENSURE-BOOLEAN :UNTIL :WHILE))))
 
   (defun %reevaluate-constant (name value test)
     (if (not (boundp name))
@@ -210,8 +210,21 @@ returns the values of `default` if no keys match."
     "Convert `x` into a Boolean value."
     (and x t))
   
+
+  (defmacro until (expression &body body)
+    "Executes `body` until `expression` is true."
+    `(do ()
+         (,expression)
+       ,@body))
+  
+
+  (defmacro while (expression &body body)
+    "Executes `body` while `expression` is true."
+    `(until (not ,expression)
+       ,@body))
+  
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (export '(define-constant set-equal curry switch eswitch cswitch
-            ensure-boolean)))
+            ensure-boolean while until)))
 
 ;;;; END OF utils.lisp ;;;;

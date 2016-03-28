@@ -73,7 +73,7 @@
 
 
 
-(defun extract-thing (wam address)
+(defun extract-thing (wam &optional (address (wam-register wam 0)))
   (let ((cell (wam-heap-cell wam (deref wam address))))
     (cond
       ((cell-null-p cell)
