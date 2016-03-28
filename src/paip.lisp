@@ -235,11 +235,17 @@
     pred))
 
 
+(defun add-rule (clause)
+  (add-clause (replace-wildcard-variables clause)))
+
 (defmacro rule (&rest clause)
-  `(add-clause ',(replace-wildcard-variables clause)))
+  `(add-rule ',clause))
+
+(defun add-fact (body)
+  (add-clause (list (replace-wildcard-variables body))))
 
 (defmacro fact (&rest body)
-  `(add-clause '(,(replace-wildcard-variables body))))
+  `(add-fact ',body))
 
 
 (defun clear-predicate (predicate)
@@ -370,6 +376,11 @@
 (defparameter *results* nil)
 
 
+(defun return-boolean (variables bindings other-goals)
+  (declare (ignore variables))
+  (setf *results* t)
+  (prove-all other-goals bindings))
+
 (defun return-one-result (variables bindings other-goals)
   (setf *results* (clean-variables variables bindings))
   (prove-all other-goals bindings))
@@ -379,9 +390,10 @@
   (push (clean-variables variables bindings) *results*)
   fail)
 
+
 (setf (get 'return-one-result clause-key) 'return-one-result)
 (setf (get 'return-all-results clause-key) 'return-all-results)
-
+(setf (get 'return-boolean clause-key) 'return-boolean)
 
 (defun top-level-find (goals primitive)
   (let ((*results* (list)))
@@ -392,9 +404,19 @@
     *results*))
 
 
+(defun return-one-for (goals)
+  (top-level-find goals 'return-one-result))
+
+(defun return-all-for (goals)
+  (top-level-find goals 'return-all-results))
+
+
 (defmacro return-one (&rest goals)
   `(top-level-find ',goals 'return-one-result))
 
 (defmacro return-all (&rest goals)
   `(top-level-find ',goals 'return-all-results))
+
+(defmacro provable-p (&rest goals)
+  `(top-level-find ',goals 'return-boolean))
 

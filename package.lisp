@@ -24,8 +24,11 @@
 
    ;; Database management
    #:clear-db
+   #:clear-predicate
    #:fact
    #:rule
+   #:add-fact
+   #:rule-fact
 
    ;; Lisp data structures as results
    #:return-one
