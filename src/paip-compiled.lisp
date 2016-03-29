@@ -471,3 +471,5 @@
 
 (defmacro ?- (&rest goals)
   `(top-level-prove ',(replace-wildcard-variables goals)))
+
+

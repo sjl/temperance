@@ -235,5 +235,5 @@
 
 (fresh-depth-charge!)
 (time
-  (dotimes (i 10)
+  (dotimes (i 100000)
     (fresh-depth-charge!)))

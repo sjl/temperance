@@ -222,11 +222,12 @@
       generate-program-actions))
 
 
-(defun run (wam instructions)
+(defun run (wam instructions &optional step)
   "Execute the machine instructions on the given WAM."
   (mapc (lambda (action)
           (when (not (wam-fail wam))
-            (apply (car action) wam (cdr action))))
+            (apply (car action) wam (cdr action))
+            (when step (break))))
         instructions)
   (values))
 
