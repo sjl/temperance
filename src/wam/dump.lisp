@@ -1,28 +1,38 @@
 (in-package #:bones.wam)
 
+(defun registers-pointing-to (wam addr)
+  (loop :for reg :across (wam-registers wam)
+        :for i :from 0
+        :when (= reg addr)
+        :collect i))
+
 (defun heap-debug (wam addr cell)
-  (switch ((cell-type cell))
-    (+tag-reference+
-      (if (= addr (cell-value cell))
-        "unbound variable"
-        (format nil "var pointer to ~D" (cell-value cell))))
-    (+tag-functor+
-      (format nil "~A/~D"
-              (wam-functor-lookup wam (cell-functor-index cell))
-              (cell-functor-arity cell)))
-    (t "")))
+  (format
+    nil "~A~{(X~A) ~}"
+    (switch ((cell-type cell))
+      (+tag-reference+
+        (if (= addr (cell-value cell))
+          "unbound variable "
+          (format nil "var pointer to ~D " (cell-value cell))))
+      (+tag-functor+
+        (format nil "~A/~D "
+                (wam-functor-lookup wam (cell-functor-index cell))
+                (cell-functor-arity cell)))
+      (t ""))
+    (registers-pointing-to wam addr)))
+
 
 (defun dump-heap (wam from to highlight)
   ;; This code is awful, sorry.
   (let ((heap (wam-heap wam)))
-    (format t "  +------+-----+--------------+----------------------------+~%")
-    (format t "  | ADDR | TYP |        VALUE | DEBUG                      |~%")
-    (format t "  +------+-----+--------------+----------------------------+~%")
+    (format t "  +------+-----+--------------+--------------------------------------+~%")
+    (format t "  | ADDR | TYP |        VALUE | DEBUG                                |~%")
+    (format t "  +------+-----+--------------+--------------------------------------+~%")
     (when (> from 0)
-      (format t "  |    ⋮ |  ⋮  |            ⋮ |                            |~%"))
+      (format t "  |    ⋮ |  ⋮  |            ⋮ |                                      |~%"))
     (flet ((print-cell (i cell)
              (let ((hi (= i highlight)))
-               (format t "~A ~4@A | ~A | ~12@A | ~26A ~A~%"
+               (format t "~A ~4@A | ~A | ~12@A | ~36A ~A~%"
                        (if hi "==>" "  |")
                        i
                        (cell-type-short-name cell)
@@ -32,21 +42,24 @@
       (loop :for i :from from :below to
             :do (print-cell i (aref heap i))))
     (when (< to (length heap))
-      (format t "  |    ⋮ |  ⋮  |            ⋮ |                            |~%"))
-    (format t "  +------+-----+--------------+----------------------------+~%")
+      (format t "  |    ⋮ |  ⋮  |            ⋮ |                                      |~%"))
+    (format t "  +------+-----+--------------+--------------------------------------+~%")
     (values)))
 
 
 (defun dump-wam-registers (wam)
   (format t "REGISTERS:~%")
-  (format t  "~5@A ->~4@A~%" "S" (wam-s wam))
+  (format t  "~5@A ->~6@A~%" "S" (wam-s wam))
   (loop :for i :from 0
         :for reg :across (wam-registers wam)
-        :for contents = (wam-register-cell wam i)
-        :do (format t "~5@A ->~4@A ~A~%"
+        :for contents = (when (not (= reg (1- +heap-limit+)))
+                          (wam-register-cell wam i))
+        :do (format t "~5@A ->~6@A ~A~%"
                     (format nil "X~D" i)
                     reg
-                    (cell-aesthetic contents))))
+                    (if contents
+                      (cell-aesthetic contents)
+                      "unset"))))
 
 (defun dump-wam-functors (wam)
   (format t " FUNCTORS: ~S~%" (wam-functors wam)))
@@ -70,7 +83,6 @@
             (min (length (wam-heap wam))
                  (+ addr width 1))
             addr))
-
 
 
 (defun extract-thing (wam &optional (address (wam-register wam 0)))

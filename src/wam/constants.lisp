@@ -13,6 +13,13 @@
   :documentation "Bitmask for masking the cell type tags.")
 
 
+(define-constant +addressable-values+ (expt 2 +cell-value-width+)
+  :documentation "Number of addressable values, based on cell width.")
+
+(define-constant +heap-limit+ +addressable-values+
+  :documentation "Maximum size of the WAM heap.")
+
+
 (define-constant +tag-null+      #b00
   :documentation "An empty cell.")
 

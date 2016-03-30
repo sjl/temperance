@@ -1,19 +1,14 @@
 (in-package #:bones.wam)
 
 ;;;; WAM
-(defparameter *wam-heap-size* 48)
-
 (defclass wam ()
   ((heap
-     :initform (make-array *wam-heap-size*
+     :initform (make-array 1024
+                           :fill-pointer 0
                            :initial-element (make-cell-null)
                            :element-type 'heap-cell)
      :reader wam-heap
      :documentation "The actual heap (stack).")
-   (heap-pointer
-     :initform 0
-     :accessor wam-heap-pointer
-     :documentation "The index of the first free cell on the heap (stack).")
    (functors
      :initform (make-array 16
                            :fill-pointer 0
@@ -24,9 +19,9 @@
    (registers
      :reader wam-registers
      :initform (make-array +register-count+
-                           ;; Point at the last heap index by default, just to
-                           ;; make it easier to read debug output.
-                           :initial-element (1- *wam-heap-size*)
+                           ;; Initialize to the last element in the heap for
+                           ;; debugging purposes.
+                           :initial-element (1- +heap-limit+)
                            :element-type 'heap-index)
      :documentation "An array of the X_i registers.")
    (fail
@@ -62,7 +57,6 @@
 ;;;
 ;;; TODO: Consider using an adjustable array.  There must still be a max size
 ;;; because you can only index so many addresses with N bits.
-
 (defun* wam-heap-push! ((wam wam) (cell heap-cell))
   (:returns (values heap-cell heap-index))
   "Push the cell onto the WAM heap and increment the heap pointer.
@@ -70,10 +64,15 @@
   Returns the cell and the address it was pushed to.
 
   "
-  (with-slots (heap heap-pointer) wam
-    (setf (aref heap heap-pointer) cell)
-    (incf heap-pointer)
-    (values cell (1- heap-pointer))))
+  (with-slots (heap) wam
+    (if (= +heap-limit+ (fill-pointer heap))
+      (error "WAM heap exhausted.")
+      (values cell (vector-push-extend cell heap)))))
+
+(defun* wam-heap-pointer ((wam wam))
+  (:returns heap-index)
+  "Return the current heap pointer of the WAM."
+  (fill-pointer (wam-heap wam)))
 
 
 (defun* wam-heap-cell ((wam wam) (address heap-index))

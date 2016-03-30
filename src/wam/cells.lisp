@@ -38,7 +38,7 @@
 
 
 (deftype heap-index ()
-  `(integer 0 ,(1- array-total-size-limit)))
+  `(integer 0 ,(1- +heap-limit+)))
 
 (deftype register-index ()
   `(integer 0 ,(1- +register-count+)))
