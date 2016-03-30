@@ -21,10 +21,10 @@
       (t ""))
     (registers-pointing-to wam addr)))
 
-
 (defun dump-heap (wam from to highlight)
   ;; This code is awful, sorry.
   (let ((heap (wam-heap wam)))
+    (format t "HEAP~%")
     (format t "  +------+-----+--------------+--------------------------------------+~%")
     (format t "  | ADDR | TYP |        VALUE | DEBUG                                |~%")
     (format t "  +------+-----+--------------+--------------------------------------+~%")
@@ -45,6 +45,22 @@
       (format t "  |    ⋮ |  ⋮  |            ⋮ |                                      |~%"))
     (format t "  +------+-----+--------------+--------------------------------------+~%")
     (values)))
+
+
+(defun instruction-aesthetic (instruction)
+  (format nil "~A~{ ~4,'0X~}"
+          (opcode-short-name (aref instruction 0))
+          (rest (coerce instruction 'list))))
+
+(defun dump-code (wam)
+  (let ((code (wam-code wam)))
+    (format t "CODE~%")
+    (let ((addr 0))
+      (while (< addr (length code))
+        (format t "; ~4,'0X: " addr)
+        (let ((instruction (wam-code-instruction wam addr)))
+          (format t "~A~%" (instruction-aesthetic instruction))
+          (incf addr (length instruction)))))))
 
 
 (defun dump-wam-registers (wam)
@@ -70,9 +86,12 @@
   (format t "     MODE: ~A~%" (wam-mode wam))
   (dump-wam-functors wam)
   (format t "HEAP SIZE: ~A~%" (length (wam-heap wam)))
+  (format t "PROGRAM C: ~A~%" (wam-program-counter wam))
   (dump-wam-registers wam)
   (format t "~%")
-  (dump-heap wam from to highlight))
+  (dump-heap wam from to highlight)
+  (format t "~%")
+  (dump-code wam))
 
 (defun dump-wam-full (wam)
   (dump-wam wam 0 (length (wam-heap wam)) -1))

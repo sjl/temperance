@@ -22,11 +22,13 @@
                 :components ((:file "paip")
                              (:module "wam"
                               :components ((:file "constants")
+                                           (:file "types")
                                            (:file "topological-sort")
                                            (:file "cells")
+                                           (:file "opcodes")
                                            (:file "wam")
                                            (:file "instructions")
-                                           (:file "dump")
-                                           (:file "compile")))
+                                           (:file "compile")
+                                           (:file "dump")))
                              (:file "bones")))))
 

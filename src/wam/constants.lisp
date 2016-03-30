@@ -13,11 +13,16 @@
   :documentation "Bitmask for masking the cell type tags.")
 
 
-(define-constant +addressable-values+ (expt 2 +cell-value-width+)
-  :documentation "Number of addressable values, based on cell width.")
-
-(define-constant +heap-limit+ +addressable-values+
+(define-constant +heap-limit+ (expt 2 +cell-value-width+)
+  ;; We can only address 2^value-bits cells.
   :documentation "Maximum size of the WAM heap.")
+
+
+(define-constant +code-word-size+ 16
+  :documentation "Size (in bits) of each word in the code store.")
+
+(define-constant +code-limit+ (expt 2 +code-word-size+)
+  :documentation "Maximum size of the WAM code store.")
 
 
 (define-constant +tag-null+      #b00
@@ -45,4 +50,9 @@
 
 (define-constant +maximum-arity+ (1- (expt 2 +functor-arity-width+))
   :documentation "The maximum allowed arity of functors.")
+
+
+(define-constant +opcode-get-structure+ 1)
+(define-constant +opcode-unify-variable+ 2)
+(define-constant +opcode-unify-value+ 3)
 

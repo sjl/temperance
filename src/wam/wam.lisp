@@ -5,10 +5,19 @@
   ((heap
      :initform (make-array 1024
                            :fill-pointer 0
+                           :adjustable t
                            :initial-element (make-cell-null)
                            :element-type 'heap-cell)
      :reader wam-heap
      :documentation "The actual heap (stack).")
+   (code
+     :initform (make-array 1024
+                           :fill-pointer 0
+                           :adjustable t
+                           :initial-element 0
+                           :element-type 'code-word)
+     :reader wam-code
+     :documentation "The code store.")
    (functors
      :initform (make-array 16
                            :fill-pointer 0
@@ -41,6 +50,11 @@
      :initform nil
      :type (or null heap-index)
      :documentation "The S register (address of next subterm to match).")
+   (program-counter
+     :accessor wam-program-counter
+     :initform 0
+     :type 'code-index
+     :documentation "The Program Counter for the WAM code store.")
    (mode
      :accessor wam-mode
      :initform nil
@@ -53,10 +67,6 @@
 
 
 ;;;; Heap
-;;; The WAM heap is a fixed-length array of cells and a heap pointer.
-;;;
-;;; TODO: Consider using an adjustable array.  There must still be a max size
-;;; because you can only index so many addresses with N bits.
 (defun* wam-heap-push! ((wam wam) (cell heap-cell))
   (:returns (values heap-cell heap-index))
   "Push the cell onto the WAM heap and increment the heap pointer.
@@ -82,6 +92,55 @@
 
 (defun (setf wam-heap-cell) (new-value wam address)
   (setf (aref (wam-heap wam) address) new-value))
+
+
+;;;; Code
+(defun* wam-code-word ((wam wam) (address code-index))
+  (:returns code-word)
+  "Return the word at the given address in the code store."
+  (aref (wam-code wam) address))
+
+(defun (setf wam-code-word) (word wam address)
+  (setf (aref (wam-code wam) address) word))
+
+
+(defun* wam-code-instruction ((wam wam) (address code-index))
+  "Return the full instruction at the given address in the code store."
+  (make-array (instruction-size (wam-code-word wam address))
+              :displaced-to (wam-code wam)
+              :displaced-index-offset address
+              :adjustable nil
+              :element-type 'code-word))
+
+
+(defun* wam-code-push-word! ((wam wam) (word code-word))
+  "Push the given word into the code store and return its new address."
+  (:returns code-index)
+  (with-slots (code) wam
+    (if (= +code-limit+ (fill-pointer code))
+      (error "WAM code store exhausted.")
+      (vector-push-extend word code))))
+
+(defun* wam-code-push! ((wam wam) (opcode opcode) &rest (arguments code-word))
+  "Push the given instruction into the code store and return its new address.
+
+  The address will be the address of the start of the instruction (i.e. the
+  address of the opcode).
+
+  "
+  (:returns code-index)
+  (assert (= (length arguments)
+             (1- (instruction-size opcode)))
+          (arguments)
+          "Cannot push opcode ~A with ~D arguments ~S, it requires exactly ~D."
+          (opcode-name opcode)
+          (length arguments)
+          arguments
+          (instruction-size opcode))
+  (prog1
+      (wam-code-push-word! wam opcode)
+    (dolist (arg arguments)
+      (wam-code-push-word! wam arg))))
 
 
 ;;;; Registers
