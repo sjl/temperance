@@ -52,14 +52,17 @@
           (opcode-short-name (aref instruction 0))
           (rest (coerce instruction 'list))))
 
-(defun dump-code (wam &optional (from 0) (to (length (wam-code wam))))
-  (format t "CODE~%")
+(defun dump-code-store (code-store &optional (from 0) (to (length code-store)))
   (let ((addr from))
     (while (< addr to)
       (format t "; ~4,'0X: " addr)
-      (let ((instruction (wam-code-instruction wam addr)))
+      (let ((instruction (retrieve-instruction code-store addr)))
         (format t "~A~%" (instruction-aesthetic instruction))
         (incf addr (length instruction))))))
+
+(defun dump-code (wam &optional (from 0) (to (length (wam-code wam))))
+  (format t "CODE~%")
+  (dump-code-store (wam-code wam) from to))
 
 
 (defun dump-wam-registers (wam)

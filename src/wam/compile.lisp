@@ -1,4 +1,5 @@
 (in-package #:bones.wam)
+(named-readtables:in-readtable :fare-quasiquote)
 
 ;;;; Parsing
 ;;; Turns p(A, q(A, B)) into something like:
@@ -278,9 +279,9 @@
     arity))
 
 
-;;;; Actions
-;;; Once we have a tokenized stream we can generate the list of machine
-;;; instructions from it.
+;;;; Bytecode
+;;; Once we have a tokenized stream we can generate the machine instructions
+;;; from it.
 ;;;
 ;;; We turn:
 ;;;
@@ -295,34 +296,59 @@
 ;;;   (#'%set-value 1)
 ;;;   (#'%set-value 2)
 
-(defun generate-actions (tokens structure-inst unseen-var-inst seen-var-inst)
-  "Generate a series of 'machine instructions' from a stream of tokens."
+(defun generate-actions (tokens store mode)
+  "Generate a series of machine instructions from a stream of tokens."
   (let ((seen (list)))
-    (flet ((handle-structure (register functor arity)
+    (flet ((handle-argument (register target)
+             (if (member target seen)
+               (vector-push-extend (ecase mode
+                                     (:program +opcode-get-value+)
+                                     (:query +opcode-put-value+))
+                                   store)
+               (progn
+                 (push target seen)
+                 (vector-push-extend (ecase mode
+                                       (:program +opcode-get-variable+)
+                                       (:query +opcode-put-variable+))
+                                     store)))
+             (vector-push-extend target store)
+             (vector-push-extend register store))
+           (handle-structure (register functor arity)
              (push register seen)
-             (list structure-inst functor arity register))
+             (vector-push-extend (ecase mode
+                                   (:program +opcode-get-structure+)
+                                   (:query +opcode-put-structure+))
+                                 store)
+             (vector-push-extend arity store) ; todo: add functor
+             (vector-push-extend register store))
            (handle-register (register)
              (if (member register seen)
-               (list seen-var-inst register)
+               (progn
+                 (vector-push-extend (ecase mode
+                                       (:program +opcode-get-value+)
+                                       (:query +opcode-set-value+))
+                                     store)
+                 (vector-push-extend register store))
                (progn
                  (push register seen)
-                 (list unseen-var-inst register)))))
-      (loop :for token :in tokens
-            :collect (if (consp token)
-                       (apply #'handle-structure token)
-                       (handle-register token))))))
+                 (vector-push-extend (ecase mode
+                                       (:program +opcode-get-variable+)
+                                       (:query +opcode-set-variable+))
+                                     store)
+                 (vector-push-extend register store)))))
+      (loop :for token :in tokens :collect
+            (match token
+              (`(:argument ,register ,target)
+               (handle-argument register target))
+              (`(:structure ,register ,functor ,arity)
+               (handle-structure register functor arity))
+              (register (handle-register register)))))))
 
-(defun generate-query-actions (tokens)
-  (generate-actions tokens
-                    #'%put-structure
-                    #'%set-variable
-                    #'%set-value))
+(defun generate-query-actions (tokens store)
+  (generate-actions tokens store :query))
 
-(defun generate-program-actions (tokens)
-  (generate-actions tokens
-                    #'%get-structure
-                    #'%unify-variable
-                    #'%unify-value))
+(defun generate-program-actions (tokens store)
+  (generate-actions tokens store :program))
 
 
 ;;;; UI

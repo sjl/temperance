@@ -27,29 +27,6 @@
 ;;; symbol lives.  Arity is the arity of the functor.
 
 
-(deftype heap-cell ()
-  `(unsigned-byte ,+cell-width+))
-
-(deftype heap-cell-tag ()
-  `(unsigned-byte ,+cell-tag-width+))
-
-(deftype heap-cell-value ()
-  `(unsigned-byte ,+cell-value-width+))
-
-
-(deftype heap-index ()
-  `(integer 0 ,(1- +heap-limit+)))
-
-(deftype register-index ()
-  `(integer 0 ,(1- +register-count+)))
-
-(deftype functor-index ()
-  `(integer 0 ,(1- array-total-size-limit)))
-
-(deftype arity ()
-  `(integer 0 ,+maximum-arity+))
-
-
 (defun* cell-type ((cell heap-cell))
   (:returns heap-cell-tag)
   (logand cell +cell-tag-bitmask+))

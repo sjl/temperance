@@ -52,7 +52,21 @@
   :documentation "The maximum allowed arity of functors.")
 
 
+;;;; Opcodes
+;;; Program
 (define-constant +opcode-get-structure+ 1)
 (define-constant +opcode-unify-variable+ 2)
 (define-constant +opcode-unify-value+ 3)
+(define-constant +opcode-get-variable+ 4)
+(define-constant +opcode-get-value+ 5)
 
+;;; Query
+(define-constant +opcode-put-structure+ 6)
+(define-constant +opcode-set-variable+ 7)
+(define-constant +opcode-set-value+ 8)
+(define-constant +opcode-put-variable+ 9)
+(define-constant +opcode-put-value+ 10)
+
+;;; Control
+(define-constant +opcode-call+ 11)
+(define-constant +opcode-proceed+ 12)

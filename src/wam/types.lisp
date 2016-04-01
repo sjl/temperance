@@ -31,4 +31,4 @@
   `(integer 0 ,(1- +code-limit+)))
 
 (deftype opcode ()
-  '(integer 0 3))
+  '(integer 0 12))

@@ -95,6 +95,15 @@
 
 
 ;;;; Code
+(defun* retrieve-instruction (code-store (address code-index))
+  "Return the full instruction at the given address in the code store."
+  (make-array (instruction-size (aref code-store address))
+              :displaced-to code-store
+              :displaced-index-offset address
+              :adjustable nil
+              :element-type 'code-word))
+
+
 (defun* wam-code-word ((wam wam) (address code-index))
   (:returns code-word)
   "Return the word at the given address in the code store."
@@ -106,11 +115,7 @@
 
 (defun* wam-code-instruction ((wam wam) (address code-index))
   "Return the full instruction at the given address in the code store."
-  (make-array (instruction-size (wam-code-word wam address))
-              :displaced-to (wam-code wam)
-              :displaced-index-offset address
-              :adjustable nil
-              :element-type 'code-word))
+  (retrieve-instruction (wam-code wam) address))
 
 
 (defun* wam-code-push-word! ((wam wam) (word code-word))
