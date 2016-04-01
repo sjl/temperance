@@ -2,7 +2,7 @@
 ;;;; See http://quickutil.org for details.
 
 ;;;; To regenerate:
-;;;; (qtlc:save-utils-as "utils.lisp" :utilities '(:DEFINE-CONSTANT :SET-EQUAL :CURRY :SWITCH :ENSURE-BOOLEAN :WHILE :UNTIL) :ensure-package T :package "BONES.UTILS")
+;;;; (qtlc:save-utils-as "utils.lisp" :utilities '(:DEFINE-CONSTANT :SET-EQUAL :CURRY :SWITCH :ENSURE-BOOLEAN :WHILE :UNTIL :TREE-MEMBER-P :MAP-TREE) :ensure-package T :package "BONES.UTILS")
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (unless (find-package "BONES.UTILS")
@@ -17,7 +17,8 @@
                                          :MAKE-GENSYM-LIST :ENSURE-FUNCTION
                                          :CURRY :STRING-DESIGNATOR
                                          :WITH-GENSYMS :EXTRACT-FUNCTION-NAME
-                                         :SWITCH :ENSURE-BOOLEAN :UNTIL :WHILE))))
+                                         :SWITCH :ENSURE-BOOLEAN :UNTIL :WHILE
+                                         :TREE-MEMBER-P :MAP-TREE))))
 
   (defun %reevaluate-constant (name value test)
     (if (not (boundp name))
@@ -223,8 +224,31 @@ returns the values of `default` if no keys match."
     `(until (not ,expression)
        ,@body))
   
+
+  (defun tree-member-p (item tree &key (test #'eql))
+    "Returns `t` if `item` is in `tree`, `nil` otherwise."
+    (labels ((rec (tree)
+               (cond ((null tree) nil)
+                     ((atom tree) (funcall test item tree))
+                     (t (or (rec (car tree))
+                            (rec (cdr tree)))))))
+      (rec tree)))
+  
+
+  (defun map-tree (function tree)
+    "Map `function` to each of the leave of `tree`."
+    (check-type tree cons)
+    (labels ((rec (tree)
+               (cond
+                 ((null tree) nil)
+                 ((atom tree) (funcall function tree))
+                 ((consp tree)
+                  (cons (rec (car tree))
+                        (rec (cdr tree)))))))
+      (rec tree)))
+  
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (export '(define-constant set-equal curry switch eswitch cswitch
-            ensure-boolean while until)))
+            ensure-boolean while until tree-member-p map-tree)))
 
 ;;;; END OF utils.lisp ;;;;

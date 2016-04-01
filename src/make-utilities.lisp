@@ -8,5 +8,7 @@
                                  :ensure-boolean
                                  :while
                                  :until
+                                 :tree-member-p
+                                 :map-tree
                                  )
                     :package "BONES.UTILS")
