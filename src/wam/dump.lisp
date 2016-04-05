@@ -47,17 +47,52 @@
     (values)))
 
 
-(defun instruction-aesthetic (instruction)
-  (format nil "~A~{ ~4,'0X~}"
-          (opcode-short-name (aref instruction 0))
-          (rest (coerce instruction 'list))))
+(defun pretty-functor (functor-index functor-list)
+  (when functor-list
+    (destructuring-bind (symbol . arity)
+        (elt functor-list functor-index)
+      (format nil "~A/~D" symbol arity))))
 
-(defun dump-code-store (code-store &optional (from 0) (to (length code-store)))
+(defun pretty-arguments (arguments)
+  (format nil "~{ ~4,'0X~}" arguments))
+
+(defgeneric instruction-details (opcode arguments functor-list))
+
+(defmethod instruction-details ((opcode t) arguments functor-list)
+  (format nil "~A~A"
+          (opcode-short-name opcode)
+          (pretty-arguments arguments)))
+
+(defmethod instruction-details ((opcode (eql +opcode-get-structure+)) arguments functor-list)
+  (format nil "GETS~A ; ~A"
+          (pretty-arguments arguments)
+          (pretty-functor (first arguments) functor-list)))
+
+(defmethod instruction-details ((opcode (eql +opcode-put-structure+)) arguments functor-list)
+  (format nil "PUTS~A ; ~A"
+          (pretty-arguments arguments)
+          (pretty-functor (first arguments) functor-list)))
+
+
+; (defmethod instruction-details ((opcode (eql +opcode-set-variable+)) arguments functor-list))
+; (defmethod instruction-details ((opcode (eql +opcode-set-value+)) arguments functor-list))
+; (defmethod instruction-details ((opcode (eql +opcode-put-variable+)) arguments functor-list))
+; (defmethod instruction-details ((opcode (eql +opcode-put-value+)) arguments functor-list))
+
+; (defmethod instruction-details ((opcode (eql +opcode-call+)) arguments functor-list))
+; (defmethod instruction-details ((opcode (eql +opcode-proceed+)) arguments functor-list))
+
+(defun dump-code-store (code-store &optional
+                                   (from 0)
+                                   (to (length code-store))
+                                   functor-list)
   (let ((addr from))
     (while (< addr to)
       (format t "; ~4,'0X: " addr)
       (let ((instruction (retrieve-instruction code-store addr)))
-        (format t "~A~%" (instruction-aesthetic instruction))
+        (format t "~A~%" (instruction-details (aref instruction 0)
+                                              (rest (coerce instruction 'list))
+                                              functor-list))
         (incf addr (length instruction))))))
 
 (defun dump-code (wam &optional (from 0) (to (length (wam-code wam))))

@@ -19,12 +19,12 @@
      :reader wam-code
      :documentation "The code store.")
    (functors
-     :initform (make-array 16
+     :initform (make-array 64
                            :fill-pointer 0
                            :adjustable t
-                           :element-type 'symbol)
+                           :element-type 'functors)
      :accessor wam-functors
-     :documentation "The array of functor symbols in this WAM.")
+     :documentation "The array of functors in this WAM.")
    (registers
      :reader wam-registers
      :initform (make-array +register-count+
@@ -180,13 +180,10 @@
 
 
 ;;;; Functors
-;;; Functors are symbols stored in an adjustable array.  Cells refer to
-;;; a functor using the functor's address in this array.
-;;;
-;;; TODO: Limit the number of functors based on the number of addressable
-;;; functors in the functor cell index bits.
+;;; Functors are stored in an adjustable array.  Cells refer to a functor using
+;;; the functor's address in this array.
 
-(defun* wam-ensure-functor-index ((wam wam) (functor symbol))
+(defun* wam-ensure-functor-index ((wam wam) (functor functor))
   (:returns functor-index)
   "Return the index of the functor in the WAM's functor table.
 
@@ -194,7 +191,7 @@
 
   "
   (with-slots (functors) wam
-    (or (position functor functors)
+    (or (position functor functors :test #'equal)
         (vector-push-extend functor functors))))
 
 (defun* wam-functor-lookup ((wam wam) (functor-index functor-index))

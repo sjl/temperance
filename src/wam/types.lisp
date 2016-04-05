@@ -23,6 +23,9 @@
 (deftype arity ()
   `(integer 0 ,+maximum-arity+))
 
+(deftype functor ()
+  '(cons symbol arity))
+
 
 (deftype code-word ()
   `(unsigned-byte ,+code-word-size+))

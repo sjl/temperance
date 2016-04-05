@@ -55,14 +55,7 @@
 
 (defun* cell-functor-index ((cell heap-cell))
   (:returns functor-index)
-  (ash (cell-value cell)
-       (- +functor-arity-width+)))
-
-(defun* cell-functor-arity ((cell heap-cell))
-  (:returns arity)
-  (values
-    (logand (cell-value cell)
-            +functor-arity-bitmask+)))
+  (cell-value cell))
 
 
 (defun* cell-aesthetic ((cell heap-cell))
@@ -74,9 +67,8 @@
             (+tag-structure+
               (format nil " ~D" (cell-value cell)))
             (+tag-functor+
-              (format nil " functor ~D/~D"
-                      (cell-functor-index cell)
-                      (cell-functor-arity cell)))
+              (format nil " functor ~D"
+                      (cell-functor-index cell)))
             (+tag-reference+
               (format nil " ~D" (cell-value cell))))))
 
@@ -116,12 +108,8 @@
   (:returns heap-cell)
   (make-cell +tag-reference+ value))
 
-(defun* make-cell-functor ((functor-index functor-index)
-                           (arity arity))
+(defun* make-cell-functor ((functor-index functor-index))
   (:returns heap-cell)
-  (make-cell
-    +tag-functor+
-    (logior (ash functor-index +functor-arity-width+)
-            arity)))
+  (make-cell +tag-functor+ functor-index))
 
 

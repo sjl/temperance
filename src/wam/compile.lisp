@@ -296,7 +296,7 @@
 ;;;   (#'%set-value 1)
 ;;;   (#'%set-value 2)
 
-(defun generate-actions (tokens store mode)
+(defun generate-actions (wam tokens store mode)
   "Generate a series of machine instructions from a stream of tokens."
   (let ((seen (list)))
     (flet ((handle-argument (register target)
@@ -319,7 +319,9 @@
                                    (:program +opcode-get-structure+)
                                    (:query +opcode-put-structure+))
                                  store)
-             (vector-push-extend arity store) ; todo: add functor
+             (vector-push-extend
+               (wam-ensure-functor-index wam (cons functor arity))
+               store)
              (vector-push-extend register store))
            (handle-register (register)
              (if (member register seen)
@@ -344,23 +346,29 @@
                (handle-structure register functor arity))
               (register (handle-register register)))))))
 
-(defun generate-query-actions (tokens store)
-  (generate-actions tokens store :query))
+(defun generate-query-actions (wam tokens store)
+  (generate-actions wam tokens store :query))
 
-(defun generate-program-actions (tokens store)
-  (generate-actions tokens store :program))
+(defun generate-program-actions (wam tokens store)
+  (generate-actions wam tokens store :program))
 
 
 ;;;; UI
-(defun compile-query-term (term)
+(defun compile-query-term (wam term)
   "Parse a Lisp query term into a series of WAM machine instructions."
-  (-> term
+  (let ((code (make-array 64
+                          :fill-pointer 0
+                          :adjustable t
+                          :element-type 'code-word)))
+    (-<>> term
       parse-term
-      flatten-query
-      tokenize-assignments
-      generate-query-actions))
+      (multiple-value-call #'inline-structure-argument-assignments)
+      (multiple-value-call #'flatten-query)
+      (multiple-value-call #'tokenize-assignments)
+      (generate-query-actions wam <> code))
+    code))
 
-(defun compile-program-term (term)
+(defun compile-program-term (wam term)
   "Parse a Lisp program term into a series of WAM machine instructions."
   (-> term
       parse-term
