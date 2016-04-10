@@ -2,7 +2,7 @@
 ;;;; See http://quickutil.org for details.
 
 ;;;; To regenerate:
-;;;; (qtlc:save-utils-as "utils.lisp" :utilities '(:DEFINE-CONSTANT :SET-EQUAL :CURRY :SWITCH :ENSURE-BOOLEAN :WHILE :UNTIL :TREE-MEMBER-P :MAP-TREE) :ensure-package T :package "BONES.UTILS")
+;;;; (qtlc:save-utils-as "utils.lisp" :utilities '(:DEFINE-CONSTANT :SET-EQUAL :CURRY :SWITCH :ENSURE-BOOLEAN :WHILE :UNTIL :TREE-MEMBER-P :WITH-GENSYMS :MAP-TREE) :ensure-package T :package "BONES.UTILS")
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (unless (find-package "BONES.UTILS")
@@ -249,6 +249,7 @@ returns the values of `default` if no keys match."
   
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (export '(define-constant set-equal curry switch eswitch cswitch
-            ensure-boolean while until tree-member-p map-tree)))
+            ensure-boolean while until tree-member-p with-gensyms
+            with-unique-names map-tree)))
 
 ;;;; END OF utils.lisp ;;;;

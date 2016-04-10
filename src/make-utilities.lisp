@@ -9,6 +9,7 @@
                                  :while
                                  :until
                                  :tree-member-p
+                                 :with-gensyms
                                  :map-tree
                                  )
                     :package "BONES.UTILS")

@@ -20,6 +20,7 @@
                (:file "package")
                (:module "src"
                 :components ((:file "paip")
+                             (:file "more-utilities")
                              (:module "wam"
                               :components ((:file "constants")
                                            (:file "types")

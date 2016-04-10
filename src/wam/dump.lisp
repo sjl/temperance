@@ -63,23 +63,61 @@
           (opcode-short-name opcode)
           (pretty-arguments arguments)))
 
-(defmethod instruction-details ((opcode (eql +opcode-get-structure+)) arguments functor-list)
-  (format nil "GETS~A ; ~A"
+
+(defmethod instruction-details ((opcode (eql +opcode-set-variable+)) arguments functor-list)
+  (format nil "SVAR~A      ; X~D <- new unbound REF"
           (pretty-arguments arguments)
+          (first arguments)))
+
+(defmethod instruction-details ((opcode (eql +opcode-set-value+)) arguments functor-list)
+  (format nil "SVLU~A      ; new REF to X~D"
+          (pretty-arguments arguments)
+          (first arguments)))
+
+(defmethod instruction-details ((opcode (eql +opcode-get-structure+)) arguments functor-list)
+  (format nil "GETS~A ; X~D <- ~A"
+          (pretty-arguments arguments)
+          (second arguments)
           (pretty-functor (first arguments) functor-list)))
 
 (defmethod instruction-details ((opcode (eql +opcode-put-structure+)) arguments functor-list)
-  (format nil "PUTS~A ; ~A"
+  (format nil "PUTS~A ; X~D <- new ~A"
+          (pretty-arguments arguments)
+          (second arguments)
+          (pretty-functor (first arguments) functor-list)))
+
+
+(defmethod instruction-details ((opcode (eql +opcode-call+)) arguments functor-list)
+  (format nil "CALL~A      ; ~A"
           (pretty-arguments arguments)
           (pretty-functor (first arguments) functor-list)))
 
 
-; (defmethod instruction-details ((opcode (eql +opcode-set-variable+)) arguments functor-list))
+(defmethod instruction-details ((opcode (eql +opcode-get-variable+)) arguments functor-list)
+  (format nil "GVAR~A ; A~D -> X~D"
+          (pretty-arguments arguments)
+          (second arguments)
+          (first arguments)))
+
+(defmethod instruction-details ((opcode (eql +opcode-get-value+)) arguments functor-list)
+  (format nil "GVLU~A ; A~D = X~D"
+          (pretty-arguments arguments)
+          (second arguments)
+          (first arguments)))
+
+
+(defmethod instruction-details ((opcode (eql +opcode-put-variable+)) arguments functor-list)
+  (format nil "PVAR~A ; A~D <- X~D <- new REF"
+          (pretty-arguments arguments)
+          (second arguments)
+          (first arguments)))
+
+; (defmethod instruction-details ((opcode (eql +opcode-get-value+)) arguments functor-list)
+;   )
+
 ; (defmethod instruction-details ((opcode (eql +opcode-set-value+)) arguments functor-list))
 ; (defmethod instruction-details ((opcode (eql +opcode-put-variable+)) arguments functor-list))
 ; (defmethod instruction-details ((opcode (eql +opcode-put-value+)) arguments functor-list))
-
-; (defmethod instruction-details ((opcode (eql +opcode-call+)) arguments functor-list))
 ; (defmethod instruction-details ((opcode (eql +opcode-proceed+)) arguments functor-list))
 
 (defun dump-code-store (code-store &optional
@@ -97,7 +135,7 @@
 
 (defun dump-code (wam &optional (from 0) (to (length (wam-code wam))))
   (format t "CODE~%")
-  (dump-code-store (wam-code wam) from to))
+  (dump-code-store (wam-code wam) from to (wam-functors wam)))
 
 
 (defun dump-wam-registers (wam)

@@ -235,7 +235,11 @@
   (flatten registers functor arity))
 
 (defun flatten-program (registers functor arity)
-  (reverse (flatten registers functor arity)))
+  (multiple-value-bind (assignments functor arity)
+      (flatten registers functor arity)
+    (values (reverse assignments)
+            functor
+            arity)))
 
 
 ;;;; Tokenization
@@ -296,93 +300,108 @@
 ;;;   (#'%set-value 1)
 ;;;   (#'%set-value 2)
 
-(defun generate-actions (wam tokens store mode)
-  "Generate a series of machine instructions from a stream of tokens."
+(defun compile-tokens (wam tokens store mode)
+  "Generate a series of machine instructions from a stream of tokens.
+
+  The compiled instructions will be appended to `store` using
+  `vector-push-extend.`
+
+  "
   (let ((seen (list)))
     (flet ((handle-argument (register target)
-             (if (member target seen)
-               (vector-push-extend (ecase mode
-                                     (:program +opcode-get-value+)
-                                     (:query +opcode-put-value+))
-                                   store)
-               (progn
-                 (push target seen)
-                 (vector-push-extend (ecase mode
-                                       (:program +opcode-get-variable+)
-                                       (:query +opcode-put-variable+))
-                                     store)))
-             (vector-push-extend target store)
-             (vector-push-extend register store))
+             ; OP X_n A_i
+             (vector-push-extend-all store
+               (if (push-if-new target seen)
+                 (ecase mode
+                   (:program +opcode-get-variable+)
+                   (:query +opcode-put-variable+))
+                 (ecase mode
+                   (:program +opcode-get-value+)
+                   (:query +opcode-put-value+)))
+               target
+               register))
            (handle-structure (register functor arity)
+             ; OP functor reg
              (push register seen)
-             (vector-push-extend (ecase mode
-                                   (:program +opcode-get-structure+)
-                                   (:query +opcode-put-structure+))
-                                 store)
-             (vector-push-extend
+             (vector-push-extend-all store
+               (ecase mode
+                 (:program +opcode-get-structure+)
+                 (:query +opcode-put-structure+))
                (wam-ensure-functor-index wam (cons functor arity))
-               store)
-             (vector-push-extend register store))
+               register))
            (handle-register (register)
-             (if (member register seen)
-               (progn
-                 (vector-push-extend (ecase mode
-                                       (:program +opcode-get-value+)
-                                       (:query +opcode-set-value+))
-                                     store)
-                 (vector-push-extend register store))
-               (progn
-                 (push register seen)
-                 (vector-push-extend (ecase mode
-                                       (:program +opcode-get-variable+)
-                                       (:query +opcode-set-variable+))
-                                     store)
-                 (vector-push-extend register store)))))
+             ; OP reg
+             (vector-push-extend-all store
+               (if (push-if-new register seen)
+                 (ecase mode
+                   (:program +opcode-unify-variable+)
+                   (:query +opcode-set-variable+))
+                 (ecase mode
+                   (:program +opcode-unify-value+)
+                   (:query +opcode-set-value+)))
+               register)))
       (loop :for token :in tokens :collect
             (match token
               (`(:argument ,register ,target)
                (handle-argument register target))
               (`(:structure ,register ,functor ,arity)
                (handle-structure register functor arity))
-              (register (handle-register register)))))))
+              (register (handle-register register)))
+            ))))
 
-(defun generate-query-actions (wam tokens store)
-  (generate-actions wam tokens store :query))
+(defun compile-query-tokens (wam tokens functor arity store)
+  (compile-tokens wam tokens store :query)
+  (vector-push-extend-all store
+    +opcode-call+
+    (wam-ensure-functor-index wam (cons functor arity))))
 
-(defun generate-program-actions (wam tokens store)
-  (generate-actions wam tokens store :program))
+(defun compile-program-tokens (wam tokens functor arity store)
+  ; todo: add functor/arity into labels
+  (compile-tokens wam tokens store :program)
+  (vector-push-extend +opcode-proceed+ store))
 
 
 ;;;; UI
-(defun compile-query-term (wam term)
-  "Parse a Lisp query term into a series of WAM machine instructions."
+(defun compile-query (wam term)
+  "Parse a Lisp query term into a series of WAM machine instructions.
+
+  The compiled code will be returned in a fresh array.
+
+  "
   (let ((code (make-array 64
                           :fill-pointer 0
                           :adjustable t
                           :element-type 'code-word)))
-    (-<>> term
-      parse-term
-      (multiple-value-call #'inline-structure-argument-assignments)
-      (multiple-value-call #'flatten-query)
-      (multiple-value-call #'tokenize-assignments)
-      (generate-query-actions wam <> code))
+    (multiple-value-bind (tokens functor arity)
+        (-<>> term
+          parse-term
+          (multiple-value-call #'inline-structure-argument-assignments)
+          (multiple-value-call #'flatten-query)
+          (multiple-value-call #'tokenize-assignments))
+      (compile-query-tokens wam tokens functor arity code))
     code))
 
-(defun compile-program-term (wam term)
-  "Parse a Lisp program term into a series of WAM machine instructions."
-  (-> term
-      parse-term
-      flatten-program
-      tokenize-assignments
-      generate-program-actions))
+(defun compile-program (wam term)
+  "Parse a Lisp program term into a series of WAM machine instructions.
+
+  The compiled code will be placed at the top of the WAM code store.
+
+  "
+  (multiple-value-bind (tokens functor arity)
+      (-<>> term
+        parse-term
+        (multiple-value-call #'inline-structure-argument-assignments)
+        (multiple-value-call #'flatten-program)
+        (multiple-value-call #'tokenize-assignments))
+    (compile-program-tokens wam tokens functor arity (wam-code wam))))
 
 
-(defun run (wam instructions &optional step)
+(defun run (wam instructions)
   "Execute the machine instructions on the given WAM."
+  ; (loop :)
   (mapc (lambda (action)
           (when (not (wam-fail wam))
-            (apply (car action) wam (cdr action))
-            (when step (break))))
+            (apply (car action) wam (cdr action))))
         instructions)
   (values))
 

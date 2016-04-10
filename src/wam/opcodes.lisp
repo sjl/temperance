@@ -41,7 +41,10 @@
     (+opcode-set-variable+ "SET-VARIABLE")
     (+opcode-set-value+ "SET-VALUE")
     (+opcode-put-variable+ "PUT-VARIABLE")
-    (+opcode-put-value+ "PUT-VALUE")))
+    (+opcode-put-value+ "PUT-VALUE")
+
+    (+opcode-call+ "CALL")
+    (+opcode-proceed+ "PROCEED")))
 
 (defun* opcode-short-name ((opcode opcode))
   (:returns string)
@@ -56,4 +59,7 @@
     (+opcode-set-variable+ "SVAR")
     (+opcode-set-value+ "SVLU")
     (+opcode-put-variable+ "PVAR")
-    (+opcode-put-value+ "PVLU")))
+    (+opcode-put-value+ "PVLU")
+
+    (+opcode-call+ "CALL")
+    (+opcode-proceed+ "PROC")))
