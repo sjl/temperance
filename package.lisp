@@ -2,20 +2,26 @@
   (:use #:cl)
   (:export #:hello))
 
-(defpackage #:bones.more-utils
-  (:use #:cl #:defstar #:bones.utils)
+(defpackage #:bones.utils
+  (:use #:cl
+        #:defstar
+        #:bones.quickutils)
   (:export
     #:vector-push-extend-all
     #:push-if-new))
 
 (defpackage #:bones.wam
-  (:use #:cl #:defstar #:optima #:cl-arrows
-        #:bones.utils #:bones.more-utils)
+  (:use #:cl
+        #:defstar
+        #:optima
+        #:cl-arrows
+        #:bones.quickutils
+        #:bones.utils)
   (:import-from #:optima #:match)
   (:shadowing-import-from #:cl-arrows #:->))
 
 (defpackage #:bones.paip
-  (:use #:cl #:defstar #:bones.utils)
+  (:use #:cl #:defstar #:bones.quickutils)
   (:documentation "Test?")
   (:export
 

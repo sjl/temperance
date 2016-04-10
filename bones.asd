@@ -16,11 +16,11 @@
                #:fare-quasiquote-readtable)
 
   :serial t
-  :components ((:file "src/utils") ; quickutils package ordering crap
+  :components ((:file "src/quickutils") ; quickutils package ordering crap
                (:file "package")
                (:module "src"
                 :components ((:file "paip")
-                             (:file "more-utilities")
+                             (:file "utils")
                              (:module "wam"
                               :components ((:file "constants")
                                            (:file "types")

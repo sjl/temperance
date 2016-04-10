@@ -7,8 +7,8 @@ apidoc = docs/03-reference.markdown
 test:
 	sbcl --noinform --load test/run.lisp  --eval '(quit)'
 
-src/utils.lisp: src/make-utilities.lisp
-	cd src && sbcl --noinform --load make-utilities.lisp  --eval '(quit)'
+src/quickutils.lisp: src/make-quickutils.lisp
+	cd src && sbcl --noinform --load make-quickutils.lisp  --eval '(quit)'
 
 $(apidoc): $(sourcefiles) docs/api.lisp
 	sbcl --noinform --load docs/api.lisp  --eval '(quit)'
