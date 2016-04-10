@@ -22,9 +22,13 @@
      :initform (make-array 64
                            :fill-pointer 0
                            :adjustable t
-                           :element-type 'functors)
+                           :element-type 'functor)
      :accessor wam-functors
      :documentation "The array of functors in this WAM.")
+   (code-labels
+     :initform (make-hash-table)
+     :accessor wam-code-labels
+     :documentation "The mapping of functor indices -> code store addresses.")
    (registers
      :reader wam-registers
      :initform (make-array +register-count+
@@ -146,6 +150,15 @@
       (wam-code-push-word! wam opcode)
     (dolist (arg arguments)
       (wam-code-push-word! wam arg))))
+
+
+(defun* wam-code-label ((wam wam)
+                        (functor functor-index))
+  (:returns code-index)
+  (gethash functor (wam-code-labels wam)))
+
+(defun (setf wam-code-label) (new-value wam functor)
+  (setf (gethash functor (wam-code-labels wam)) new-value))
 
 
 ;;;; Registers

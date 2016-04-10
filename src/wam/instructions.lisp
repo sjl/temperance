@@ -67,7 +67,6 @@
     (deref wam (cell-value (wam-heap-cell wam address)))
     address))
 
-
 (defun* bind! ((wam wam) (address-1 heap-index) (address-2 heap-index))
   (:returns :void)
   "Bind the unbound reference cell to the other.
@@ -89,7 +88,6 @@
            (make-cell-reference address-1)))
     (t (error "At least one cell must be an unbound reference when binding.")))
   (values))
-
 
 (defun* fail! ((wam wam) (reason string))
   (:returns :void)
@@ -159,16 +157,20 @@
 (defun* %put-variable ((wam wam)
                        (register register-index)
                        (argument register-index))
+  (:returns :void)
   (->> (push-unbound-reference! wam)
     (nth-value 1)
     (setf (wam-register wam register))
-    (setf (wam-register wam argument))))
+    (setf (wam-register wam argument)))
+  (values))
 
 (defun* %put-value ((wam wam)
                     (register register-index)
                     (argument register-index))
-  (setf (wam-register wam register)
-        (wam-register wam argument)))
+  (:returns :void)
+  (setf (wam-register wam argument)
+        (wam-register wam register))
+  (values))
 
 
 ;;;; Program Instructions
@@ -231,8 +233,9 @@
   (ecase (wam-mode wam)
     (:read (setf (wam-register wam register)
                  (wam-s wam)))
-    (:write (setf (wam-register wam register)
-                  (nth-value 1 (push-unbound-reference! wam)))))
+    (:write (->> (push-unbound-reference! wam)
+              (nth-value 1)
+              (setf (wam-register wam register)))))
   (incf (wam-s wam))
   (values))
 
@@ -240,12 +243,29 @@
   (:returns :void)
   (ecase (wam-mode wam)
     (:read (unify! wam
-                   (cell-value (wam-register wam register))
+                   (wam-register wam register)
                    (wam-s wam)))
-    (:write (wam-heap-push! wam (wam-register wam register))))
+    (:write (wam-heap-push! wam (wam-register-cell wam register))))
   (incf (wam-s wam))
   (values))
 
+(defun* %get-variable ((wam wam)
+                       (register register-index)
+                       (argument register-index))
+  (:returns :void)
+  (setf (wam-register wam register)
+        (wam-register wam argument))
+  (values))
+
+(defun* %get-value ((wam wam)
+                    (register register-index)
+                    (argument register-index))
+  (:returns :void)
+  (unify! wam
+          (wam-register wam register)
+          (wam-register wam argument))
+  (values))
+  
 
 ;;;; Running
 (defmacro instruction-call (wam instruction code-store pc number-of-arguments)
@@ -283,4 +303,5 @@
         (when (>= pc (length code)) ; queries SHOULD always end in a CALL...
           (error "Fell off the end of the query code store!")))))
   (values))
+
 

@@ -346,8 +346,7 @@
                (handle-argument register target))
               (`(:structure ,register ,functor ,arity)
                (handle-structure register functor arity))
-              (register (handle-register register)))
-            ))))
+              (register (handle-register register)))))))
 
 (defun compile-query-tokens (wam tokens functor arity store)
   (compile-tokens wam tokens store :query)
@@ -356,7 +355,9 @@
     (wam-ensure-functor-index wam (cons functor arity))))
 
 (defun compile-program-tokens (wam tokens functor arity store)
-  ; todo: add functor/arity into labels
+  ; todo: make this less ugly
+  (setf (wam-code-label wam (wam-ensure-functor-index wam (cons functor arity)))
+        (fill-pointer (wam-code wam)))
   (compile-tokens wam tokens store :program)
   (vector-push-extend +opcode-proceed+ store))
 

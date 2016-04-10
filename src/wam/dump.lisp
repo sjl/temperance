@@ -161,6 +161,15 @@
 (defun dump-wam-functors (wam)
   (format t " FUNCTORS: ~S~%" (wam-functors wam)))
 
+(defun dump-labels (wam)
+  (format t "LABELS:~%~{  ~A -> ~4,'0X~^~%~}~%"
+          (loop :for functor-index
+                :being :the :hash-keys :of (wam-code-labels wam)
+                :using (hash-value address)
+                :nconc (list (pretty-functor functor-index
+                                             (wam-functors wam))
+                             address))))
+
 
 (defun dump-wam (wam from to highlight)
   (format t "     FAIL: ~A~%" (wam-fail wam))
@@ -172,6 +181,7 @@
   (format t "~%")
   (dump-heap wam from to highlight)
   (format t "~%")
+  (dump-labels wam)
   (dump-code wam))
 
 (defun dump-wam-full (wam)
