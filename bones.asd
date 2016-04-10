@@ -28,8 +28,8 @@
                                            (:file "cells")
                                            (:file "opcodes")
                                            (:file "wam")
-                                           (:file "instructions")
                                            (:file "compile")
+                                           (:file "instructions")
                                            (:file "dump")))
                              (:file "bones")))))
 

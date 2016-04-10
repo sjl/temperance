@@ -6,18 +6,23 @@
         :when (= reg addr)
         :collect i))
 
-(defun heap-debug (wam addr cell)
+(defun heap-debug (wam addr cell indent-p)
   (format
-    nil "~A~{(X~A) ~}"
+    nil "~A~A~{<-X~A ~}"
+    (if indent-p
+      "  "
+      "")
     (switch ((cell-type cell))
       (+tag-reference+
         (if (= addr (cell-value cell))
           "unbound variable "
           (format nil "var pointer to ~D " (cell-value cell))))
+      (+tag-structure+
+        (format nil "structure pointer to ~D " (cell-value cell)))
       (+tag-functor+
-        (format nil "~A/~D "
-                (wam-functor-lookup wam (cell-functor-index cell))
-                (cell-functor-arity cell)))
+        (destructuring-bind (functor . arity)
+            (wam-functor-lookup wam (cell-functor-index cell))
+          (format nil "~A/~D " functor arity)))
       (t ""))
     (registers-pointing-to wam addr)))
 
@@ -30,17 +35,25 @@
     (format t "  +------+-----+--------------+--------------------------------------+~%")
     (when (> from 0)
       (format t "  |    ⋮ |  ⋮  |            ⋮ |                                      |~%"))
-    (flet ((print-cell (i cell)
+    (flet ((print-cell (i cell indent)
              (let ((hi (= i highlight)))
                (format t "~A ~4@A | ~A | ~12@A | ~36A ~A~%"
                        (if hi "==>" "  |")
                        i
                        (cell-type-short-name cell)
                        (cell-value cell)
-                       (heap-debug wam i cell)
+                       (heap-debug wam i cell (> indent 0))
                        (if hi "<===" "|")))))
       (loop :for i :from from :below to
-            :do (print-cell i (aref heap i))))
+            :with indent = 0
+            :for cell = (aref heap i)
+            :do
+            (progn
+              (print-cell i cell indent)
+              (if (cell-functor-p cell)
+                (setf indent (wam-functor-arity wam (cell-functor-index cell)))
+                (when (not (zerop indent))
+                  (decf indent))))))
     (when (< to (length heap))
       (format t "  |    ⋮ |  ⋮  |            ⋮ |                                      |~%"))
     (format t "  +------+-----+--------------+--------------------------------------+~%")
@@ -55,6 +68,7 @@
 
 (defun pretty-arguments (arguments)
   (format nil "~{ ~4,'0X~}" arguments))
+
 
 (defgeneric instruction-details (opcode arguments functor-list))
 
@@ -87,12 +101,6 @@
           (pretty-functor (first arguments) functor-list)))
 
 
-(defmethod instruction-details ((opcode (eql +opcode-call+)) arguments functor-list)
-  (format nil "CALL~A      ; ~A"
-          (pretty-arguments arguments)
-          (pretty-functor (first arguments) functor-list)))
-
-
 (defmethod instruction-details ((opcode (eql +opcode-get-variable+)) arguments functor-list)
   (format nil "GVAR~A ; A~D -> X~D"
           (pretty-arguments arguments)
@@ -105,20 +113,18 @@
           (second arguments)
           (first arguments)))
 
-
 (defmethod instruction-details ((opcode (eql +opcode-put-variable+)) arguments functor-list)
   (format nil "PVAR~A ; A~D <- X~D <- new REF"
           (pretty-arguments arguments)
           (second arguments)
           (first arguments)))
 
-; (defmethod instruction-details ((opcode (eql +opcode-get-value+)) arguments functor-list)
-;   )
 
-; (defmethod instruction-details ((opcode (eql +opcode-set-value+)) arguments functor-list))
-; (defmethod instruction-details ((opcode (eql +opcode-put-variable+)) arguments functor-list))
-; (defmethod instruction-details ((opcode (eql +opcode-put-value+)) arguments functor-list))
-; (defmethod instruction-details ((opcode (eql +opcode-proceed+)) arguments functor-list))
+(defmethod instruction-details ((opcode (eql +opcode-call+)) arguments functor-list)
+  (format nil "CALL~A      ; ~A"
+          (pretty-arguments arguments)
+          (pretty-functor (first arguments) functor-list)))
+
 
 (defun dump-code-store (code-store &optional
                                    (from 0)
@@ -189,8 +195,8 @@
       ((cell-structure-p cell)
        (extract-thing wam (cell-value cell)))
       ((cell-functor-p cell)
-       (let ((functor (wam-functor-lookup wam (cell-functor-index cell)))
-             (arity (cell-functor-arity cell)))
+       (destructuring-bind (functor . arity)
+           (wam-functor-lookup wam (cell-functor-index cell))
          (list* functor
                 (loop :for i :from (1+ address) :to (+ address arity)
                       :collect (extract-thing wam i)))))

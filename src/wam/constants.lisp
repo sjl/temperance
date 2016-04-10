@@ -60,6 +60,7 @@
 (define-constant +opcode-get-variable+ 4)
 (define-constant +opcode-get-value+ 5)
 
+
 ;;; Query
 (define-constant +opcode-put-structure+ 6)
 (define-constant +opcode-set-variable+ 7)

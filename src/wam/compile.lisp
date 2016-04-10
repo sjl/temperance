@@ -395,13 +395,3 @@
         (multiple-value-call #'tokenize-assignments))
     (compile-program-tokens wam tokens functor arity (wam-code wam))))
 
-
-(defun run (wam instructions)
-  "Execute the machine instructions on the given WAM."
-  ; (loop :)
-  (mapc (lambda (action)
-          (when (not (wam-fail wam))
-            (apply (car action) wam (cdr action))))
-        instructions)
-  (values))
-

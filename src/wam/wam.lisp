@@ -195,9 +195,19 @@
         (vector-push-extend functor functors))))
 
 (defun* wam-functor-lookup ((wam wam) (functor-index functor-index))
-  (:returns symbol)
-  "Return the symbol for the functor with the given index in the WAM."
+  (:returns functor)
+  "Return the functor with the given index in the WAM."
   (aref (wam-functors wam) functor-index))
+
+(defun* wam-functor-symbol ((wam wam) (functor-index functor-index))
+  (:returns symbol)
+  "Return the symbol of the functor with the given index in the WAM."
+  (car (wam-functor-lookup wam functor-index)))
+
+(defun* wam-functor-arity ((wam wam) (functor-index functor-index))
+  (:returns arity)
+  "Return the arity of the functor with the given index in the WAM."
+  (cdr (wam-functor-lookup wam functor-index)))
 
 
 ;;;; Unification Stack

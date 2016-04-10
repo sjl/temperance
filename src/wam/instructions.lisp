@@ -16,16 +16,10 @@
   "
   (wam-heap-push! wam (make-cell-structure (1+ (wam-heap-pointer wam)))))
 
-(defun* push-new-functor! ((wam wam) (functor symbol) (arity arity))
+(defun* push-new-functor! ((wam wam) (functor functor-index))
   (:returns (values heap-cell heap-index))
-  "Push a new functor cell onto the heap.
-
-  If the functor isn't already in the functor table it will be added.
-
-  "
-  (wam-heap-push! wam (make-cell-functor
-                        (wam-ensure-functor-index wam functor)
-                        arity)))
+  "Push a new functor cell onto the heap."
+  (wam-heap-push! wam (make-cell-functor functor)))
 
 
 (defun* bound-reference-p ((wam wam) (address heap-index))
@@ -44,26 +38,18 @@
       (and (cell-reference-p cell)
            (= (cell-value cell) address)))))
 
-(defun* matching-functor-p ((wam wam)
-                            (cell heap-cell)
-                            (functor symbol)
-                            (arity arity))
+(defun* matching-functor-p ((cell heap-cell)
+                            (functor functor-index))
   (:returns boolean)
-  "Return whether `cell` is a functor cell of `functor`/`arity`."
+  "Return whether `cell` is a functor cell containing `functor`."
   (ensure-boolean
     (and (cell-functor-p cell)
-         (= arity (cell-functor-arity cell))
-         (eql functor
-              (wam-functor-lookup wam (cell-functor-index cell))))))
+         (= (cell-functor-index cell) functor))))
 
 (defun* functors-match-p ((functor-cell-1 heap-cell)
                           (functor-cell-2 heap-cell))
   (:returns boolean)
   "Return whether the two functor cells represent the same functor."
-  ;; Warning: this is a gross, fast hack.  Functor cell values are a combination
-  ;; of functor index and arity, so the only way they can represent the same
-  ;; functor is if they have the same value.  We don't have to bother actually
-  ;; looking up and comparing the functor symbols themselves.
   (= (cell-value functor-cell-1)
      (cell-value functor-cell-2)))
 
@@ -149,19 +135,20 @@
 
 ;;;; Query Instructions
 (defun* %put-structure ((wam wam)
-                        (functor symbol)
-                        (arity arity)
+                        (functor functor-index)
                         (register register-index))
   (:returns :void)
-  (setf (wam-register wam register)
-        (nth-value 1 (push-new-structure! wam)))
-  (push-new-functor! wam functor arity)
+  (->> (push-new-structure! wam)
+    (nth-value 1)
+    (setf (wam-register wam register)))
+  (push-new-functor! wam functor)
   (values))
 
 (defun* %set-variable ((wam wam) (register register-index))
   (:returns :void)
-  (setf (wam-register wam register)
-        (nth-value 1 (push-unbound-reference! wam)))
+  (->> (push-unbound-reference! wam)
+    (nth-value 1)
+    (setf (wam-register wam register)))
   (values))
 
 (defun* %set-value ((wam wam) (register register-index))
@@ -169,11 +156,24 @@
   (wam-heap-push! wam (wam-register-cell wam register))
   (values))
 
+(defun* %put-variable ((wam wam)
+                       (register register-index)
+                       (argument register-index))
+  (->> (push-unbound-reference! wam)
+    (nth-value 1)
+    (setf (wam-register wam register))
+    (setf (wam-register wam argument))))
+
+(defun* %put-value ((wam wam)
+                    (register register-index)
+                    (argument register-index))
+  (setf (wam-register wam register)
+        (wam-register wam argument)))
+
 
 ;;;; Program Instructions
 (defun* %get-structure ((wam wam)
-                        (functor symbol)
-                        (arity arity)
+                        (functor functor-index)
                         (register register-index))
   (:returns :void)
   (let* ((addr (deref wam (wam-register wam register)))
@@ -193,7 +193,7 @@
       ;; few instructions (which will be unify-*'s, executed in write mode).
       ((cell-reference-p cell)
        (let ((new-structure-address (nth-value 1 (push-new-structure! wam))))
-         (push-new-functor! wam functor arity)
+         (push-new-functor! wam functor)
          (bind! wam addr new-structure-address)
          (setf (wam-mode wam) :write)))
 
@@ -217,7 +217,7 @@
       ((cell-structure-p cell)
        (let* ((functor-addr (cell-value cell))
               (functor-cell (wam-heap-cell wam functor-addr)))
-         (if (matching-functor-p wam functor-cell functor arity)
+         (if (matching-functor-p functor-cell functor)
            (progn
              (setf (wam-s wam) (1+ functor-addr))
              (setf (wam-mode wam) :read))
@@ -244,5 +244,43 @@
                    (wam-s wam)))
     (:write (wam-heap-push! wam (wam-register wam register))))
   (incf (wam-s wam))
+  (values))
+
+
+;;;; Running
+(defmacro instruction-call (wam instruction code-store pc number-of-arguments)
+  "Expand into a call of the appropriate machine instruction.
+
+  `pc` should be a safe place representing the program counter.
+
+  `code-store` should be a safe place representing the instructions.
+
+  "
+  `(,instruction ,wam
+    ,@(loop :for i :from 1 :to number-of-arguments
+            :collect `(aref ,code-store (+ ,pc ,i)))))
+
+(defun run-query (wam term)
+  "Compile query `term` and run the instructions on the `wam`.
+
+  For now, just stop at the call instruction.
+
+  "
+  (let ((code (compile-query wam term)))
+    (loop
+      :with pc = 0 ; local program counter for this hunk of query code
+      :for opcode = (aref code pc)
+      :do
+      (progn
+        (eswitch (opcode)
+          (+opcode-put-structure+ (instruction-call wam %put-structure code pc 2))
+          (+opcode-set-variable+ (instruction-call wam %set-variable code pc 1))
+          (+opcode-set-value+ (instruction-call wam %set-value code pc 1))
+          (+opcode-put-variable+ (instruction-call wam %put-variable code pc 2))
+          (+opcode-put-value+ (instruction-call wam %put-value code pc 2))
+          (+opcode-call+ (return))) ; TODO: actually call
+        (incf pc (instruction-size opcode))
+        (when (>= pc (length code)) ; queries SHOULD always end in a CALL...
+          (error "Fell off the end of the query code store!")))))
   (values))
 
