@@ -195,7 +195,8 @@
             addr))
 
 
-(defun extract-thing (wam &optional (address (wam-register wam 0)))
+(defun extract-thing (wam address)
+  "Extract the thing at the given heap address and print it nicely."
   (let ((cell (wam-heap-cell wam (deref wam address))))
     (cond
       ((cell-null-p cell)

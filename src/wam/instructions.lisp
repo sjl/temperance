@@ -280,10 +280,29 @@
     ,@(loop :for i :from 1 :to number-of-arguments
             :collect `(aref ,code-store (+ ,pc ,i)))))
 
-(defun run-query (wam term)
+(defun run-program (wam functor)
+  (with-slots (code program-counter) wam
+    (setf program-counter (wam-code-label wam functor))
+    (loop
+      :for opcode = (aref code program-counter)
+      :do
+      (progn
+        (eswitch (opcode)
+          (+opcode-get-structure+ (instruction-call wam %get-structure code program-counter 2))
+          (+opcode-unify-variable+ (instruction-call wam %unify-variable code program-counter 1))
+          (+opcode-unify-value+ (instruction-call wam %unify-value code program-counter 1))
+          (+opcode-get-variable+ (instruction-call wam %get-variable code program-counter 2))
+          (+opcode-get-value+ (instruction-call wam %get-value code program-counter 2))
+          (+opcode-proceed+ (return)))
+        (incf program-counter (instruction-size opcode))
+        (when (>= program-counter (length code))
+          ;; programs SHOULD always end in a PROCEED
+          (error "Fell off the end of the program code store!"))))))
+
+(defun run-query (wam term &optional (step nil))
   "Compile query `term` and run the instructions on the `wam`.
 
-  For now, just stop at the call instruction.
+  When `step` is true, break into the debugger before calling the procedure.
 
   "
   (let ((code (compile-query wam term)))
@@ -298,7 +317,10 @@
           (+opcode-set-value+ (instruction-call wam %set-value code pc 1))
           (+opcode-put-variable+ (instruction-call wam %put-variable code pc 2))
           (+opcode-put-value+ (instruction-call wam %put-value code pc 2))
-          (+opcode-call+ (return))) ; TODO: actually call
+          (+opcode-call+
+            (when step (break))
+            (run-program wam (aref code (+ pc 1)))
+            (return)))
         (incf pc (instruction-size opcode))
         (when (>= pc (length code)) ; queries SHOULD always end in a CALL...
           (error "Fell off the end of the query code store!")))))
