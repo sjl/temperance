@@ -94,6 +94,7 @@
   "Mark a failure in the WAM."
   (setf (wam-fail wam) t)
   (format *debug-io* "FAIL: ~A~%" reason)
+  (break)
   (values))
 
 
@@ -120,11 +121,12 @@
             (let* ((structure-1-addr (cell-value cell-1)) ; find where they
                    (structure-2-addr (cell-value cell-2)) ; start on the heap
                    (functor-1 (wam-heap-cell wam structure-1-addr)) ; grab the
-                   (functor-2 (wam-heap-cell wam structure-2-addr))) ;functors
+                   (functor-2 (wam-heap-cell wam structure-2-addr))) ; functors
               (if (functors-match-p functor-1 functor-2)
                 ;; If the functors match, push their pairs of arguments onto
                 ;; the stack to be unified.
-                (loop :for i :from 1 :to (cell-functor-arity functor-1) :do
+                (loop :with arity = (cdr (wam-functor-lookup wam functor-1))
+                      :for i :from 1 :to arity :do
                       (wam-unification-stack-push! wam (+ structure-1-addr i))
                       (wam-unification-stack-push! wam (+ structure-2-addr i)))
                 ;; Otherwise we're hosed.
@@ -265,7 +267,26 @@
           (wam-register wam register)
           (wam-register wam argument))
   (values))
-  
+
+(defun* %call ((wam wam) (functor functor-index))
+  (:returns :void)
+  (let ((target (wam-code-label wam functor)))
+    (if target
+      (progn
+        (setf (wam-continuation-pointer wam) ; CP <- next instruction
+              (+ (wam-program-counter wam)
+                 (instruction-size +opcode-call+))
+              (wam-program-counter wam) ; PC <- target 
+              target))
+      (fail! wam "Tried to call unknown procedure.")))
+  (values))
+
+(defun* %proceed ((wam wam))
+  (:returns :void)
+  (setf (wam-program-counter wam) ; P <- CP
+        (wam-continuation-pointer wam))
+  (values))
+
 
 ;;;; Running
 (defmacro instruction-call (wam instruction code-store pc number-of-arguments)
@@ -280,32 +301,47 @@
     ,@(loop :for i :from 1 :to number-of-arguments
             :collect `(aref ,code-store (+ ,pc ,i)))))
 
-(defun run-program (wam functor)
-  (with-slots (code program-counter) wam
+
+(defun run-program (wam functor &optional (step nil))
+  (with-slots (code program-counter fail) wam
     (setf program-counter (wam-code-label wam functor))
     (loop
+      :while (and (not fail) ; failure
+                  (not (= program-counter +code-sentinal+))) ; finished
       :for opcode = (aref code program-counter)
       :do
-      (progn
+      (block op
+        (when step
+          (break "About to execute instruction at ~4,'0X" program-counter))
         (eswitch (opcode)
           (+opcode-get-structure+ (instruction-call wam %get-structure code program-counter 2))
           (+opcode-unify-variable+ (instruction-call wam %unify-variable code program-counter 1))
           (+opcode-unify-value+ (instruction-call wam %unify-value code program-counter 1))
           (+opcode-get-variable+ (instruction-call wam %get-variable code program-counter 2))
           (+opcode-get-value+ (instruction-call wam %get-value code program-counter 2))
-          (+opcode-proceed+ (return)))
+          ;; need to skip the PC increment for PROC/CALL
+          ;; TODO: this is ugly
+          (+opcode-proceed+ (instruction-call wam %proceed code program-counter 0)
+                            (return-from op))
+          (+opcode-call+ (instruction-call wam %call code program-counter 1)
+                         (return-from op)))
         (incf program-counter (instruction-size opcode))
-        (when (>= program-counter (length code))
-          ;; programs SHOULD always end in a PROCEED
-          (error "Fell off the end of the program code store!"))))))
+        (when (>= program-counter (fill-pointer code))
+          (error "Fell off the end of the program code store!"))))
+    (if fail
+      (print "FAIL")
+      (print "SUCCESS"))))
 
 (defun run-query (wam term &optional (step nil))
   "Compile query `term` and run the instructions on the `wam`.
+
+  Resets the heap, etc before running.
 
   When `step` is true, break into the debugger before calling the procedure.
 
   "
   (let ((code (compile-query wam term)))
+    (wam-reset! wam)
     (loop
       :with pc = 0 ; local program counter for this hunk of query code
       :for opcode = (aref code pc)
@@ -319,7 +355,8 @@
           (+opcode-put-value+ (instruction-call wam %put-value code pc 2))
           (+opcode-call+
             (when step (break))
-            (run-program wam (aref code (+ pc 1)))
+            (setf (wam-continuation-pointer wam) +code-sentinal+)
+            (run-program wam (aref code (+ pc 1)) step)
             (return)))
         (incf pc (instruction-size opcode))
         (when (>= pc (length code)) ; queries SHOULD always end in a CALL...

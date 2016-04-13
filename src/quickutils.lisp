@@ -2,7 +2,7 @@
 ;;;; See http://quickutil.org for details.
 
 ;;;; To regenerate:
-;;;; (qtlc:save-utils-as "quickutils.lisp" :utilities '(:DEFINE-CONSTANT :SET-EQUAL :CURRY :SWITCH :ENSURE-BOOLEAN :WHILE :UNTIL :TREE-MEMBER-P :WITH-GENSYMS :MAP-TREE) :ensure-package T :package "BONES.QUICKUTILS")
+;;;; (qtlc:save-utils-as "quickutils.lisp" :utilities '(:DEFINE-CONSTANT :SET-EQUAL :CURRY :SWITCH :ENSURE-BOOLEAN :WHILE :UNTIL :TREE-MEMBER-P :TREE-COLLECT :WITH-GENSYMS :MAP-TREE) :ensure-package T :package "BONES.QUICKUTILS")
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (unless (find-package "BONES.QUICKUTILS")
@@ -18,7 +18,7 @@
                                          :CURRY :STRING-DESIGNATOR
                                          :WITH-GENSYMS :EXTRACT-FUNCTION-NAME
                                          :SWITCH :ENSURE-BOOLEAN :UNTIL :WHILE
-                                         :TREE-MEMBER-P :MAP-TREE))))
+                                         :TREE-MEMBER-P :TREE-COLLECT :MAP-TREE))))
 
   (defun %reevaluate-constant (name value test)
     (if (not (boundp name))
@@ -235,6 +235,25 @@ returns the values of `default` if no keys match."
       (rec tree)))
   
 
+  (defun tree-collect (predicate tree)
+    "Returns a list of every node in the `tree` that satisfies the `predicate`. If there are any improper lists in the tree, the `predicate` is also applied to their dotted elements."
+    (let ((sentinel (gensym)))
+      (flet ((my-cdr (obj)
+               (cond ((consp obj)
+                      (let ((result (cdr obj)))
+                        (if (listp result)
+                            result
+                            (list result sentinel))))
+                     (t
+                      (list sentinel)))))
+        (loop :for (item . rest) :on tree :by #'my-cdr
+              :until (eq item sentinel)
+              :if (funcall predicate item) collect item
+                :else
+                  :if (listp item)
+                    :append (tree-collect predicate item)))))
+  
+
   (defun map-tree (function tree)
     "Map `function` to each of the leave of `tree`."
     (check-type tree cons)
@@ -249,7 +268,7 @@ returns the values of `default` if no keys match."
   
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (export '(define-constant set-equal curry switch eswitch cswitch
-            ensure-boolean while until tree-member-p with-gensyms
+            ensure-boolean while until tree-member-p tree-collect with-gensyms
             with-unique-names map-tree)))
 
 ;;;; END OF quickutils.lisp ;;;;

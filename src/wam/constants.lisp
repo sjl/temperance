@@ -24,6 +24,9 @@
 (define-constant +code-limit+ (expt 2 +code-word-size+)
   :documentation "Maximum size of the WAM code store.")
 
+(define-constant +code-sentinal+ (1- +code-limit+)
+  :documentation "Sentinal value used in the PC and CP.")
+
 
 (define-constant +tag-null+      #b00
   :documentation "An empty cell.")
@@ -50,6 +53,11 @@
 
 (define-constant +maximum-arity+ (1- (expt 2 +functor-arity-width+))
   :documentation "The maximum allowed arity of functors.")
+
+
+(define-constant +maximum-query-size+ 256
+  :documentation
+  "The maximum size (in bytes of bytecode) a query may compile to.")
 
 
 ;;;; Opcodes

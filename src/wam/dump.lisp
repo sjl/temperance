@@ -114,7 +114,7 @@
           (first arguments)))
 
 (defmethod instruction-details ((opcode (eql +opcode-put-variable+)) arguments functor-list)
-  (format nil "PVAR~A ; A~D <- X~D <- new REF"
+  (format nil "PVAR~A ; A~D <- X~D <- new unbound REF"
           (pretty-arguments arguments)
           (second arguments)
           (first arguments)))
@@ -144,6 +144,25 @@
   (dump-code-store (wam-code wam) from to (wam-functors wam)))
 
 
+(defun extract-thing (wam address)
+  "Extract the thing at the given heap address and print it nicely."
+  (let ((cell (wam-heap-cell wam (deref wam address))))
+    (cond
+      ((cell-null-p cell)
+       "NULL!")
+      ((cell-reference-p cell)
+       (format nil "var-~D" (cell-value cell)))
+      ((cell-structure-p cell)
+       (extract-thing wam (cell-value cell)))
+      ((cell-functor-p cell)
+       (destructuring-bind (functor . arity)
+           (wam-functor-lookup wam (cell-functor-index cell))
+         (list* functor
+                (loop :for i :from (1+ address) :to (+ address arity)
+                      :collect (extract-thing wam i)))))
+      (t (error "What to heck is this?")))))
+
+
 (defun dump-wam-registers (wam)
   (format t "REGISTERS:~%")
   (format t  "~5@A ->~6@A~%" "S" (wam-s wam))
@@ -151,12 +170,15 @@
         :for reg :across (wam-registers wam)
         :for contents = (when (not (= reg (1- +heap-limit+)))
                           (wam-register-cell wam i))
-        :do (format t "~5@A ->~6@A ~A~%"
+        :do (format t "~5@A ->~6@A ~A ~A~%"
                     (format nil "X~D" i)
                     reg
                     (if contents
                       (cell-aesthetic contents)
-                      "unset"))))
+                      "unset")
+                    (if contents
+                      (format nil "; ~A" (extract-thing wam reg))
+                      ""))))
 
 (defun dump-wam-functors (wam)
   (format t " FUNCTORS: ~S~%" (wam-functors wam)))
@@ -195,20 +217,3 @@
             addr))
 
 
-(defun extract-thing (wam address)
-  "Extract the thing at the given heap address and print it nicely."
-  (let ((cell (wam-heap-cell wam (deref wam address))))
-    (cond
-      ((cell-null-p cell)
-       "NULL!")
-      ((cell-reference-p cell)
-       (format nil "var-~D" (cell-value cell)))
-      ((cell-structure-p cell)
-       (extract-thing wam (cell-value cell)))
-      ((cell-functor-p cell)
-       (destructuring-bind (functor . arity)
-           (wam-functor-lookup wam (cell-functor-index cell))
-         (list* functor
-                (loop :for i :from (1+ address) :to (+ address arity)
-                      :collect (extract-thing wam i)))))
-      (t (error "What to heck is this?")))))

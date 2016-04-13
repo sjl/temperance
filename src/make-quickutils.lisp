@@ -10,6 +10,7 @@
                :while
                :until
                :tree-member-p
+               :tree-collect
                :with-gensyms
                :map-tree
                )

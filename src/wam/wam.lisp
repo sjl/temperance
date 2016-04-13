@@ -12,8 +12,8 @@
      :documentation "The actual heap (stack).")
    (code
      :initform (make-array 1024
-                           :fill-pointer 0
                            :adjustable t
+                           :fill-pointer 0
                            :initial-element 0
                            :element-type 'code-word)
      :reader wam-code
@@ -57,8 +57,13 @@
    (program-counter
      :accessor wam-program-counter
      :initform 0
-     :type 'code-index
-     :documentation "The Program Counter for the WAM code store.")
+     :type code-index
+     :documentation "The Program Counter into the WAM code store.")
+   (continuation-pointer
+     :accessor wam-continuation-pointer
+     :initform 0
+     :type code-index
+     :documentation "The Continuation Pointer into the WAM code store.")
    (mode
      :accessor wam-mode
      :initform nil
@@ -98,6 +103,23 @@
   (setf (aref (wam-heap wam) address) new-value))
 
 
+(defun* wam-truncate-heap! ((wam wam))
+  (setf (fill-pointer (wam-heap wam)) 0))
+
+(defun* wam-reset-registers! ((wam wam))
+  (loop :for i :from 0 :below +register-count+ :do
+        (setf (wam-register wam i)
+              (1- +heap-limit+)))
+  (setf (wam-s wam) nil))
+
+(defun* wam-reset! ((wam wam))
+  (wam-truncate-heap! wam)
+  (wam-reset-registers! wam)
+  (setf (wam-program-counter wam) 0)
+  (setf (wam-continuation-pointer wam) 0)
+  (setf (wam-mode wam) nil))
+
+
 ;;;; Code
 (defun* retrieve-instruction (code-store (address code-index))
   "Return the full instruction at the given address in the code store."
@@ -122,15 +144,15 @@
   (retrieve-instruction (wam-code wam) address))
 
 
-(defun* wam-code-push-word! ((wam wam) (word code-word))
+(defun* code-push-word! ((store (array code-word))
+                         (word code-word))
   "Push the given word into the code store and return its new address."
   (:returns code-index)
-  (with-slots (code) wam
-    (if (= +code-limit+ (fill-pointer code))
-      (error "WAM code store exhausted.")
-      (vector-push-extend word code))))
+  (vector-push-extend word store))
 
-(defun* wam-code-push! ((wam wam) (opcode opcode) &rest (arguments code-word))
+(defun* code-push-instruction! ((store (array code-word))
+                                (opcode opcode)
+                                &rest (arguments code-word))
   "Push the given instruction into the code store and return its new address.
 
   The address will be the address of the start of the instruction (i.e. the
@@ -147,14 +169,14 @@
           arguments
           (instruction-size opcode))
   (prog1
-      (wam-code-push-word! wam opcode)
+      (code-push-word! store opcode)
     (dolist (arg arguments)
-      (wam-code-push-word! wam arg))))
+      (code-push-word! store arg))))
 
 
 (defun* wam-code-label ((wam wam)
                         (functor functor-index))
-  (:returns code-index)
+  (:returns (or null code-index))
   (gethash functor (wam-code-labels wam)))
 
 (defun (setf wam-code-label) (new-value wam functor)

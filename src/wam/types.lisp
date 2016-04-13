@@ -31,6 +31,7 @@
   `(unsigned-byte ,+code-word-size+))
 
 (deftype code-index ()
+  ; either an address or the sentinal
   `(integer 0 ,(1- +code-limit+)))
 
 (deftype opcode ()

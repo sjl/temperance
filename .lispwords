@@ -1,1 +1,2 @@
 (1 vector-push-extend-all)
+(2 code-push-instruction!)
