@@ -1,6 +1,133 @@
 (in-package #:bones.wam)
 (named-readtables:in-readtable :fare-quasiquote)
 
+;;;; Registers
+(deftype register-type ()
+  '(member :argument :local :permanent))
+
+(deftype register-number ()
+  '(integer 0))
+
+
+(defclass register ()
+  ((type
+     :initarg :type
+     :reader register-type
+     :type register-type)
+   (number
+     :initarg :number
+     :reader register-number
+     :type register-number)))
+
+
+(defun* make-register ((type register-type) (number register-number))
+  (:returns register)
+  (make-instance 'register :type type :number number))
+
+
+(defun* register-to-string ((register register))
+  (format nil "~A~D"
+          (ecase (register-type register)
+            (:argument #\A)
+            (:local #\X)
+            (:permanent #\Y))
+          (register-number register)))
+
+(defmethod print-object ((object register) stream)
+  (print-unreadable-object (object stream :identity nil :type nil)
+    (format stream (register-to-string object))))
+
+
+(defun* register= ((r1 register) (r2 register))
+  (:returns boolean)
+  (ensure-boolean
+    (and (eql (register-type r1)
+              (register-type r2))
+         (= (register-number r1)
+            (register-number r2)))))
+
+(defun* register≈ ((r1 register) (r2 register))
+  (:returns boolean)
+  (ensure-boolean
+    (and (or (eql (register-type r1)
+                  (register-type r2))
+             ;; local and argument registers are actually the same register, just
+             ;; named differently
+             (and (member (register-type r1) '(:local :argument))
+                  (member (register-type r2) '(:local :argument))))
+         (= (register-number r1)
+            (register-number r2)))))
+
+
+;;;; Register Assignments
+(deftype register-assignment ()
+  ;; A register assignment represented as a cons of (register . contents).
+  '(cons register t))
+
+(deftype register-assignment-list ()
+  '(trivial-types:association-list register t))
+
+
+(defun* pprint-assignments ((assignments register-assignment-list))
+  (format t "~{~A~%~}"
+          (loop :for (register . contents) :in assignments :collect
+                (format nil "~A <- ~A" (register-to-string register) contents))))
+
+(defun* find-assignment ((register register)
+                         (assignments register-assignment-list))
+  (:returns register-assignment)
+  "Find the assignment for the given register number in the assignment list."
+  (assoc register assignments))
+
+
+(defun* variable-p (term)
+  (:returns boolean)
+  (ensure-boolean (keywordp term)))
+
+
+(defun* variable-assignment-p ((assignment register-assignment))
+  "Return whether the register assigment is a simple variable assignment.
+
+  E.g. `X1 = Foo` is simple, but `X2 = f(...)` is not.
+
+  Note that register assignments actually look like `(1 . contents)`, so
+  a simple variable assignment would be `(1 . :foo)`.
+
+  "
+  (:returns boolean)
+  (variable-p (cdr assignment)))
+
+(defun* variable-register-p ((register register)
+                             (assignments register-assignment-list))
+  (:returns boolean)
+  "Return whether the given register contains a variable assignment."
+  (variable-assignment-p (find-assignment register assignments)))
+
+
+(defun* register-assignment-p ((assignment register-assignment))
+  (:returns boolean)
+  "Return whether the register assigment is a register-to-register assignment.
+
+  E.g. `A1 = X2`.
+
+  Note that this should only ever happen for argument registers.
+
+  "
+  (typep (cdr assignment) 'register))
+
+
+(defun* structure-assignment-p ((assignment register-assignment))
+  (:returns boolean)
+  "Return whether the given assignment pair is a structure assignment."
+  (listp (cdr assignment)))
+
+(defun* structure-register-p ((register register)
+                              (assignments register-assignment-list))
+  (:returns boolean)
+  "Return whether the given register contains a structure assignment."
+  (structure-assignment-p (find-assignment register assignments)))
+
+
 ;;;; Parsing
 ;;; Turns p(A, q(A, B)) into something like:
 ;;;
@@ -15,72 +142,6 @@
 ;;;   A0 -> A
 ;;;   A1 -> q(A1, X3)
 ;;;   X2 -> B
-
-(defun find-assignment (register assignments)
-  "Find the assignment for the given register number in the assignment list."
-  (assoc register assignments))
-
-
-(defun variable-p (term)
-  (keywordp term))
-
-(defun find-permanent-variables (clause)
-  "Return a list of all the 'permanent' variables in `clause`.
-
-  Permanent variables are those that appear in more than one goal of the clause,
-  where the head of the clause is considered to be a part of the first goal.
-
-  "
-  (if (< (length clause) 2)
-    (list) ; facts and chain rules have no permanent variables at all
-    (destructuring-bind (head body-first . body-rest) clause
-      ;; the head is treated as part of the first goal for the purposes of
-      ;; finding permanent variables
-      (let* ((goals (cons (cons head body-first) body-rest))
-             (variables (remove-duplicates (tree-collect #'variable-p goals))))
-        (flet ((permanent-p (variable)
-                 "Permanent variables are those contained in more than 1 goal."
-                 (> (count-if (curry #'tree-member-p variable)
-                              goals)
-                    1)))
-          (remove-if-not #'permanent-p variables))))))
-
-
-(defun variable-assignment-p (ass)
-  "Return whether the register assigment is a simple variable assignment.
-
-  E.g. `X1 = Foo` is simple, but `X2 = f(...)` is not.
-
-  Note that register assignments actually look like `(1 . contents)`, so
-  a simple variable assignment would be `(1 . :foo)`.
-
-  "
-  (keywordp (cdr ass)))
-
-(defun variable-register-p (register assignments)
-  "Return whether the given register contains a variable assignment."
-  (variable-assignment-p (find-assignment register assignments)))
-
-
-(defun register-assignment-p (ass)
-  "Return whether the register assigment is a register-to-register assignment.
-
-  E.g. `A1 = X2`.
-
-  Note that this should only ever happen for argument registers.
-
-  "
-  (numberp (cdr ass)))
-
-
-(defun structure-assignment-p (ass)
-  "Return whether the given assignment pair is a structure assignment."
-  (listp (cdr ass)))
-
-(defun structure-register-p (register assignments)
-  "Return whether the given register contains a structure assignment."
-  (structure-assignment-p (find-assignment register assignments)))
-
 
 (defun parse-term (term)
   "Parse a term into a series of register assignments.
@@ -112,20 +173,27 @@
                                 :adjustable t
                                 :initial-element nil)))
     (labels
-        ((parse-variable (var)
-           ;; If we've already seen this variable, just return its position,
-           ;; otherwise allocate a register for it.
-           (or (position var registers)
-               (vector-push-extend var registers)))
-         (parse-structure (structure register)
+        ((make-temporary-register (number)
+           (make-register (if (< number arity) :argument :local)
+                          number))
+         (find-variable (var)
+           (let ((r (position var registers)))
+             (when r
+               (make-temporary-register r))))
+         (parse-variable (var)
+           ;; If we've already seen this variable just return the register it's
+           ;; in, otherwise allocate a register for it and return that.
+           (or (find-variable var)
+               (make-temporary-register (vector-push-extend var registers))))
+         (parse-structure (structure reg)
            (destructuring-bind (functor . arguments) structure
              ;; If we've been given a register to hold this structure (i.e.
-             ;; we're parsing a top-level argument, use it.  Otherwise allocate
+             ;; we're parsing a top-level argument) use it.  Otherwise allocate
              ;; a fresh one.
-             (let ((register (or register (vector-push-extend nil registers))))
-               (setf (aref registers register)
+             (let ((reg (or reg (vector-push-extend nil registers))))
+               (setf (aref registers reg)
                      (cons functor (mapcar #'parse arguments)))
-               register)))
+               (make-temporary-register reg))))
          (parse (term &optional register)
            (cond
              ((variable-p term) (parse-variable term))
@@ -141,24 +209,12 @@
             :when (not (aref registers i))
             :do (setf (aref registers i) parsed))
       (values (loop :for i :from 0 ; turn the register array into an assignment list
-                    :for reg :across registers
-                    :collect (cons i reg))
+                    :for contents :across registers
+                    :collect
+                    (cons (make-temporary-register i)
+                          contents))
               predicate
               arity))))
-
-
-(defun register-types (assignments arity permanent-variables)
-  "Return the alist of register types for the given register assignments.
-
-  `assignments` must be sorted, and not flattened yet.
-
-  "
-  (loop :for i :from 0
-        :for (register . contents) :in assignments :collect
-        (cons i (cond
-                  ((< i arity) :argument)
-                  ((member contents permanent-variables) :permanent)
-                  (t :local)))))
 
 
 ;;;; Flattening
@@ -196,7 +252,8 @@
          ())
         ; Register assignments (A0 <- X5) have one obvious dependency.
         ((register-assignment-p assignment)
-         (list (cons (cdr assignment) (car assignment))))
+         (destructuring-bind (argument . contents) assignment
+           (list `(,contents . ,argument))))
         ; Structure assignments depend on all the functor's arguments.
         ((structure-assignment-p assignment)
          (destructuring-bind (target . (functor . reqs))
@@ -216,7 +273,9 @@
 
   "
   (-<> assignments
-    (topological-sort <> (find-dependencies assignments) :key #'car)
+    (topological-sort <> (find-dependencies assignments)
+                      :key #'car
+                      :key-test #'register=)
     (remove-if #'variable-assignment-p <>)))
 
 (defun flatten-query (assignments)
@@ -232,13 +291,13 @@
 ;;;
 ;;; It turns:
 ;;;
-;;;   X2 -> q(X1, X3), X0 -> p(X1, X2)
+;;;   X2 -> q(X1, X3), X0 -> p(X1, X2), A3 <- X4
 ;;;
 ;;; into something like:
 ;;;
-;;;   (X2 = q/2), X1, X3, (X0 = p/2), X1, X2
+;;;   (X2 = q/2), X1, X3, (X0 = p/2), X1, X2, (A3 = X4)
 
-(defun tokenize-assignments (assignments arity)
+(defun tokenize-assignments (assignments)
   "Tokenize a flattened set of register assignments into a stream."
   (mapcan
     (lambda (ass)
@@ -247,14 +306,11 @@
       ;;   A0 = X5                 (0 . 5)
       ;;
       ;; And turn it into a stream of tokens:
-      ;;   (X1 = f/3), a, b, c     ((:structure 1 f 3) a b c)
-      ;;   (A0 = X5)               ((:argument 0 5))
+      ;;   (X1 = f/3), a, b, c     ((:structure 1 f 3) a b c
+      ;;   (A0 = X5)                (:argument 0 5))
       (if (register-assignment-p ass)
         ;; It might be a register assignment for an argument register.
         (destructuring-bind (argument-register . target-register) ass
-          (assert (< argument-register arity) ()
-            "Cannot tokenize register assignment to non-argument register ~D in ???/~D:~%~S."
-            argument-register arity assignments)
           (list (list :argument argument-register target-register)))
         ;; Otherwise it's a structure assignment.  We know the others have
         ;; gotten flattened away by now.
@@ -264,37 +320,14 @@
     assignments))
 
 
-(defun zip-register-types (tokens register-types)
-  (labels
-      ((get-type (register)
-         (cdr (assoc register register-types)))
-       (update-leaf (leaf)
-         (if (numberp leaf)
-           (cons (get-type leaf) leaf)
-           leaf))
-       (fix-token (token)
-         (match token
-           (`(:structure ,register ,functor ,arity)
-            `(:structure (,(get-type register) . ,register)
-              ,functor
-              ,arity))
-           ((guard n (numberp n))
-            (update-leaf n))
-           (other (map-tree #'update-leaf other)))))
-    (mapcar #'fix-token tokens)))
-
-
 (defun tokenize-term (term permanent-variables flattener)
   (multiple-value-bind (assignments functor arity)
       (parse-term term)
-    (let* ((register-types (register-types assignments
-                                           arity
-                                           permanent-variables))
-           (assignments (funcall flattener assignments))
-           (tokens (tokenize-assignments assignments arity)))
-      (values (zip-register-types tokens register-types)
-              functor
-              arity))))
+    (values (->> assignments
+              (funcall flattener)
+              tokenize-assignments)
+            functor
+            arity)))
 
 (defun tokenize-program-term (term permanent-variables)
   "Tokenize `term` as a program term, returning its tokens, functor, and arity."
@@ -347,70 +380,95 @@
   (let ((seen (list))
         (mode nil))
     (labels
-        ((handle-argument (argument-type argument source-type source)
-           (assert (eql argument-type :argument) ()
-             "Attempted argument assignment to non-argument register.")
-           (assert (member source-type '(:local :permanent)) ()
-             "Attempted argument assignment from non-permanent/local register.")
-           ; OP X_n A_i
+        ((handle-argument (argument-register source-register)
+           ;; OP X_n A_i
            (code-push-instruction! store
-               (if (push-if-new source seen)
+               (if (push-if-new source-register seen :test #'register=)
                  (ecase mode
                    (:program +opcode-get-variable+)
                    (:query +opcode-put-variable+))
                  (ecase mode
                    (:program +opcode-get-value+)
                    (:query +opcode-put-value+)))
-             source
-             argument))
-         (handle-structure (register-type register functor arity)
-           (assert (member register-type '(:local :argument)) ()
-             "Attempted structure assignment to non-local/argument register.")
-           ; OP functor reg
-           (push register seen)
+             (register-number source-register)
+             (register-number argument-register)))
+         (handle-structure (destination-register functor arity)
+           ;; OP functor reg
+           (push destination-register seen)
            (code-push-instruction! store
                (ecase mode
                  (:program +opcode-get-structure+)
                  (:query +opcode-put-structure+))
              (wam-ensure-functor-index wam (cons functor arity))
-             register))
+             (register-number destination-register)))
          (handle-call (functor arity)
+           ;; CALL functor
            (code-push-instruction! store
                +opcode-call+
              (wam-ensure-functor-index wam (cons functor arity))))
          (handle-proceed ()
+           ;; PROC
            (code-push-instruction! store
                +opcode-proceed+))
-         (handle-register (register-type register)
-           (declare (ignore register-type))
-           ; OP reg
+         (handle-register (register)
+           ;; OP reg
            (code-push-instruction! store
-               (if (push-if-new register seen)
+               (if (push-if-new register seen :test #'register=)
                  (ecase mode
                    (:program +opcode-unify-variable+)
                    (:query +opcode-set-variable+))
                  (ecase mode
                    (:program +opcode-unify-value+)
                    (:query +opcode-set-value+)))
-             register))
+             (register-number register)))
          (handle-stream (tokens)
            (loop :for token :in tokens :collect
-                 (match token
-                   (`(:argument (,argument-type . ,argument) (,source-type . ,source))
-                    (handle-argument argument-type argument source-type source))
-                   (`(:structure (,register-type . ,register) ,functor ,arity)
-                    (handle-structure register-type register functor arity))
+                 (ematch token
+                   ((guard `(:argument ,argument-register ,source-register)
+                           (and (eql (register-type argument-register) :argument)
+                                (member (register-type source-register)
+                                        '(:local :permanent))))
+                    (handle-argument argument-register source-register))
+                   ((guard `(:structure ,destination-register ,functor ,arity)
+                           (member (register-type destination-register)
+                                   '(:local :argument)))
+                    (handle-structure destination-register functor arity))
                    (`(:call ,functor ,arity)
                     (handle-call functor arity))
                    (`(:proceed)
                     (handle-proceed))
-                   (`(,register-type . ,register)
-                    (handle-register register-type register))))))
+                   ((guard register
+                           (typep register 'register))
+                    (handle-register register))))))
       (when head-tokens
         (setf mode :program)
         (handle-stream head-tokens))
       (setf mode :query)
       (handle-stream body-tokens))))
+
+
+;;;; UI
+(defun find-permanent-variables (clause)
+  "Return a list of all the 'permanent' variables in `clause`.
+
+  Permanent variables are those that appear in more than one goal of the clause,
+  where the head of the clause is considered to be a part of the first goal.
+
+  "
+  (if (< (length clause) 2)
+    (list) ; facts and chain rules have no permanent variables at all
+    (destructuring-bind (head body-first . body-rest) clause
+      ;; the head is treated as part of the first goal for the purposes of
+      ;; finding permanent variables
+      (let* ((goals (cons (cons head body-first) body-rest))
+             (variables (remove-duplicates (tree-collect #'variable-p goals))))
+        (flet ((permanent-p (variable)
+                 "Permanent variables are those contained in more than 1 goal."
+                 (> (count-if (curry #'tree-member-p variable)
+                              goals)
+                    1)))
+          (remove-if-not #'permanent-p variables))))))
+
 
 (defun mark-label (wam functor arity store)
   "Set the code label `(functor . arity)` to point at the next space in `store`."
@@ -419,12 +477,12 @@
         (fill-pointer store)))
 
 
-;;;; UI
 (defun make-query-code-store ()
   (make-array 64
               :fill-pointer 0
               :adjustable t
               :element-type 'code-word))
+
 
 (defun compile-clause (wam store head body)
   "Compile the clause into the given store array.

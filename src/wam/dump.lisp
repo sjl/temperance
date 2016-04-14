@@ -126,22 +126,21 @@
           (pretty-functor (first arguments) functor-list)))
 
 
-(defun dump-code-store (code-store &optional
+(defun dump-code-store (wam code-store &optional
                                    (from 0)
-                                   (to (length code-store))
-                                   functor-list)
+                                   (to (length code-store)))
   (let ((addr from))
     (while (< addr to)
       (format t "; ~4,'0X: " addr)
       (let ((instruction (retrieve-instruction code-store addr)))
         (format t "~A~%" (instruction-details (aref instruction 0)
                                               (rest (coerce instruction 'list))
-                                              functor-list))
+                                              (wam-functors wam)))
         (incf addr (length instruction))))))
 
 (defun dump-code (wam &optional (from 0) (to (length (wam-code wam))))
   (format t "CODE~%")
-  (dump-code-store (wam-code wam) from to (wam-functors wam)))
+  (dump-code-store wam (wam-code wam) from to))
 
 
 (defun extract-thing (wam address)
