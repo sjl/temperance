@@ -82,37 +82,12 @@
   (structure-assignment-p (find-assignment register assignments)))
 
 
-(defun relocate-register (assignments from to)
-  "Relocate a register in the assignment list."
-  ;; Takes an assignment list like:
-  ;;
-  ;;   (0 . 2)       ; A0 = X2
-  ;;   (1 . (f 2 3)) ; A1 = f(X2, X3)
-  ;;   (2 . :foo)    ; X2 = Foo
-  ;;   (3 . :bar)    ; X3 = Bar
-  (assert (< to from) (from to)
-    "Cannot relocate register ~D to ~D, destination must be before source."
-    from to)
-  (assert (not (tree-member-p to assignments)) (to)
-    "Cannot relocate register ~D to ~D in ~S, destination is already in use."
-    from to assignments)
-  (when assignments
-    (map-tree (lambda (r)
-                (if (numberp r)
-                  (cond ((= r from) to) ; relocate the actual register
-                        ((> r from) (1- r)) ; decrement higher registers
-                        ((< r from) r)) ; pass through lower registers
-                  r))
-              assignments)))
-
-
 (defun parse-term (term)
   "Parse a term into a series of register assignments.
 
-  Return:
+  Returns:
 
     * The assignment list
-    * The register types
     * The root functor
     * The root functor's arity
 
@@ -132,69 +107,45 @@
          (arity (length arguments))
          ;; Preallocate enough registers for all of the arguments.
          ;; We'll fill them in later.
-         (registers (make-array 64 :fill-pointer arity :adjustable t)))
+         (registers (make-array 64
+                                :fill-pointer arity
+                                :adjustable t
+                                :initial-element nil)))
     (labels
         ((parse-variable (var)
            ;; If we've already seen this variable, just return its position,
            ;; otherwise allocate a register for it.
            (or (position var registers)
                (vector-push-extend var registers)))
-         (parse-structure (structure)
-           (let* ((functor (first structure))
-                  (arguments (rest structure))
-                  (contents (list functor)))
-             (prog1
-                 (vector-push-extend contents registers)
-               ;; Parse the arguments and splice the results into this cell
-               ;; once we're finished.  The children should handle extending
-               ;; the registers as needed.
-               (nconc contents (mapcar #'parse arguments)))))
-         (parse (term)
+         (parse-structure (structure register)
+           (destructuring-bind (functor . arguments) structure
+             ;; If we've been given a register to hold this structure (i.e.
+             ;; we're parsing a top-level argument, use it.  Otherwise allocate
+             ;; a fresh one.
+             (let ((register (or register (vector-push-extend nil registers))))
+               (setf (aref registers register)
+                     (cons functor (mapcar #'parse arguments)))
+               register)))
+         (parse (term &optional register)
            (cond
              ((variable-p term) (parse-variable term))
-             ((symbolp term) (parse (list term))) ; f -> f/0
-             ((listp term) (parse-structure term))
+             ((symbolp term) (parse (list term) register)) ; f -> f/0
+             ((listp term) (parse-structure term register))
              (t (error "Cannot parse term ~S." term)))))
       ;; Arguments are handled specially.  We parse the children as normal,
       ;; and then fill in the argument registers after each child.
       (loop :for argument :in arguments
             :for i :from 0
-            :do (setf (aref registers i)
-                      (parse argument)))
+            :for parsed = (parse argument i)
+            ;; If the argument didn't fill itself in (structure), do it.
+            :when (not (aref registers i))
+            :do (setf (aref registers i) parsed))
       (values (loop :for i :from 0 ; turn the register array into an assignment list
                     :for reg :across registers
                     :collect (cons i reg))
               predicate
               arity))))
 
-
-(defun inline-structure-argument-assignments (assignments arity)
-  "Inline structure register assignments directly into the argument registers."
-  ;; After parsing the term we end up with something like:
-  ;;
-  ;;   (0 . 2)       ; A0 = X2
-  ;;   (1 . 4)       ; A1 = X3    <---------+
-  ;;   (2 . :foo)    ; X2 = Foo             | inline this
-  ;;   (3 . (f 2 4)) ; X3 = f(X2, X4) ------+
-  ;;   (4 . :bar)    ; X4 = Bar
-  ;;
-  ;; We want to "inline" any structure arguments into the argument registers.
-  (labels
-      ((recur (remaining assignments)
-         (if (zerop remaining)
-           assignments
-           (let* ((argument-register (car assignments))
-                  (argument-number (car argument-register))
-                  (argument-target (cdr argument-register)))
-             (if (structure-register-p argument-target assignments)
-               (recur (1- remaining)
-                      (relocate-register (cdr assignments)
-                                         argument-target
-                                         argument-number))
-               (cons argument-register
-                     (recur (1- remaining)
-                            (cdr assignments))))))))
-    (sort (recur arity assignments) #'< :key #'car)))
 
 (defun register-types (assignments arity permanent-variables)
   "Return the alist of register types for the given register assignments.
@@ -336,9 +287,7 @@
 (defun tokenize-term (term permanent-variables flattener)
   (multiple-value-bind (assignments functor arity)
       (parse-term term)
-    (let* ((assignments (inline-structure-argument-assignments assignments
-                                                               arity))
-           (register-types (register-types assignments
+    (let* ((register-types (register-types assignments
                                            arity
                                            permanent-variables))
            (assignments (funcall flattener assignments))
