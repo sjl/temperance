@@ -7,7 +7,6 @@
         #:defstar
         #:bones.quickutils)
   (:export
-    #:vector-push-extend-all
     #:push-if-new))
 
 (defpackage #:bones.wam

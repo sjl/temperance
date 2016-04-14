@@ -12,6 +12,7 @@
                :tree-member-p
                :tree-collect
                :with-gensyms
+               :zip
                :map-tree
                )
   :package "BONES.QUICKUTILS")

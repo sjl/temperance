@@ -2,7 +2,7 @@
 ;;;; See http://quickutil.org for details.
 
 ;;;; To regenerate:
-;;;; (qtlc:save-utils-as "quickutils.lisp" :utilities '(:DEFINE-CONSTANT :SET-EQUAL :CURRY :SWITCH :ENSURE-BOOLEAN :WHILE :UNTIL :TREE-MEMBER-P :TREE-COLLECT :WITH-GENSYMS :MAP-TREE) :ensure-package T :package "BONES.QUICKUTILS")
+;;;; (qtlc:save-utils-as "quickutils.lisp" :utilities '(:DEFINE-CONSTANT :SET-EQUAL :CURRY :SWITCH :ENSURE-BOOLEAN :WHILE :UNTIL :TREE-MEMBER-P :TREE-COLLECT :WITH-GENSYMS :ZIP :MAP-TREE) :ensure-package T :package "BONES.QUICKUTILS")
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (unless (find-package "BONES.QUICKUTILS")
@@ -18,7 +18,8 @@
                                          :CURRY :STRING-DESIGNATOR
                                          :WITH-GENSYMS :EXTRACT-FUNCTION-NAME
                                          :SWITCH :ENSURE-BOOLEAN :UNTIL :WHILE
-                                         :TREE-MEMBER-P :TREE-COLLECT :MAP-TREE))))
+                                         :TREE-MEMBER-P :TREE-COLLECT
+                                         :TRANSPOSE :ZIP :MAP-TREE))))
 
   (defun %reevaluate-constant (name value test)
     (if (not (boundp name))
@@ -254,6 +255,17 @@ returns the values of `default` if no keys match."
                     :append (tree-collect predicate item)))))
   
 
+  (defun transpose (lists)
+    "Analog to matrix transpose for a list of lists given by `lists`."
+    (apply #'mapcar #'list lists))
+  
+
+  (defun zip (&rest lists)
+    "Take a tuple of lists and turn them into a list of
+tuples. Equivalent to `unzip`."
+    (transpose lists))
+  
+
   (defun map-tree (function tree)
     "Map `function` to each of the leave of `tree`."
     (check-type tree cons)
@@ -269,6 +281,6 @@ returns the values of `default` if no keys match."
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (export '(define-constant set-equal curry switch eswitch cswitch
             ensure-boolean while until tree-member-p tree-collect with-gensyms
-            with-unique-names map-tree)))
+            with-unique-names zip map-tree)))
 
 ;;;; END OF quickutils.lisp ;;;;
