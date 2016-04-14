@@ -2,7 +2,7 @@
 
 (defmacro push-if-new (thing place
                              &environment env
-                             &key key (test 'eql))
+                             &key key (test '#'eql))
   "Push `thing` into the list at `place` if it's not already there.
 
   Returns whether `thing` was actually pushed.  This function is basically
