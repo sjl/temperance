@@ -225,9 +225,10 @@
   (wam-truncate-heap! wam)
   (wam-truncate-stack! wam)
   (wam-reset-registers! wam)
-  (setf (wam-program-counter wam) 0)
-  (setf (wam-continuation-pointer wam) 0)
-  (setf (wam-mode wam) nil))
+  (setf (wam-program-counter wam) 0
+        (wam-continuation-pointer wam) 0
+        (wam-fail wam) nil
+        (wam-mode wam) nil))
 
 
 ;;;; Code

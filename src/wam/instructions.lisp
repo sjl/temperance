@@ -1,4 +1,9 @@
 (in-package #:bones.wam)
+(named-readtables:in-readtable :fare-quasiquote)
+
+;;;; Config
+(defparameter *break-on-fail* nil)
+
 
 ;;;; Utilities
 (defun* push-unbound-reference! ((wam wam))
@@ -91,10 +96,14 @@
 
 (defun* fail! ((wam wam) (reason string))
   (:returns :void)
-  "Mark a failure in the WAM."
+  "Mark a failure in the WAM.
+
+  If `*break-on-fail*` is true, the debugger will be invoked.
+
+  "
   (setf (wam-fail wam) t)
-  (format *debug-io* "FAIL: ~A~%" reason)
-  (break)
+  (when *break-on-fail*
+    (break "FAIL: ~A~%" reason))
   (values))
 
 
@@ -302,6 +311,27 @@
             :collect `(aref ,code-store (+ ,pc ,i)))))
 
 
+(defun extract-query-results (wam goal)
+  (let ((results (list)))
+    (labels ((recur (original result)
+               (cond
+                 ((and (variable-p original)
+                       (not (assoc original results)))
+                  (push (cons original
+                              (match result
+                                (`(,bare-functor) bare-functor)
+                                (r r)))
+                        results))
+                 ((consp original)
+                  (recur (car original) (car result))
+                  (recur (cdr original) (cdr result)))
+                 (t nil))))
+      (loop :for argument :in (cdr goal)
+            :for a :from 0
+            :do (recur argument (extract-thing wam (wam-register wam a)))))
+    results))
+
+
 (defun run-program (wam functor &optional (step nil))
   (with-slots (code program-counter fail) wam
     (setf program-counter (wam-code-label wam functor))
@@ -328,9 +358,7 @@
         (incf program-counter (instruction-size opcode))
         (when (>= program-counter (fill-pointer code))
           (error "Fell off the end of the program code store!"))))
-    (if fail
-      (print "FAIL")
-      (print "SUCCESS"))))
+    (values)))
 
 (defun run-query (wam term &optional (step nil))
   "Compile query `term` and run the instructions on the `wam`.
@@ -361,6 +389,10 @@
         (incf pc (instruction-size opcode))
         (when (>= pc (length code)) ; queries SHOULD always end in a CALL...
           (error "Fell off the end of the query code store!")))))
+  (if (wam-fail wam)
+    (princ "No.")
+    (loop :for (var . val) :in (extract-query-results wam (first term))
+          :do (format t "~S -> ~S~%" var val)))
   (values))
 
 

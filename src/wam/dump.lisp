@@ -183,13 +183,14 @@
 
 
 (defun extract-thing (wam address)
-  "Extract the thing at the given heap address and print it nicely."
+  "Extract the thing at the given heap address."
   (let ((cell (wam-heap-cell wam (deref wam address))))
     (cond
       ((cell-null-p cell)
        "NULL!")
       ((cell-reference-p cell)
-       (format nil "var-~D" (cell-value cell)))
+       ;; TODO: figure out what the hell to return here
+       (gensym (format nil "var@~4,'0X-" (cell-value cell))))
       ((cell-structure-p cell)
        (extract-thing wam (cell-value cell)))
       ((cell-functor-p cell)
