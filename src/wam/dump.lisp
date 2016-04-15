@@ -16,9 +16,9 @@
       (+tag-reference+
         (if (= addr (cell-value cell))
           "unbound variable "
-          (format nil "var pointer to ~D " (cell-value cell))))
+          (format nil "var pointer to ~4,'0X " (cell-value cell))))
       (+tag-structure+
-        (format nil "structure pointer to ~D " (cell-value cell)))
+        (format nil "structure pointer to ~4,'0X " (cell-value cell)))
       (+tag-functor+
         (destructuring-bind (functor . arity)
             (wam-functor-lookup wam (cell-functor-index cell))
@@ -30,14 +30,14 @@
   ;; This code is awful, sorry.
   (let ((heap (wam-heap wam)))
     (format t "HEAP~%")
-    (format t "  +------+-----+--------------+--------------------------------------+~%")
-    (format t "  | ADDR | TYP |        VALUE | DEBUG                                |~%")
-    (format t "  +------+-----+--------------+--------------------------------------+~%")
+    (format t "  +------+-----+----------+--------------------------------------+~%")
+    (format t "  | ADDR | TYP |    VALUE | DEBUG                                |~%")
+    (format t "  +------+-----+----------+--------------------------------------+~%")
     (when (> from 0)
-      (format t "  |    ⋮ |  ⋮  |            ⋮ |                                      |~%"))
+      (format t "  |    ⋮ |  ⋮  |        ⋮ |                                      |~%"))
     (flet ((print-cell (i cell indent)
              (let ((hi (= i highlight)))
-               (format t "~A ~4@A | ~A | ~12@A | ~36A ~A~%"
+               (format t "~A ~4,'0X | ~A | ~8,'0X | ~36A ~A~%"
                        (if hi "==>" "  |")
                        i
                        (cell-type-short-name cell)
@@ -55,9 +55,48 @@
                 (when (not (zerop indent))
                   (decf indent))))))
     (when (< to (length heap))
-      (format t "  |    ⋮ |  ⋮  |            ⋮ |                                      |~%"))
-    (format t "  +------+-----+--------------+--------------------------------------+~%")
+      (format t "  |    ⋮ |  ⋮  |        ⋮ |                                      |~%"))
+    (format t "  +------+-----+----------+--------------------------------------+~%")
     (values)))
+
+
+(defun dump-stack (wam &optional (e (wam-environment-pointer wam)))
+  (format t "STACK~%")
+  (format t "  +------+----------+-------------------------------+~%")
+  (format t "  | ADDR |    VALUE |                               |~%")
+  (format t "  +------+----------+-------------------------------+~%")
+  (loop :with n = nil
+        :with arg = 0
+        :for offset = 0 :then (1+ offset)
+        :for cell :across (wam-stack wam)
+        :for addr :from 0 :do
+        (format t "  | ~4,'0X | ~8,'0X | ~30A|~A~A~%"
+                addr
+                cell
+                (cond
+                  ((= offset 0) "CE ===========================")
+                  ((= offset 1) "CP")
+                  ((= offset 2)
+                   (if (zerop cell)
+                     (progn
+                       (setf offset -1)
+                       "N: EMPTY")
+                     (progn
+                       (setf n cell)
+                       (format nil "N: ~D" cell))))
+                  ((< arg n)
+                   (prog1
+                       (format nil " Y~D: ~4,'0X"
+                               arg
+                               ;; look up the actual cell in the heap
+                               (cell-aesthetic (wam-heap-cell wam cell)))
+                     (when (= n (incf arg))
+                       (setf offset -1
+                             n nil
+                             arg 0)))))
+                (if (= addr (wam-environment-pointer wam)) " <- E" "")
+                (if (= addr e) " <- FRAME" "")))
+  (format t "  +------+----------+-------------------------------+~%"))
 
 
 (defun pretty-functor (functor-index functor-list)
@@ -169,15 +208,12 @@
         :for reg :across (wam-registers wam)
         :for contents = (when (not (= reg (1- +heap-limit+)))
                           (wam-register-cell wam i))
-        :do (format t "~5@A ->~6@A ~A ~A~%"
+        :when contents
+        :do (format t "~5@A ->~6@A ~10A ~A~%"
                     (format nil "X~D" i)
                     reg
-                    (if contents
-                      (cell-aesthetic contents)
-                      "unset")
-                    (if contents
-                      (format nil "; ~A" (extract-thing wam reg))
-                      ""))))
+                    (cell-aesthetic contents)
+                    (format nil "; ~A" (extract-thing wam reg)))))
 
 (defun dump-wam-functors (wam)
   (format t " FUNCTORS: ~S~%" (wam-functors wam)))
@@ -194,13 +230,17 @@
 
 (defun dump-wam (wam from to highlight)
   (format t "     FAIL: ~A~%" (wam-fail wam))
-  (format t "     MODE: ~A~%" (wam-mode wam))
+  (format t "     MODE: ~S~%" (wam-mode wam))
   (dump-wam-functors wam)
   (format t "HEAP SIZE: ~A~%" (length (wam-heap wam)))
   (format t "PROGRAM C: ~A~%" (wam-program-counter wam))
+  (format t "CONT  PTR: ~A~%" (wam-continuation-pointer wam))
+  (format t "ENVIR PTR: ~A~%" (wam-environment-pointer wam))
   (dump-wam-registers wam)
   (format t "~%")
   (dump-heap wam from to highlight)
+  (format t "~%")
+  (dump-stack wam)
   (format t "~%")
   (dump-labels wam)
   (dump-code wam))

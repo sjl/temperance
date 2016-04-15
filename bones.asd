@@ -26,7 +26,7 @@
                                            (:file "types")
                                            (:file "topological-sort")
                                            (:file "cells")
-                                           (:file "opcodes")
+                                           (:file "bytecode")
                                            (:file "wam")
                                            (:file "compile")
                                            (:file "instructions")

@@ -71,7 +71,7 @@
 (defun* pprint-assignments ((assignments register-assignment-list))
   (format t "~{~A~%~}"
           (loop :for (register . contents) :in assignments :collect
-                (format nil "~A <- ~A" (register-to-string register) contents))))
+                (format nil "~A <- ~S" (register-to-string register) contents))))
 
 (defun* find-assignment ((register register)
                          (assignments register-assignment-list))
@@ -143,7 +143,7 @@
 ;;;   A1 -> q(A1, X3)
 ;;;   X2 -> B
 
-(defun parse-term (term)
+(defun parse-term (term permanent-variables)
   "Parse a term into a series of register assignments.
 
   Returns:
@@ -168,30 +168,44 @@
          (arity (length arguments))
          ;; Preallocate enough registers for all of the arguments.
          ;; We'll fill them in later.
-         (registers (make-array 64
-                                :fill-pointer arity
-                                :adjustable t
-                                :initial-element nil)))
+         (local-registers (make-array 64
+                                      :fill-pointer arity
+                                      :adjustable t
+                                      :initial-element nil))
+         (stack-registers (make-array 64
+                                      :fill-pointer 0
+                                      :adjustable t
+                                      :initial-element nil)))
     (labels
         ((make-temporary-register (number)
            (make-register (if (< number arity) :argument :local)
                           number))
+         (make-permanent-register (number)
+           (make-register :permanent number))
          (find-variable (var)
-           (let ((r (position var registers)))
-             (when r
-               (make-temporary-register r))))
+           (let ((r (position var local-registers))
+                 (s (position var stack-registers)))
+             (cond
+               (r (make-temporary-register r))
+               (s (make-permanent-register s))
+               (t nil))))
+         (store-variable (var)
+           (if (member var permanent-variables)
+             (make-permanent-register (vector-push-extend var stack-registers))
+             (make-temporary-register (vector-push-extend var local-registers))))
          (parse-variable (var)
            ;; If we've already seen this variable just return the register it's
            ;; in, otherwise allocate a register for it and return that.
            (or (find-variable var)
-               (make-temporary-register (vector-push-extend var registers))))
+               (store-variable var)))
          (parse-structure (structure reg)
            (destructuring-bind (functor . arguments) structure
              ;; If we've been given a register to hold this structure (i.e.
              ;; we're parsing a top-level argument) use it.  Otherwise allocate
-             ;; a fresh one.
-             (let ((reg (or reg (vector-push-extend nil registers))))
-               (setf (aref registers reg)
+             ;; a fresh one.  Note that structures always live in local
+             ;; registers, never permanent ones.
+             (let ((reg (or reg (vector-push-extend nil local-registers))))
+               (setf (aref local-registers reg)
                      (cons functor (mapcar #'parse arguments)))
                (make-temporary-register reg))))
          (parse (term &optional register)
@@ -199,20 +213,24 @@
              ((variable-p term) (parse-variable term))
              ((symbolp term) (parse (list term) register)) ; f -> f/0
              ((listp term) (parse-structure term register))
-             (t (error "Cannot parse term ~S." term)))))
+             (t (error "Cannot parse term ~S." term))))
+         (make-assignment-list (registers register-maker)
+           (loop :for i :from 0
+                 :for contents :across registers
+                 :collect
+                 (cons (funcall register-maker i)
+                       contents))))
       ;; Arguments are handled specially.  We parse the children as normal,
       ;; and then fill in the argument registers after each child.
       (loop :for argument :in arguments
             :for i :from 0
             :for parsed = (parse argument i)
             ;; If the argument didn't fill itself in (structure), do it.
-            :when (not (aref registers i))
-            :do (setf (aref registers i) parsed))
-      (values (loop :for i :from 0 ; turn the register array into an assignment list
-                    :for contents :across registers
-                    :collect
-                    (cons (make-temporary-register i)
-                          contents))
+            :when (not (aref local-registers i))
+            :do (setf (aref local-registers i) parsed))
+      (values (append
+                (make-assignment-list local-registers #'make-temporary-register)
+                (make-assignment-list stack-registers #'make-permanent-register))
               predicate
               arity))))
 
@@ -322,7 +340,7 @@
 
 (defun tokenize-term (term permanent-variables flattener)
   (multiple-value-bind (assignments functor arity)
-      (parse-term term)
+      (parse-term term permanent-variables)
     (values (->> assignments
               (funcall flattener)
               tokenize-assignments)

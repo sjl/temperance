@@ -18,6 +18,19 @@
   :documentation "Maximum size of the WAM heap.")
 
 
+(define-constant +stack-word-size+ 16
+  :documentation "Size (in bits) of each word in WAM stack.")
+
+(define-constant +stack-limit+ (expt 2 +stack-word-size+)
+  ;; We can only address 2^value-bits cells, and since stack address are
+  ;; themselves stored on the stack (e.g. the environment continuation pointer)
+  ;; they can only reference so much memory.
+  ;;
+  ;; todo: we might want to limit this further to prevent the stack from growing
+  ;; too large.
+  :documentation "Maximum size of the WAM stack.")
+
+
 (define-constant +code-word-size+ 16
   :documentation "Size (in bits) of each word in the code store.")
 
@@ -58,6 +71,16 @@
 (define-constant +maximum-query-size+ 256
   :documentation
   "The maximum size (in bytes of bytecode) a query may compile to.")
+
+
+(define-constant +tag-local-register+ #b0
+  :documentation "A local register (X_n or A_n).")
+
+(define-constant +tag-stack-register+ #b1
+  :documentation "A stack register (Y_n).")
+
+(define-constant +register-designator-tag-bitmask+ #b1
+  :documentation "Bitmask for the type tag of a register designator.")
 
 
 ;;;; Opcodes

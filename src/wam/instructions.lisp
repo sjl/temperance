@@ -276,7 +276,7 @@
         (setf (wam-continuation-pointer wam) ; CP <- next instruction
               (+ (wam-program-counter wam)
                  (instruction-size +opcode-call+))
-              (wam-program-counter wam) ; PC <- target 
+              (wam-program-counter wam) ; PC <- target
               target))
       (fail! wam "Tried to call unknown procedure.")))
   (values))

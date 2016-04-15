@@ -67,7 +67,7 @@
             (+tag-structure+
               (format nil " ~D" (cell-value cell)))
             (+tag-functor+
-              (format nil " functor ~D"
+              (format nil " ~D"
                       (cell-functor-index cell)))
             (+tag-reference+
               (format nil " ~D" (cell-value cell))))))
