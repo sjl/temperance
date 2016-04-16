@@ -24,12 +24,11 @@
                              (:module "wam"
                               :components ((:file "constants")
                                            (:file "types")
-                                           (:file "topological-sort")
                                            (:file "cells")
                                            (:file "bytecode")
                                            (:file "wam")
-                                           (:file "compile")
-                                           (:file "instructions")
+                                           (:file "compiler")
+                                           (:file "interpreter")
                                            (:file "dump")))
                              (:file "bones")))))
 

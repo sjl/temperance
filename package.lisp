@@ -8,6 +8,7 @@
         #:bones.quickutils)
   (:export
     #:repeat
+    #:topological-sort
     #:push-if-new))
 
 (defpackage #:bones.wam
