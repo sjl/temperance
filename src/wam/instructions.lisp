@@ -145,7 +145,7 @@
 ;;;; Query Instructions
 (defun* %put-structure ((wam wam)
                         (functor functor-index)
-                        (register register-index))
+                        (register register-designator))
   (:returns :void)
   (->> (push-new-structure! wam)
     (nth-value 1)
@@ -153,21 +153,21 @@
   (push-new-functor! wam functor)
   (values))
 
-(defun* %set-variable ((wam wam) (register register-index))
+(defun* %set-variable ((wam wam) (register register-designator))
   (:returns :void)
   (->> (push-unbound-reference! wam)
     (nth-value 1)
     (setf (wam-register wam register)))
   (values))
 
-(defun* %set-value ((wam wam) (register register-index))
+(defun* %set-value ((wam wam) (register register-designator))
   (:returns :void)
   (wam-heap-push! wam (wam-register-cell wam register))
   (values))
 
 (defun* %put-variable ((wam wam)
-                       (register register-index)
-                       (argument register-index))
+                       (register register-designator)
+                       (argument register-designator))
   (:returns :void)
   (->> (push-unbound-reference! wam)
     (nth-value 1)
@@ -176,8 +176,8 @@
   (values))
 
 (defun* %put-value ((wam wam)
-                    (register register-index)
-                    (argument register-index))
+                    (register register-designator)
+                    (argument register-designator))
   (:returns :void)
   (setf (wam-register wam argument)
         (wam-register wam register))
@@ -187,7 +187,7 @@
 ;;;; Program Instructions
 (defun* %get-structure ((wam wam)
                         (functor functor-index)
-                        (register register-index))
+                        (register register-designator))
   (:returns :void)
   (let* ((addr (deref wam (wam-register wam register)))
          (cell (wam-heap-cell wam addr)))
@@ -239,7 +239,7 @@
                             (cell-aesthetic cell))))))
   (values))
 
-(defun* %unify-variable ((wam wam) (register register-index))
+(defun* %unify-variable ((wam wam) (register register-designator))
   (:returns :void)
   (ecase (wam-mode wam)
     (:read (setf (wam-register wam register)
@@ -250,7 +250,7 @@
   (incf (wam-s wam))
   (values))
 
-(defun* %unify-value ((wam wam) (register register-index))
+(defun* %unify-value ((wam wam) (register register-designator))
   (:returns :void)
   (ecase (wam-mode wam)
     (:read (unify! wam
@@ -261,16 +261,16 @@
   (values))
 
 (defun* %get-variable ((wam wam)
-                       (register register-index)
-                       (argument register-index))
+                       (register register-designator)
+                       (argument register-designator))
   (:returns :void)
   (setf (wam-register wam register)
         (wam-register wam argument))
   (values))
 
 (defun* %get-value ((wam wam)
-                    (register register-index)
-                    (argument register-index))
+                    (register register-designator)
+                    (argument register-designator))
   (:returns :void)
   (unify! wam
           (wam-register wam register)
@@ -348,7 +348,11 @@
                  (t nil))))
       (loop :for argument :in (cdr goal)
             :for a :from 0
-            :do (recur argument (extract-thing wam (wam-register wam a)))))
+            :do (recur argument
+                       (extract-thing
+                         wam
+                         ;; results are stored in local (argument) registers
+                         (wam-local-register wam a)))))
     results))
 
 
