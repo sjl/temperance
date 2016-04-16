@@ -2,7 +2,7 @@
 ;;;; See http://quickutil.org for details.
 
 ;;;; To regenerate:
-;;;; (qtlc:save-utils-as "quickutils.lisp" :utilities '(:DEFINE-CONSTANT :SET-EQUAL :CURRY :SWITCH :ENSURE-BOOLEAN :WHILE :UNTIL :TREE-MEMBER-P :TREE-COLLECT :WITH-GENSYMS :ZIP :MAP-TREE) :ensure-package T :package "BONES.QUICKUTILS")
+;;;; (qtlc:save-utils-as "quickutils.lisp" :utilities '(:DEFINE-CONSTANT :SET-EQUAL :CURRY :SWITCH :ENSURE-BOOLEAN :WHILE :UNTIL :TREE-MEMBER-P :TREE-COLLECT :WITH-GENSYMS :ZIP :ALIST-TO-HASH-TABLE :MAP-TREE) :ensure-package T :package "BONES.QUICKUTILS")
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (unless (find-package "BONES.QUICKUTILS")
@@ -19,7 +19,8 @@
                                          :WITH-GENSYMS :EXTRACT-FUNCTION-NAME
                                          :SWITCH :ENSURE-BOOLEAN :UNTIL :WHILE
                                          :TREE-MEMBER-P :TREE-COLLECT
-                                         :TRANSPOSE :ZIP :MAP-TREE))))
+                                         :TRANSPOSE :ZIP :ALIST-TO-HASH-TABLE
+                                         :MAP-TREE))))
 
   (defun %reevaluate-constant (name value test)
     (if (not (boundp name))
@@ -266,6 +267,15 @@ tuples. Equivalent to `unzip`."
     (transpose lists))
   
 
+  (defun alist-to-hash-table (kv-pairs)
+    "Create a hash table populated with `kv-pairs`."
+    (let ((hashtab (make-hash-table :test #'equal)))
+      (loop 
+        :for (i j) :in kv-pairs
+        :do (setf (gethash i hashtab) j)
+        :finally (return hashtab))))
+  
+
   (defun map-tree (function tree)
     "Map `function` to each of the leave of `tree`."
     (check-type tree cons)
@@ -281,6 +291,6 @@ tuples. Equivalent to `unzip`."
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (export '(define-constant set-equal curry switch eswitch cswitch
             ensure-boolean while until tree-member-p tree-collect with-gensyms
-            with-unique-names zip map-tree)))
+            with-unique-names zip alist-to-hash-table map-tree)))
 
 ;;;; END OF quickutils.lisp ;;;;

@@ -22,7 +22,9 @@
     (+opcode-put-value+ 3)
 
     (+opcode-call+ 2)
-    (+opcode-proceed+ 1)))
+    (+opcode-proceed+ 1)
+    (+opcode-allocate+ 2)
+    (+opcode-deallocate+ 1)))
 
 
 (defun* opcode-name ((opcode opcode))
@@ -41,7 +43,9 @@
     (+opcode-put-value+ "PUT-VALUE")
 
     (+opcode-call+ "CALL")
-    (+opcode-proceed+ "PROCEED")))
+    (+opcode-proceed+ "PROCEED")
+    (+opcode-allocate+ "ALLOCATE")
+    (+opcode-deallocate+ "DEALLOCATE")))
 
 (defun* opcode-short-name ((opcode opcode))
   (:returns string)
@@ -59,7 +63,9 @@
     (+opcode-put-value+ "PVLU")
 
     (+opcode-call+ "CALL")
-    (+opcode-proceed+ "PROC")))
+    (+opcode-proceed+ "PROC")
+    (+opcode-allocate+ "ALOC")
+    (+opcode-deallocate+ "DEAL")))
 
 
 ;;;; Register Designators
@@ -108,3 +114,12 @@
 (defun* make-stack-register-designator ((register register-index))
   (:returns register-designator)
   (make-register-designator register +tag-stack-register+))
+
+(defun* register-designator-to-string ((register-designator register-designator))
+  (format nil
+          (if (register-designator-local-p register-designator)
+            ;; Unfortunately we've lost the X/A distinction by this point.
+            "X~D"
+            "Y~D")
+          (+ (register-designator-value register-designator)
+             (if *off-by-one* 1 0))))

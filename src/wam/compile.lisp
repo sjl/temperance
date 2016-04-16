@@ -24,6 +24,23 @@
   (:returns register)
   (make-instance 'register :type type :number number))
 
+(defun* make-temporary-register ((number register-number) (arity arity))
+  (:returns register)
+  (make-register (if (< number arity) :argument :local)
+                 number))
+
+(defun* make-permanent-register ((number register-number) (arity arity))
+  (:returns register)
+  (declare (ignore arity))
+  (make-register :permanent number))
+
+
+(defun* register-to-designator ((register register))
+  (:returns register-designator)
+  (with-slots (type number) register
+    (if (eql type :permanent)
+      (make-stack-register-designator number)
+      (make-local-register-designator number))))
 
 (defun* register-to-string ((register register))
   (format nil "~A~D"
@@ -31,7 +48,8 @@
             (:argument #\A)
             (:local #\X)
             (:permanent #\Y))
-          (register-number register)))
+          (+ (register-number register)
+             (if *off-by-one* 1 0))))
 
 (defmethod print-object ((object register) stream)
   (print-unreadable-object (object stream :identity nil :type nil)
@@ -51,8 +69,8 @@
   (ensure-boolean
     (and (or (eql (register-type r1)
                   (register-type r2))
-             ;; local and argument registers are actually the same register, just
-             ;; named differently
+             ;; local and argument registers are actually the same register,
+             ;; just named differently
              (and (member (register-type r1) '(:local :argument))
                   (member (register-type r2) '(:local :argument))))
          (= (register-number r1)
@@ -166,33 +184,32 @@
   (let* ((predicate (first term))
          (arguments (rest term))
          (arity (length arguments))
-         ;; Preallocate enough registers for all of the arguments.
-         ;; We'll fill them in later.
+         ;; Preallocate enough registers for all of the arguments.  We'll fill
+         ;; them in later.
          (local-registers (make-array 64
                                       :fill-pointer arity
                                       :adjustable t
                                       :initial-element nil))
-         (stack-registers (make-array 64
-                                      :fill-pointer 0
-                                      :adjustable t
-                                      :initial-element nil)))
+         ;; We essentially "preallocate" all the permanent variables up front
+         ;; because we need them to always be in the same stack registers across
+         ;; all the terms of our clause.
+         ;;
+         ;; The ones that won't get used in this term will end up getting
+         ;; flattened away anyway.
+         (stack-registers (make-array (length permanent-variables)
+                                      :initial-contents permanent-variables)))
     (labels
-        ((make-temporary-register (number)
-           (make-register (if (< number arity) :argument :local)
-                          number))
-         (make-permanent-register (number)
-           (make-register :permanent number))
-         (find-variable (var)
+        ((find-variable (var)
            (let ((r (position var local-registers))
                  (s (position var stack-registers)))
              (cond
-               (r (make-temporary-register r))
-               (s (make-permanent-register s))
+               (r (make-temporary-register r arity))
+               (s (make-permanent-register s arity))
                (t nil))))
          (store-variable (var)
-           (if (member var permanent-variables)
-             (make-permanent-register (vector-push-extend var stack-registers))
-             (make-temporary-register (vector-push-extend var local-registers))))
+           (make-temporary-register
+             (vector-push-extend var local-registers)
+             arity))
          (parse-variable (var)
            ;; If we've already seen this variable just return the register it's
            ;; in, otherwise allocate a register for it and return that.
@@ -207,7 +224,7 @@
              (let ((reg (or reg (vector-push-extend nil local-registers))))
                (setf (aref local-registers reg)
                      (cons functor (mapcar #'parse arguments)))
-               (make-temporary-register reg))))
+               (make-temporary-register reg arity))))
          (parse (term &optional register)
            (cond
              ((variable-p term) (parse-variable term))
@@ -218,7 +235,7 @@
            (loop :for i :from 0
                  :for contents :across registers
                  :collect
-                 (cons (funcall register-maker i)
+                 (cons (funcall register-maker i arity)
                        contents))))
       ;; Arguments are handled specially.  We parse the children as normal,
       ;; and then fill in the argument registers after each child.
@@ -293,7 +310,8 @@
   (-<> assignments
     (topological-sort <> (find-dependencies assignments)
                       :key #'car
-                      :key-test #'register=)
+                      :key-test #'register=
+                      :test #'eql)
     (remove-if #'variable-assignment-p <>)))
 
 (defun flatten-query (assignments)
@@ -349,12 +367,7 @@
 
 (defun tokenize-program-term (term permanent-variables)
   "Tokenize `term` as a program term, returning its tokens, functor, and arity."
-  (multiple-value-bind (tokens functor arity)
-      (tokenize-term term permanent-variables #'flatten-program)
-    ;; We need to shove a PROCEED token onto the end.
-    (values (append tokens `((:proceed)))
-            functor
-            arity)))
+  (tokenize-term term permanent-variables #'flatten-program))
 
 (defun tokenize-query-term (term permanent-variables)
   "Tokenize `term` as a query term, returning its stream of tokens."
@@ -408,8 +421,8 @@
                  (ecase mode
                    (:program +opcode-get-value+)
                    (:query +opcode-put-value+)))
-             (register-number source-register)
-             (register-number argument-register)))
+             (register-to-designator source-register)
+             (register-to-designator argument-register)))
          (handle-structure (destination-register functor arity)
            ;; OP functor reg
            (push destination-register seen)
@@ -418,16 +431,12 @@
                  (:program +opcode-get-structure+)
                  (:query +opcode-put-structure+))
              (wam-ensure-functor-index wam (cons functor arity))
-             (register-number destination-register)))
+             (register-to-designator destination-register)))
          (handle-call (functor arity)
            ;; CALL functor
            (code-push-instruction! store
                +opcode-call+
              (wam-ensure-functor-index wam (cons functor arity))))
-         (handle-proceed ()
-           ;; PROC
-           (code-push-instruction! store
-               +opcode-proceed+))
          (handle-register (register)
            ;; OP reg
            (code-push-instruction! store
@@ -438,7 +447,7 @@
                  (ecase mode
                    (:program +opcode-unify-value+)
                    (:query +opcode-set-value+)))
-             (register-number register)))
+             (register-to-designator register)))
          (handle-stream (tokens)
            (loop :for token :in tokens :collect
                  (ematch token
@@ -453,8 +462,6 @@
                     (handle-structure destination-register functor arity))
                    (`(:call ,functor ,arity)
                     (handle-call functor arity))
-                   (`(:proceed)
-                    (handle-proceed))
                    ((guard register
                            (typep register 'register))
                     (handle-register register))))))
@@ -520,7 +527,19 @@
          (body-tokens
            (loop :for term :in body :append
                  (tokenize-query-term term permanent-variables))))
-    (compile-tokens wam head-tokens body-tokens store))
+    (flet ((compile% () (compile-tokens wam head-tokens body-tokens store)))
+      ;; We need to compile facts and rules differently.  Facts end with
+      ;; a PROCEED and rules are wrapped in ALOC/DEAL.
+      (cond
+        ((and head body) ; a full-ass rule
+         (code-push-instruction! store +opcode-allocate+ (length permanent-variables))
+         (compile%)
+         (code-push-instruction! store +opcode-deallocate+))
+        ((and head (null body)) ; a bare fact
+         (compile%)
+         (code-push-instruction! store +opcode-proceed+))
+        (t ; just a query
+         (compile%)))))
   (values))
 
 (defun compile-query (wam query)

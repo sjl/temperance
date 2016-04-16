@@ -39,7 +39,7 @@
 
 
 (deftype opcode ()
-  '(integer 0 12))
+  '(integer 0 14))
 
 
 (deftype register-designator ()
@@ -52,6 +52,9 @@
 
 
 (deftype stack-frame-size ()
+  `(integer 3 ,+stack-frame-size-limit+))
+
+(deftype stack-frame-argcount ()
   `(integer 0 ,+register-count+))
 
 (deftype continuation-pointer ()
@@ -60,9 +63,9 @@
 (deftype environment-pointer ()
   'stack-index)
 
-(deftype stack-cell ()
+(deftype stack-word ()
   '(or
     environment-pointer ; CE
     continuation-pointer ; CP
-    stack-frame-size ; N
+    stack-frame-argcount ; N
     heap-index)) ; YN

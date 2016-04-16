@@ -17,3 +17,19 @@
               (,current ,access-expr)
               (,result (pushnew ,thing ,place :key ,key :test ,test)))
         (not (eql ,current ,result))))))
+
+(defun invert-hash-table (ht)
+  "Jesus christ don't actually use this for anything but debugging.
+
+  Inverts the keys/values of a hash table.
+
+  "
+  (alist-to-hash-table
+    (loop :for k :being :the :hash-keys :of ht
+          :using (hash-value v)
+          :collect (list v k))))
+
+(defmacro repeat (n &body body)
+  "Repeat `body` `n` times."
+  `(dotimes (,(gensym) ,n)
+     ,@body))

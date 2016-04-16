@@ -277,6 +277,8 @@
           (wam-register wam argument))
   (values))
 
+
+;;;; Control Instructions
 (defun* %call ((wam wam) (functor functor-index))
   (:returns :void)
   (let ((target (wam-code-label wam functor)))
@@ -296,6 +298,23 @@
         (wam-continuation-pointer wam))
   (values))
 
+(defun* %allocate ((wam wam) (n stack-frame-argcount))
+  (:returns :void)
+  (setf (wam-environment-pointer wam) ; E <- new E
+        (->> wam
+          wam-environment-pointer
+          (wam-stack-push! wam) ; CE
+          (nth-value 1)))
+  (wam-stack-push! wam (wam-continuation-pointer wam)) ; CP
+  (wam-stack-push! wam n) ; N
+  (wam-stack-extend! wam n)) ; Y_n (TODO: this sucks)
+
+(defun* %deallocate ((wam wam))
+  (:returns :void)
+  (setf (wam-program-counter wam)
+        (wam-stack-frame-cp wam))
+  (wam-stack-pop-environment! wam))
+
 
 ;;;; Running
 (defmacro instruction-call (wam instruction code-store pc number-of-arguments)
@@ -312,6 +331,7 @@
 
 
 (defun extract-query-results (wam goal)
+  ;; TODO: rehaul this
   (let ((results (list)))
     (labels ((recur (original result)
                (cond

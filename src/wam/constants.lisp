@@ -18,19 +18,6 @@
   :documentation "Maximum size of the WAM heap.")
 
 
-(define-constant +stack-word-size+ 16
-  :documentation "Size (in bits) of each word in WAM stack.")
-
-(define-constant +stack-limit+ (expt 2 +stack-word-size+)
-  ;; We can only address 2^value-bits cells, and since stack address are
-  ;; themselves stored on the stack (e.g. the environment continuation pointer)
-  ;; they can only reference so much memory.
-  ;;
-  ;; todo: we might want to limit this further to prevent the stack from growing
-  ;; too large.
-  :documentation "Maximum size of the WAM stack.")
-
-
 (define-constant +code-word-size+ 16
   :documentation "Size (in bits) of each word in the code store.")
 
@@ -83,6 +70,22 @@
   :documentation "Bitmask for the type tag of a register designator.")
 
 
+(define-constant +stack-word-size+ 16
+  :documentation "Size (in bits) of each word in WAM stack.")
+
+(define-constant +stack-limit+ (expt 2 +stack-word-size+)
+  ;; We can only address 2^value-bits cells, and since stack address are
+  ;; themselves stored on the stack (the environment continuation pointer) they
+  ;; can only reference so much memory.
+  ;;
+  ;; todo: we might want to limit this further to prevent the stack from growing
+  ;; too large.
+  :documentation "Maximum size of the WAM stack.")
+
+(define-constant +stack-frame-size-limit+ (+ 3 +register-count+)
+  :documentation "The maximum size, in stack frame words, that a stack frame could be.")
+
+
 ;;;; Opcodes
 ;;; Program
 (define-constant +opcode-get-structure+ 1)
@@ -99,6 +102,13 @@
 (define-constant +opcode-put-variable+ 9)
 (define-constant +opcode-put-value+ 10)
 
+
 ;;; Control
 (define-constant +opcode-call+ 11)
 (define-constant +opcode-proceed+ 12)
+(define-constant +opcode-allocate+ 13)
+(define-constant +opcode-deallocate+ 14)
+
+
+;;;; Debug Config
+(defparameter *off-by-one* nil)

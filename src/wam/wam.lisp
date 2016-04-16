@@ -30,14 +30,14 @@
      :accessor wam-code-labels
      :documentation "The mapping of functor indices -> code store addresses.")
    (registers
-     :reader wam-registers
+     :reader wam-local-registers
      :initform (make-array +register-count+
                            ;; Initialize to the last element in the heap for
                            ;; debugging purposes.
                            ;; todo: don't do this
                            :initial-element (1- +heap-limit+)
                            :element-type 'heap-index)
-     :documentation "An array of the X_i registers.")
+     :documentation "An array of the local X_i registers.")
    (stack
      :reader wam-stack
      :initform (make-array 1024
@@ -47,7 +47,7 @@
                            ;; debugging purposes.
                            ;; todo: don't do this
                            :initial-element (1- +heap-limit+)
-                           :element-type 'stack-cell)
+                           :element-type 'stack-word)
      :documentation "The local stack for storing stack frames.")
    (fail
      :accessor wam-fail
@@ -138,74 +138,105 @@
   (fill-pointer (wam-stack wam)))
 
 
-(defun* wam-stack-cell ((wam wam) (address stack-index))
+(defun* wam-stack-word ((wam wam) (address stack-index))
   (:returns stack-index)
-  "Return the stack cell at the given address."
+  "Return the stack word at the given address."
   (aref (wam-stack wam) address))
 
-(defun (setf wam-stack-cell) (new-value wam address)
+(defun (setf wam-stack-word) (new-value wam address)
   (setf (aref (wam-stack wam) address) new-value))
 
 
-(defun* wam-stack-frame-ce ((wam wam)
-                            &optional
-                            ((e environment-pointer) (wam-environment-pointer wam)))
+(defun* wam-stack-frame-ce
+    ((wam wam)
+     &optional
+     ((e environment-pointer)
+      (wam-environment-pointer wam)))
   (:returns environment-pointer)
-  (wam-stack-cell wam e))
+  (wam-stack-word wam e))
 
-(defun* wam-stack-frame-cp ((wam wam)
-                            &optional
-                            ((e environment-pointer) (wam-environment-pointer wam)))
+(defun* wam-stack-frame-cp
+    ((wam wam)
+     &optional
+     ((e environment-pointer)
+      (wam-environment-pointer wam)))
   (:returns continuation-pointer)
-  (wam-stack-cell wam (1+ e)))
+  (wam-stack-word wam (1+ e)))
 
-(defun* wam-stack-frame-n ((wam wam)
-                            &optional
-                            ((e environment-pointer) (wam-environment-pointer wam)))
-  (:returns register-index)
-  (wam-stack-cell wam (+ 2 e)))
+(defun* wam-stack-frame-n
+    ((wam wam)
+     &optional
+     ((e environment-pointer)
+      (wam-environment-pointer wam)))
+  (:returns stack-frame-argcount)
+  (wam-stack-word wam (+ 2 e)))
 
-(defun* wam-stack-frame-arg ((wam wam)
-                             (n register-index)
-                             &optional
-                             ((e environment-pointer) (wam-environment-pointer wam)))
+(defun* wam-stack-frame-arg
+    ((wam wam)
+     (n register-index)
+     &optional
+     ((e environment-pointer) (wam-environment-pointer wam)))
   (:returns heap-index)
-  (wam-stack-cell wam (+ 3 n e)))
+  (wam-stack-word wam (+ 3 n e)))
 
-(defun* wam-stack-frame-arg-cell ((wam wam)
-                                  (n register-index)
-                                  &optional
-                                  ((e environment-pointer) (wam-environment-pointer wam)))
+(defun (setf wam-stack-frame-arg)
+    (new-value wam n &optional (e (wam-environment-pointer wam)))
+  (setf (wam-stack-word wam (+ e 3 n))
+        new-value))
+
+(defun* wam-stack-frame-arg-cell
+    ((wam wam)
+     (n register-index)
+     &optional
+     ((e environment-pointer)
+      (wam-environment-pointer wam)))
   (:returns heap-cell)
   (wam-heap-cell wam (wam-stack-frame-arg wam n e)))
 
 
-(defun* wam-stack-frame-size ((wam wam)
-                              &optional
-                              ((e environment-pointer) (wam-environment-pointer wam)))
-  (:returns (integer 3 1024)) ; TODO: Type this better
+(defun* wam-stack-frame-size
+    ((wam wam)
+     &optional
+     ((e environment-pointer)
+      (wam-environment-pointer wam)))
+  (:returns stack-frame-size)
   "Return the size of the stack frame starting at environment pointer `e`."
   (+ (wam-stack-frame-n wam e) 3))
 
 
-(defun* wam-stack-push! ((wam wam) (cell stack-cell))
-  (:returns (values stack-cell stack-index))
-  "Push the cell onto the WAM stack and increment the stack pointer.
+(defun* wam-stack-push! ((wam wam) (word stack-word))
+  (:returns (values stack-word stack-index))
+  "Push the word onto the WAM stack and increment the stack pointer.
 
-  Returns the cell and the address it was pushed to.
+  Returns the word and the address it was pushed to.
 
   "
   (with-slots (stack) wam
     (if (= +stack-limit+ (fill-pointer stack))
       (error "WAM stack exhausted.")
-      (values cell (vector-push-extend cell stack)))))
+      (values word (vector-push-extend word stack)))))
+
+(defun* wam-stack-extend! ((wam wam) (words integer))
+  (:returns :void)
+  "Extend the WAM stack by the given number of words.
+
+  Each word is initialized to 0.
+
+  "
+  ;; TODO: this sucks, fix it
+  (with-slots (stack) wam
+    (repeat words
+      (if (= +stack-limit+ (fill-pointer stack))
+        (error "WAM stack exhausted.")
+        (vector-push-extend 0 stack))))
+  (values))
 
 (defun* wam-stack-pop-environment! ((wam wam))
   "Pop an environment (stack frame) off the WAM stack."
   (let ((frame-size (wam-stack-frame-size wam)))
     (with-slots (stack environment-pointer) wam
-      (decf environment-pointer frame-size)
-      (decf (fill-pointer stack) frame-size))))
+      (decf environment-pointer frame-size) ; lol
+      (decf (fill-pointer stack) frame-size)))) ; its fine
 
 
 ;;;; Resetting
@@ -215,18 +246,19 @@
 (defun* wam-truncate-stack! ((wam wam))
   (setf (fill-pointer (wam-stack wam)) 0))
 
-(defun* wam-reset-registers! ((wam wam))
+(defun* wam-reset-local-registers! ((wam wam))
   (loop :for i :from 0 :below +register-count+ :do
-        (setf (wam-register wam i)
+        (setf (wam-local-register wam i)
               (1- +heap-limit+)))
   (setf (wam-s wam) nil))
 
 (defun* wam-reset! ((wam wam))
   (wam-truncate-heap! wam)
   (wam-truncate-stack! wam)
-  (wam-reset-registers! wam)
+  (wam-reset-local-registers! wam)
   (setf (wam-program-counter wam) 0
         (wam-continuation-pointer wam) 0
+        (wam-environment-pointer wam) 0
         (wam-fail wam) nil
         (wam-mode wam) nil))
 
@@ -295,23 +327,64 @@
 
 
 ;;;; Registers
-;;; WAM registers are implemented as an array of a fixed number of registers.
-;;; A register contains the address of a cell in the heap.
+;;; The WAM has two types of registers.  A register (regardless of type) always
+;;; contains an index into the heap (basically a pointer to a heap cell).
+;;;
+;;; Local/temporary/arguments registers live in a small, fixed, preallocated
+;;; array called `registers` in the WAM object.
+;;;
+;;; Stack/permanent registers live on the stack, and need some extra math to
+;;; find their location.
+;;;
+;;; Registers are typically denoted by their "register index", which is just
+;;; their number.  Hoever, the bytecode needs to be able to distinguish between
+;;; local and stack registers.  To do this we use "register designators" (see
+;;; bytecode.lisp for more information on those).
+;;;
+;;; `wam-register` and `wam-register-cell` provide an interface to pass in
+;;; a register designator and get out "the right thing", so you should probably
+;;; just use those and not worry about the other functions here.
 
-(defun* wam-register ((wam wam) (register register-index))
+(defun* wam-local-register ((wam wam) (register register-index))
   (:returns heap-index)
-  "Return the value of the WAM register with the given index."
-  (aref (wam-registers wam) register))
+  "Return the value of the WAM local register with the given index."
+  (aref (wam-local-registers wam) register))
 
-(defun (setf wam-register) (new-value wam register)
-  (setf (aref (wam-registers wam) register) new-value))
+(defun (setf wam-local-register) (new-value wam register)
+  (setf (aref (wam-local-registers wam) register) new-value))
 
-(defun* wam-register-cell ((wam wam) (register register-index))
+
+(defun* wam-stack-register ((wam wam) (register register-index))
+  (:returns heap-index)
+  "Return the value of the WAM stack register with the given index."
+  (wam-stack-frame-arg wam register))
+
+(defun (setf wam-stack-register) (new-value wam register)
+  (setf (wam-stack-frame-arg wam register) new-value))
+
+
+(defun* wam-register ((wam wam) (register-designator register-designator))
+  (:returns heap-index)
+  "Return the heap index the designated register is pointing at."
+  (if (register-designator-local-p register-designator) ; ugly but fast
+    (wam-local-register wam (register-designator-value register-designator))
+    (wam-stack-register wam (register-designator-value register-designator))))
+
+(defun (setf wam-register) (new-value wam register-designator)
+  (if (register-designator-local-p register-designator) ; ugly but fast
+    (setf (wam-local-register wam (register-designator-value register-designator)) new-value)
+    (setf (wam-stack-register wam (register-designator-value register-designator)) new-value)))
+
+
+(defun* wam-register-cell ((wam wam) (register-designator register-designator))
   (:returns heap-cell)
-  "Return the heap cell `register` is pointing at."
-  (->> register
-    (wam-register wam)
-    (wam-heap-cell wam)))
+  "Return the heap cell the designated register is pointing at."
+  (wam-heap-cell
+    wam
+    (if (register-designator-local-p register-designator)
+      (wam-local-register wam (register-designator-value register-designator))
+      (wam-stack-register wam (register-designator-value register-designator)))))
+
 
 (defun* wam-s-cell ((wam wam))
   "Retrieve the cell the S register is pointing at.

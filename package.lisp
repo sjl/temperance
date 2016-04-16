@@ -7,6 +7,7 @@
         #:defstar
         #:bones.quickutils)
   (:export
+    #:repeat
     #:push-if-new))
 
 (defpackage #:bones.wam

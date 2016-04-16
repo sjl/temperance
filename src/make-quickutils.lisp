@@ -13,6 +13,7 @@
                :tree-collect
                :with-gensyms
                :zip
+               :alist-to-hash-table
                :map-tree
                )
   :package "BONES.QUICKUTILS")

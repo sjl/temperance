@@ -1,7 +1,7 @@
 (in-package #:bones.wam)
 
 (defun registers-pointing-to (wam addr)
-  (loop :for reg :across (wam-registers wam)
+  (loop :for reg :across (wam-local-registers wam)
         :for i :from 0
         :when (= reg addr)
         :collect i))
@@ -118,45 +118,51 @@
 
 
 (defmethod instruction-details ((opcode (eql +opcode-set-variable+)) arguments functor-list)
-  (format nil "SVAR~A      ; X~D <- new unbound REF"
+  (format nil "SVAR~A      ; ~A <- new unbound REF"
           (pretty-arguments arguments)
-          (first arguments)))
+          (register-designator-to-string (first arguments))))
 
 (defmethod instruction-details ((opcode (eql +opcode-set-value+)) arguments functor-list)
-  (format nil "SVLU~A      ; new REF to X~D"
+  (format nil "SVLU~A      ; new REF to ~A"
           (pretty-arguments arguments)
-          (first arguments)))
+          (register-designator-to-string (first arguments))))
 
 (defmethod instruction-details ((opcode (eql +opcode-get-structure+)) arguments functor-list)
-  (format nil "GETS~A ; X~D <- ~A"
+  (format nil "GETS~A ; ~A = ~A"
           (pretty-arguments arguments)
-          (second arguments)
+          (register-designator-to-string (second arguments))
           (pretty-functor (first arguments) functor-list)))
 
 (defmethod instruction-details ((opcode (eql +opcode-put-structure+)) arguments functor-list)
-  (format nil "PUTS~A ; X~D <- new ~A"
+  (format nil "PUTS~A ; ~A <- new ~A"
           (pretty-arguments arguments)
-          (second arguments)
+          (register-designator-to-string (second arguments))
           (pretty-functor (first arguments) functor-list)))
 
 
 (defmethod instruction-details ((opcode (eql +opcode-get-variable+)) arguments functor-list)
-  (format nil "GVAR~A ; A~D -> X~D"
+  (format nil "GVAR~A ; ~A <- ~A"
           (pretty-arguments arguments)
-          (second arguments)
-          (first arguments)))
+          (register-designator-to-string (first arguments))
+          (register-designator-to-string (second arguments))))
 
 (defmethod instruction-details ((opcode (eql +opcode-get-value+)) arguments functor-list)
-  (format nil "GVLU~A ; A~D = X~D"
+  (format nil "GVLU~A ; ~A = ~A"
           (pretty-arguments arguments)
-          (second arguments)
-          (first arguments)))
+          (register-designator-to-string (second arguments))
+          (register-designator-to-string (first arguments))))
 
 (defmethod instruction-details ((opcode (eql +opcode-put-variable+)) arguments functor-list)
-  (format nil "PVAR~A ; A~D <- X~D <- new unbound REF"
+  (format nil "PVAR~A ; ~A <- ~A <- new unbound REF"
           (pretty-arguments arguments)
-          (second arguments)
-          (first arguments)))
+          (register-designator-to-string (second arguments))
+          (register-designator-to-string (first arguments))))
+
+(defmethod instruction-details ((opcode (eql +opcode-put-value+)) arguments functor-list)
+  (format nil "PVLU~A ; ~A <- ~A"
+          (pretty-arguments arguments)
+          (register-designator-to-string (second arguments))
+          (register-designator-to-string (first arguments))))
 
 
 (defmethod instruction-details ((opcode (eql +opcode-call+)) arguments functor-list)
@@ -165,11 +171,17 @@
           (pretty-functor (first arguments) functor-list)))
 
 
-(defun dump-code-store (wam code-store &optional
-                                   (from 0)
-                                   (to (length code-store)))
-  (let ((addr from))
+(defun dump-code-store (wam code-store
+                            &optional
+                            (from 0)
+                            (to (length code-store)))
+  (let ((addr from)
+        (lbls (bones.utils::invert-hash-table (wam-code-labels wam)))) ; oh god
     (while (< addr to)
+      (let ((lbl (gethash addr lbls))) ; forgive me
+        (when lbl
+          (format t ";;;; BEGIN ~A~%"
+                  (pretty-functor lbl (wam-functors wam)))))
       (format t "; ~4,'0X: " addr)
       (let ((instruction (retrieve-instruction code-store addr)))
         (format t "~A~%" (instruction-details (aref instruction 0)
@@ -206,9 +218,9 @@
   (format t "REGISTERS:~%")
   (format t  "~5@A ->~6@A~%" "S" (wam-s wam))
   (loop :for i :from 0
-        :for reg :across (wam-registers wam)
+        :for reg :across (wam-local-registers wam)
         :for contents = (when (not (= reg (1- +heap-limit+)))
-                          (wam-register-cell wam i))
+                          (wam-heap-cell wam reg))
         :when contents
         :do (format t "~5@A ->~6@A ~10A ~A~%"
                     (format nil "X~D" i)
