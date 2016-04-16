@@ -368,13 +368,24 @@
         (when step
           (break "About to execute instruction at ~4,'0X" program-counter))
         (eswitch (opcode)
-          (+opcode-get-structure+ (instruction-call wam %get-structure code program-counter 2))
+          ;; Query
+          (+opcode-put-structure+  (instruction-call wam %put-structure code program-counter 2))
+          (+opcode-set-variable+   (instruction-call wam %set-variable code program-counter 1))
+          (+opcode-set-value+      (instruction-call wam %set-value code program-counter 1))
+          (+opcode-put-variable+   (instruction-call wam %put-variable code program-counter 2))
+          (+opcode-put-value+      (instruction-call wam %put-value code program-counter 2))
+          ;; Program
+          (+opcode-get-structure+  (instruction-call wam %get-structure code program-counter 2))
           (+opcode-unify-variable+ (instruction-call wam %unify-variable code program-counter 1))
-          (+opcode-unify-value+ (instruction-call wam %unify-value code program-counter 1))
-          (+opcode-get-variable+ (instruction-call wam %get-variable code program-counter 2))
-          (+opcode-get-value+ (instruction-call wam %get-value code program-counter 2))
-          ;; need to skip the PC increment for PROC/CALL
+          (+opcode-unify-value+    (instruction-call wam %unify-value code program-counter 1))
+          (+opcode-get-variable+   (instruction-call wam %get-variable code program-counter 2))
+          (+opcode-get-value+      (instruction-call wam %get-value code program-counter 2))
+          ;; Control
+          (+opcode-allocate+       (instruction-call wam %allocate code program-counter 1))
+          ;; need to skip the PC increment for PROC/CALL/DEAL
           ;; TODO: this is ugly
+          (+opcode-deallocate+ (instruction-call wam %deallocate code program-counter 0)
+                               (return-from op))
           (+opcode-proceed+ (instruction-call wam %proceed code program-counter 0)
                             (return-from op))
           (+opcode-call+ (instruction-call wam %call code program-counter 1)
@@ -392,6 +403,7 @@
   When `step` is true, break into the debugger before calling the procedure.
 
   "
+  ;; TODO: dedupe this interpreter code
   (let ((code (compile-query wam term)))
     (wam-reset! wam)
     (loop

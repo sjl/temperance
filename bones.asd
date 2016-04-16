@@ -29,6 +29,7 @@
                                            (:file "wam")
                                            (:file "compiler")
                                            (:file "interpreter")
-                                           (:file "dump")))
+                                           (:file "dump")
+                                           (:file "ui")))
                              (:file "bones")))))
 
