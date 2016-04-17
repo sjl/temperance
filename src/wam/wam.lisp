@@ -4,25 +4,25 @@
 (defclass wam ()
   ((heap
      :initform (make-array 1024
-                           :fill-pointer 0
-                           :adjustable t
-                           :initial-element (make-cell-null)
-                           :element-type 'heap-cell)
+                 :fill-pointer 0
+                 :adjustable t
+                 :initial-element (make-cell-null)
+                 :element-type 'heap-cell)
      :reader wam-heap
      :documentation "The actual heap (stack).")
    (code
      :initform (make-array 1024
-                           :adjustable t
-                           :fill-pointer 0
-                           :initial-element 0
-                           :element-type 'code-word)
+                 :adjustable t
+                 :fill-pointer 0
+                 :initial-element 0
+                 :element-type 'code-word)
      :reader wam-code
      :documentation "The code store.")
    (functors
      :initform (make-array 64
-                           :fill-pointer 0
-                           :adjustable t
-                           :element-type 'functor)
+                 :fill-pointer 0
+                 :adjustable t
+                 :element-type 'functor)
      :accessor wam-functors
      :documentation "The array of functors in this WAM.")
    (code-labels
@@ -32,22 +32,20 @@
    (registers
      :reader wam-local-registers
      :initform (make-array +register-count+
-                           ;; Initialize to the last element in the heap for
-                           ;; debugging purposes.
-                           ;; todo: don't do this
-                           :initial-element (1- +heap-limit+)
-                           :element-type 'heap-index)
+                 ;; Initialize to the last element in the heap for debugging.
+                 ;; todo: don't do this
+                 :initial-element (1- +heap-limit+)
+                 :element-type 'heap-index)
      :documentation "An array of the local X_i registers.")
    (stack
      :reader wam-stack
      :initform (make-array 1024
-                           :adjustable t
-                           :fill-pointer 0
-                           ;; Initialize to the last element in the heap for
-                           ;; debugging purposes.
-                           ;; todo: don't do this
-                           :initial-element (1- +heap-limit+)
-                           :element-type 'stack-word)
+                 :adjustable t
+                 :fill-pointer 0
+                 ;; Initialize to the last element in the heap for debugging.
+                 ;; todo: don't do this
+                 :initial-element (1- +heap-limit+)
+                 :element-type 'stack-word)
      :documentation "The local stack for storing stack frames.")
    (fail
      :accessor wam-fail
@@ -57,9 +55,9 @@
    (unification-stack
      :reader wam-unification-stack
      :initform (make-array 16
-                           :fill-pointer 0
-                           :adjustable t
-                           :element-type 'heap-index)
+                 :fill-pointer 0
+                 :adjustable t
+                 :element-type 'heap-index)
      :documentation "The unification stack.")
    (s
      :accessor wam-s
@@ -235,7 +233,7 @@
   "Pop an environment (stack frame) off the WAM stack."
   (let ((frame-size (wam-stack-frame-size wam)))
     (with-slots (stack environment-pointer) wam
-      (decf environment-pointer frame-size) ; lol
+      (setf environment-pointer (wam-stack-frame-ce wam)) ; E <- CE
       (decf (fill-pointer stack) frame-size)))) ; its fine
 
 
@@ -267,10 +265,10 @@
 (defun* retrieve-instruction (code-store (address code-index))
   "Return the full instruction at the given address in the code store."
   (make-array (instruction-size (aref code-store address))
-              :displaced-to code-store
-              :displaced-index-offset address
-              :adjustable nil
-              :element-type 'code-word))
+    :displaced-to code-store
+    :displaced-index-offset address
+    :adjustable nil
+    :element-type 'code-word))
 
 
 (defun* wam-code-word ((wam wam) (address code-index))
@@ -338,12 +336,9 @@
 ;;;
 ;;; Registers are typically denoted by their "register index", which is just
 ;;; their number.  Hoever, the bytecode needs to be able to distinguish between
-;;; local and stack registers.  To do this we use "register designators" (see
-;;; bytecode.lisp for more information on those).
-;;;
-;;; `wam-register` and `wam-register-cell` provide an interface to pass in
-;;; a register designator and get out "the right thing", so you should probably
-;;; just use those and not worry about the other functions here.
+;;; local and stack registers.  To do this we just make separate opcodes for
+;;; each kind.  This is ugly, but it lets us figure things out at compile time
+;;; instead of runtime, and register references happen A LOT at runtime.
 
 (defun* wam-local-register ((wam wam) (register register-index))
   (:returns heap-index)
@@ -361,29 +356,6 @@
 
 (defun (setf wam-stack-register) (new-value wam register)
   (setf (wam-stack-frame-arg wam register) new-value))
-
-
-(defun* wam-register ((wam wam) (register-designator register-designator))
-  (:returns heap-index)
-  "Return the heap index the designated register is pointing at."
-  (if (register-designator-local-p register-designator) ; ugly but fast
-    (wam-local-register wam (register-designator-value register-designator))
-    (wam-stack-register wam (register-designator-value register-designator))))
-
-(defun (setf wam-register) (new-value wam register-designator)
-  (if (register-designator-local-p register-designator) ; ugly but fast
-    (setf (wam-local-register wam (register-designator-value register-designator)) new-value)
-    (setf (wam-stack-register wam (register-designator-value register-designator)) new-value)))
-
-
-(defun* wam-register-cell ((wam wam) (register-designator register-designator))
-  (:returns heap-cell)
-  "Return the heap cell the designated register is pointing at."
-  (wam-heap-cell
-    wam
-    (if (register-designator-local-p register-designator)
-      (wam-local-register wam (register-designator-value register-designator))
-      (wam-stack-register wam (register-designator-value register-designator)))))
 
 
 (defun* wam-s-cell ((wam wam))

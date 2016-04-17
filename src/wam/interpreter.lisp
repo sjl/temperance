@@ -142,54 +142,73 @@
                 (fail! wam "Functors don't match in unify!")))))))))
 
 
+;;;; Instruction Definition
+(defmacro define-instruction (name lambda-list &body body)
+  `(defun* ,name ,lambda-list
+     (:returns :void)
+     ,@body
+     (values)))
+
+(defmacro define-instructions ((local-name stack-name) lambda-list &body body)
+  `(progn
+    (macrolet ((%wam-register% (wam register)
+                 `(wam-local-register ,wam ,register)))
+      (define-instruction ,local-name ,lambda-list
+        ,@body))
+    (macrolet ((%wam-register% (wam register)
+                 `(wam-stack-register ,wam ,register)))
+      (define-instruction ,stack-name ,lambda-list
+        ,@body))))
+
+
 ;;;; Query Instructions
-(defun* %put-structure ((wam wam)
-                        (functor functor-index)
-                        (register register-designator))
-  (:returns :void)
+(define-instructions (%put-structure-local %put-structure-stack)
+    ((wam wam)
+     (functor functor-index)
+     (register register-index))
   (->> (push-new-structure! wam)
     (nth-value 1)
-    (setf (wam-register wam register)))
-  (push-new-functor! wam functor)
-  (values))
+    (setf (%wam-register% wam register)))
+  (push-new-functor! wam functor))
 
-(defun* %set-variable ((wam wam) (register register-designator))
-  (:returns :void)
+(define-instructions (%set-variable-local %set-variable-stack)
+    ((wam wam)
+     (register register-index))
   (->> (push-unbound-reference! wam)
     (nth-value 1)
-    (setf (wam-register wam register)))
-  (values))
+    (setf (%wam-register% wam register))))
 
-(defun* %set-value ((wam wam) (register register-designator))
-  (:returns :void)
-  (wam-heap-push! wam (wam-register-cell wam register))
-  (values))
+(define-instructions (%set-value-local %set-value-stack)
+    ((wam wam)
+     (register register-index))
+  (wam-heap-push! wam (->> register
+                        (%wam-register% wam)
+                        (wam-heap-cell wam))))
 
-(defun* %put-variable ((wam wam)
-                       (register register-designator)
-                       (argument register-designator))
-  (:returns :void)
+(define-instructions (%put-variable-local %put-variable-stack)
+    ((wam wam)
+     (register register-index)
+     (argument register-index))
   (->> (push-unbound-reference! wam)
     (nth-value 1)
-    (setf (wam-register wam register))
-    (setf (wam-register wam argument)))
-  (values))
+    (setf (%wam-register% wam register))
+    (setf (wam-local-register wam argument))))
 
-(defun* %put-value ((wam wam)
-                    (register register-designator)
-                    (argument register-designator))
-  (:returns :void)
-  (setf (wam-register wam argument)
-        (wam-register wam register))
-  (values))
+(define-instructions (%put-value-local %put-value-stack)
+    ((wam wam)
+     (register register-index)
+     (argument register-index))
+  (setf (wam-local-register wam argument)
+        (%wam-register% wam register)))
 
 
 ;;;; Program Instructions
-(defun* %get-structure ((wam wam)
-                        (functor functor-index)
-                        (register register-designator))
-  (:returns :void)
-  (let* ((addr (deref wam (wam-register wam register)))
+;; TODO: do we really need both of these variants?
+(define-instructions (%get-structure-local %get-structure-stack)
+    ((wam wam)
+     (functor functor-index)
+     (register register-index))
+  (let* ((addr (deref wam (%wam-register% wam register)))
          (cell (wam-heap-cell wam addr)))
     (cond
       ;; If the register points at a reference cell, we push two new cells onto
@@ -236,51 +255,50 @@
              (setf (wam-mode wam) :read))
            (fail! wam "Functors don't match in get-struct"))))
       (t (fail! wam (format nil "get-struct on a non-ref/struct cell ~A"
-                            (cell-aesthetic cell))))))
-  (values))
+                            (cell-aesthetic cell)))))))
 
-(defun* %unify-variable ((wam wam) (register register-designator))
-  (:returns :void)
+(define-instructions (%unify-variable-local %unify-variable-stack)
+    ((wam wam)
+     (register register-index))
   (ecase (wam-mode wam)
-    (:read (setf (wam-register wam register)
+    (:read (setf (%wam-register% wam register)
                  (wam-s wam)))
     (:write (->> (push-unbound-reference! wam)
               (nth-value 1)
-              (setf (wam-register wam register)))))
-  (incf (wam-s wam))
-  (values))
+              (setf (%wam-register% wam register)))))
+  (incf (wam-s wam)))
 
-(defun* %unify-value ((wam wam) (register register-designator))
-  (:returns :void)
+(define-instructions (%unify-value-local %unify-value-stack)
+    ((wam wam)
+     (register register-index))
   (ecase (wam-mode wam)
     (:read (unify! wam
-                   (wam-register wam register)
+                   (%wam-register% wam register)
                    (wam-s wam)))
-    (:write (wam-heap-push! wam (wam-register-cell wam register))))
-  (incf (wam-s wam))
-  (values))
+    (:write (wam-heap-push! wam
+                            (->> register
+                              (%wam-register% wam)
+                              (wam-heap-cell wam)))))
+  (incf (wam-s wam)))
 
-(defun* %get-variable ((wam wam)
-                       (register register-designator)
-                       (argument register-designator))
-  (:returns :void)
-  (setf (wam-register wam register)
-        (wam-register wam argument))
-  (values))
+(define-instructions (%get-variable-local %get-variable-stack)
+    ((wam wam)
+     (register register-index)
+     (argument register-index))
+  (setf (%wam-register% wam register)
+        (wam-local-register wam argument)))
 
-(defun* %get-value ((wam wam)
-                    (register register-designator)
-                    (argument register-designator))
-  (:returns :void)
+(define-instructions (%get-value-local %get-value-stack)
+    ((wam wam)
+     (register register-index)
+     (argument register-index))
   (unify! wam
-          (wam-register wam register)
-          (wam-register wam argument))
-  (values))
+          (%wam-register% wam register)
+          (wam-local-register wam argument)))
 
 
 ;;;; Control Instructions
-(defun* %call ((wam wam) (functor functor-index))
-  (:returns :void)
+(define-instruction %call ((wam wam) (functor functor-index))
   (let ((target (wam-code-label wam functor)))
     (if target
       (progn
@@ -289,17 +307,13 @@
                  (instruction-size +opcode-call+))
               (wam-program-counter wam) ; PC <- target
               target))
-      (fail! wam "Tried to call unknown procedure.")))
-  (values))
+      (fail! wam "Tried to call unknown procedure."))))
 
-(defun* %proceed ((wam wam))
-  (:returns :void)
+(define-instruction %proceed ((wam wam))
   (setf (wam-program-counter wam) ; P <- CP
-        (wam-continuation-pointer wam))
-  (values))
+        (wam-continuation-pointer wam)))
 
-(defun* %allocate ((wam wam) (n stack-frame-argcount))
-  (:returns :void)
+(define-instruction %allocate ((wam wam) (n stack-frame-argcount))
   (setf (wam-environment-pointer wam) ; E <- new E
         (->> wam
           wam-environment-pointer
@@ -309,8 +323,7 @@
   (wam-stack-push! wam n) ; N
   (wam-stack-extend! wam n)) ; Y_n (TODO: this sucks)
 
-(defun* %deallocate ((wam wam))
-  (:returns :void)
+(define-instruction %deallocate ((wam wam))
   (setf (wam-program-counter wam)
         (wam-stack-frame-cp wam))
   (wam-stack-pop-environment! wam))
@@ -358,41 +371,52 @@
 
 (defun run-program (wam functor &optional (step nil))
   (with-slots (code program-counter fail) wam
-    (setf program-counter (wam-code-label wam functor))
-    (loop
-      :while (and (not fail) ; failure
-                  (not (= program-counter +code-sentinal+))) ; finished
-      :for opcode = (aref code program-counter)
-      :do
-      (block op
-        (when step
-          (break "About to execute instruction at ~4,'0X" program-counter))
-        (eswitch (opcode)
-          ;; Query
-          (+opcode-put-structure+  (instruction-call wam %put-structure code program-counter 2))
-          (+opcode-set-variable+   (instruction-call wam %set-variable code program-counter 1))
-          (+opcode-set-value+      (instruction-call wam %set-value code program-counter 1))
-          (+opcode-put-variable+   (instruction-call wam %put-variable code program-counter 2))
-          (+opcode-put-value+      (instruction-call wam %put-value code program-counter 2))
-          ;; Program
-          (+opcode-get-structure+  (instruction-call wam %get-structure code program-counter 2))
-          (+opcode-unify-variable+ (instruction-call wam %unify-variable code program-counter 1))
-          (+opcode-unify-value+    (instruction-call wam %unify-value code program-counter 1))
-          (+opcode-get-variable+   (instruction-call wam %get-variable code program-counter 2))
-          (+opcode-get-value+      (instruction-call wam %get-value code program-counter 2))
-          ;; Control
-          (+opcode-allocate+       (instruction-call wam %allocate code program-counter 1))
-          ;; need to skip the PC increment for PROC/CALL/DEAL
-          ;; TODO: this is ugly
-          (+opcode-deallocate+ (instruction-call wam %deallocate code program-counter 0)
-                               (return-from op))
-          (+opcode-proceed+ (instruction-call wam %proceed code program-counter 0)
-                            (return-from op))
-          (+opcode-call+ (instruction-call wam %call code program-counter 1)
-                         (return-from op)))
-        (incf program-counter (instruction-size opcode))
-        (when (>= program-counter (fill-pointer code))
-          (error "Fell off the end of the program code store!"))))
+    (macrolet ((instruction (inst args &body body)
+                 `(progn
+                    (instruction-call wam ,inst code program-counter ,args)
+                   ,@body)))
+      (setf program-counter (wam-code-label wam functor))
+      (loop
+        :while (and (not fail) ; failure
+                    (not (= program-counter +code-sentinal+))) ; finished
+        :for opcode = (aref code program-counter)
+        :do
+        (block op
+          (when step
+            (break "About to execute instruction at ~4,'0X" program-counter))
+          (eswitch (opcode)
+            ;; Query
+            (+opcode-put-structure-local+  (instruction %put-structure-local 2))
+            (+opcode-put-structure-stack+  (instruction %put-structure-stack 2))
+            (+opcode-set-variable-local+   (instruction %set-variable-local 1))
+            (+opcode-set-variable-stack+   (instruction %set-variable-stack 1))
+            (+opcode-set-value-local+      (instruction %set-value-local 1))
+            (+opcode-set-value-stack+      (instruction %set-value-stack 1))
+            (+opcode-put-variable-local+   (instruction %put-variable-local 2))
+            (+opcode-put-variable-stack+   (instruction %put-variable-stack 2))
+            (+opcode-put-value-local+      (instruction %put-value-local 2))
+            (+opcode-put-value-stack+      (instruction %put-value-stack 2))
+            ;; Program
+            (+opcode-get-structure-local+  (instruction %get-structure-local 2))
+            (+opcode-get-structure-stack+  (instruction %get-structure-stack 2))
+            (+opcode-unify-variable-local+ (instruction %unify-variable-local 1))
+            (+opcode-unify-variable-stack+ (instruction %unify-variable-stack 1))
+            (+opcode-unify-value-local+    (instruction %unify-value-local 1))
+            (+opcode-unify-value-stack+    (instruction %unify-value-stack 1))
+            (+opcode-get-variable-local+   (instruction %get-variable-local 2))
+            (+opcode-get-variable-stack+   (instruction %get-variable-stack 2))
+            (+opcode-get-value-local+      (instruction %get-value-local 2))
+            (+opcode-get-value-stack+      (instruction %get-value-stack 2))
+            ;; Control
+            (+opcode-allocate+             (instruction %allocate 1))
+            ;; need to skip the PC increment for PROC/CALL/DEAL
+            ;; TODO: this is ugly
+            (+opcode-deallocate+   (instruction %deallocate 0 (return-from op)))
+            (+opcode-proceed+      (instruction %proceed 0 (return-from op)))
+            (+opcode-call+         (instruction %call 1 (return-from op))))
+          (incf program-counter (instruction-size opcode))
+          (when (>= program-counter (fill-pointer code))
+            (error "Fell off the end of the program code store!")))))
     (values)))
 
 (defun run-query (wam term &optional (step nil))
@@ -404,31 +428,42 @@
 
   "
   ;; TODO: dedupe this interpreter code
-  (let ((code (compile-query wam term)))
-    (wam-reset! wam)
-    (loop
-      :with pc = 0 ; local program counter for this hunk of query code
-      :for opcode = (aref code pc)
-      :do
-      (progn
-        (eswitch (opcode)
-          (+opcode-put-structure+ (instruction-call wam %put-structure code pc 2))
-          (+opcode-set-variable+ (instruction-call wam %set-variable code pc 1))
-          (+opcode-set-value+ (instruction-call wam %set-value code pc 1))
-          (+opcode-put-variable+ (instruction-call wam %put-variable code pc 2))
-          (+opcode-put-value+ (instruction-call wam %put-value code pc 2))
-          (+opcode-call+
-            (when step (break))
-            (setf (wam-continuation-pointer wam) +code-sentinal+)
-            (run-program wam (aref code (+ pc 1)) step)
-            (return)))
-        (incf pc (instruction-size opcode))
-        (when (>= pc (length code)) ; queries SHOULD always end in a CALL...
-          (error "Fell off the end of the query code store!")))))
+  (macrolet ((instruction (inst args &body body)
+               `(progn
+                 (instruction-call wam ,inst code pc ,args)
+                 ,@body)))
+    (let ((code (compile-query wam term)))
+      (when step
+        (dump-code-store wam code))
+      (wam-reset! wam)
+      (loop
+        :with pc = 0 ; local program counter for this hunk of query code
+        :for opcode = (aref code pc)
+        :do
+        (progn
+          (eswitch (opcode)
+            (+opcode-put-structure-local+  (instruction %put-structure-local 2))
+            (+opcode-put-structure-stack+  (instruction %put-structure-stack 2))
+            (+opcode-set-variable-local+   (instruction %set-variable-local 1))
+            (+opcode-set-variable-stack+   (instruction %set-variable-stack 1))
+            (+opcode-set-value-local+      (instruction %set-value-local 1))
+            (+opcode-set-value-stack+      (instruction %set-value-stack 1))
+            (+opcode-put-variable-local+   (instruction %put-variable-local 2))
+            (+opcode-put-variable-stack+   (instruction %put-variable-stack 2))
+            (+opcode-put-value-local+      (instruction %put-value-local 2))
+            (+opcode-put-value-stack+      (instruction %put-value-stack 2))
+            (+opcode-call+
+              (when step
+                (break "Built query on the heap, about to call program code."))
+              (setf (wam-continuation-pointer wam) +code-sentinal+)
+              (run-program wam (aref code (+ pc 1)) step)
+              (return)))
+          (incf pc (instruction-size opcode))
+          (when (>= pc (length code)) ; queries SHOULD always end in a CALL...
+            (error "Fell off the end of the query code store!"))))))
   (if (wam-fail wam)
     (princ "No.")
-    (loop :for (var . val) :in (extract-query-results wam (first term))
-          :do (format t "~S -> ~S~%" var val)))
+    (princ "Yes."))
   (values))
 
 

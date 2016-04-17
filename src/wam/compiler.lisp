@@ -35,13 +35,6 @@
   (make-register :permanent number))
 
 
-(defun* register-to-designator ((register register))
-  (:returns register-designator)
-  (with-slots (type number) register
-    (if (eql type :permanent)
-      (make-stack-register-designator number)
-      (make-local-register-designator number))))
-
 (defun* register-to-string ((register register))
   (format nil "~A~D"
           (ecase (register-type register)
@@ -54,6 +47,13 @@
 (defmethod print-object ((object register) stream)
   (print-unreadable-object (object stream :identity nil :type nil)
     (format stream (register-to-string object))))
+
+
+(defun* register-temporary-p ((register register))
+  (member (register-type register) '(:argument :local)))
+
+(defun* register-permanent-p ((register register))
+  (eql (register-type register) :permanent))
 
 
 (defun* register= ((r1 register) (r2 register))
@@ -71,8 +71,8 @@
                   (register-type r2))
              ;; local and argument registers are actually the same register,
              ;; just named differently
-             (and (member (register-type r1) '(:local :argument))
-                  (member (register-type r2) '(:local :argument))))
+             (and (register-temporary-p r1)
+                  (register-temporary-p r2)))
          (= (register-number r1)
             (register-number r2)))))
 
@@ -161,7 +161,9 @@
 ;;;   A1 -> q(A1, X3)
 ;;;   X2 -> B
 
-(defun parse-term (term permanent-variables)
+(defun parse-term (term permanent-variables
+                   ;; JESUS TAKE THE WHEEL
+                   &optional reserved-variables reserved-arity)
   "Parse a term into a series of register assignments.
 
   Returns:
@@ -171,25 +173,15 @@
     * The root functor's arity
 
   "
-  ;; A term is a Lispy representation of the raw Prolog.  A register assignment
-  ;; is a cons of (register . assigned-to), e.g.:
-  ;;
-  ;;   (p :foo (f :foo :bar))
-  ;;   ->
-  ;;   (0 . 2)       ; A0 = X2
-  ;;   (1 . 4)       ; A1 = X3
-  ;;   (2 . :foo)    ; X2 = Foo
-  ;;   (3 . (f 2 4)) ; X3 = f(X2, X4)
-  ;;   (4 . :bar)    ; X4 = Bar
   (let* ((predicate (first term))
          (arguments (rest term))
          (arity (length arguments))
          ;; Preallocate enough registers for all of the arguments.  We'll fill
          ;; them in later.
          (local-registers (make-array 64
-                                      :fill-pointer arity
-                                      :adjustable t
-                                      :initial-element nil))
+                            :fill-pointer (or reserved-arity arity)
+                            :adjustable t
+                            :initial-element nil))
          ;; We essentially "preallocate" all the permanent variables up front
          ;; because we need them to always be in the same stack registers across
          ;; all the terms of our clause.
@@ -197,7 +189,10 @@
          ;; The ones that won't get used in this term will end up getting
          ;; flattened away anyway.
          (stack-registers (make-array (length permanent-variables)
-                                      :initial-contents permanent-variables)))
+                            :initial-contents permanent-variables)))
+    ;; TODO: document this clusterfuck
+    (loop :for variable :in reserved-variables :do
+          (vector-push-extend variable local-registers))
     (labels
         ((find-variable (var)
            (let ((r (position var local-registers))
@@ -234,7 +229,7 @@
          (make-assignment-list (registers register-maker)
            (loop :for i :from 0
                  :for contents :across registers
-                 :collect
+                 :when contents :collect ; don't include unused reserved regs
                  (cons (funcall register-maker i arity)
                        contents))))
       ;; Arguments are handled specially.  We parse the children as normal,
@@ -356,23 +351,34 @@
     assignments))
 
 
-(defun tokenize-term (term permanent-variables flattener)
+(defun tokenize-term
+    (term permanent-variables reserved-variables reserved-arity flattener)
   (multiple-value-bind (assignments functor arity)
-      (parse-term term permanent-variables)
+      (parse-term term permanent-variables reserved-variables reserved-arity)
     (values (->> assignments
               (funcall flattener)
               tokenize-assignments)
             functor
             arity)))
 
-(defun tokenize-program-term (term permanent-variables)
+(defun tokenize-program-term
+    (term permanent-variables reserved-variables reserved-arity)
   "Tokenize `term` as a program term, returning its tokens, functor, and arity."
-  (tokenize-term term permanent-variables #'flatten-program))
+  (tokenize-term term
+                 permanent-variables
+                 reserved-variables
+                 reserved-arity
+                 #'flatten-program))
 
-(defun tokenize-query-term (term permanent-variables)
+(defun tokenize-query-term
+    (term permanent-variables &optional reserved-variables reserved-arity)
   "Tokenize `term` as a query term, returning its stream of tokens."
   (multiple-value-bind (tokens functor arity)
-      (tokenize-term term permanent-variables #'flatten-query)
+      (tokenize-term term
+                     permanent-variables
+                     reserved-variables
+                     reserved-arity
+                     #'flatten-query)
     ;; We need to shove a CALL token onto the end.
     (append tokens `((:call ,functor ,arity)))))
 
@@ -394,6 +400,35 @@
 ;;;   (#'%set-value 1)
 ;;;   (#'%set-value 2)
 
+(defun find-opcode (opcode newp mode &optional register)
+  (flet ((find-variant (register)
+           (when register
+             (if (register-temporary-p register)
+               :local
+               :stack))))
+    (eswitch ((list opcode newp mode (find-variant register)) :test #'equal)
+      ('(:argument t   :program :local) +opcode-get-variable-local+)
+      ('(:argument t   :program :stack) +opcode-get-variable-stack+)
+      ('(:argument t   :query   :local) +opcode-put-variable-local+)
+      ('(:argument t   :query   :stack) +opcode-put-variable-stack+)
+      ('(:argument nil :program :local) +opcode-get-value-local+)
+      ('(:argument nil :program :stack) +opcode-get-value-stack+)
+      ('(:argument nil :query   :local) +opcode-put-value-local+)
+      ('(:argument nil :query   :stack) +opcode-put-value-stack+)
+      ('(:structure nil :program :local) +opcode-get-structure-local+)
+      ('(:structure nil :program :stack) +opcode-get-structure-stack+)
+      ('(:structure nil :query   :local) +opcode-put-structure-local+)
+      ('(:structure nil :query   :stack) +opcode-put-structure-stack+)
+      ('(:register t   :program :local) +opcode-unify-variable-local+)
+      ('(:register t   :program :stack) +opcode-unify-variable-stack+)
+      ('(:register t   :query   :local) +opcode-set-variable-local+)
+      ('(:register t   :query   :stack) +opcode-set-variable-stack+)
+      ('(:register nil :program :local) +opcode-unify-value-local+)
+      ('(:register nil :program :stack) +opcode-unify-value-stack+)
+      ('(:register nil :query   :local) +opcode-set-value-local+)
+      ('(:register nil :query   :stack) +opcode-set-value-stack+))))
+
+
 (defun compile-tokens (wam head-tokens body-tokens store)
   "Generate a series of machine instructions from a stream of head and body
   tokens.
@@ -413,25 +448,18 @@
     (labels
         ((handle-argument (argument-register source-register)
            ;; OP X_n A_i
-           (code-push-instruction! store
-               (if (push-if-new source-register seen :test #'register=)
-                 (ecase mode
-                   (:program +opcode-get-variable+)
-                   (:query +opcode-put-variable+))
-                 (ecase mode
-                   (:program +opcode-get-value+)
-                   (:query +opcode-put-value+)))
-             (register-to-designator source-register)
-             (register-to-designator argument-register)))
+           (let ((newp (push-if-new source-register seen :test #'register=)))
+             (code-push-instruction! store
+                 (find-opcode :argument newp mode source-register)
+               (register-number source-register)
+               (register-number argument-register))))
          (handle-structure (destination-register functor arity)
            ;; OP functor reg
            (push destination-register seen)
            (code-push-instruction! store
-               (ecase mode
-                 (:program +opcode-get-structure+)
-                 (:query +opcode-put-structure+))
+               (find-opcode :structure nil mode destination-register)
              (wam-ensure-functor-index wam (cons functor arity))
-             (register-to-designator destination-register)))
+             (register-number destination-register)))
          (handle-call (functor arity)
            ;; CALL functor
            (code-push-instruction! store
@@ -439,15 +467,10 @@
              (wam-ensure-functor-index wam (cons functor arity))))
          (handle-register (register)
            ;; OP reg
-           (code-push-instruction! store
-               (if (push-if-new register seen :test #'register=)
-                 (ecase mode
-                   (:program +opcode-unify-variable+)
-                   (:query +opcode-set-variable+))
-                 (ecase mode
-                   (:program +opcode-unify-value+)
-                   (:query +opcode-set-value+)))
-             (register-to-designator register)))
+           (let ((newp (push-if-new register seen :test #'register=)))
+             (code-push-instruction! store
+                 (find-opcode :register newp mode register)
+               (register-number register))))
          (handle-stream (tokens)
            (loop :for token :in tokens :collect
                  (ematch token
@@ -473,6 +496,16 @@
 
 
 ;;;; UI
+(defun find-shared-variables (terms)
+  "Return a list of all variables shared by two or more terms."
+  (let* ((variables (remove-duplicates (tree-collect #'variable-p terms))))
+    (flet ((permanent-p (variable)
+             "Permanent variables are those contained in more than 1 term."
+             (> (count-if (curry #'tree-member-p variable)
+                          terms)
+                1)))
+      (remove-if-not #'permanent-p variables))))
+
 (defun find-permanent-variables (clause)
   "Return a list of all the 'permanent' variables in `clause`.
 
@@ -480,19 +513,19 @@
   where the head of the clause is considered to be a part of the first goal.
 
   "
-  (if (< (length clause) 2)
+  (if (<= (length clause) 2)
     (list) ; facts and chain rules have no permanent variables at all
     (destructuring-bind (head body-first . body-rest) clause
       ;; the head is treated as part of the first goal for the purposes of
       ;; finding permanent variables
-      (let* ((goals (cons (cons head body-first) body-rest))
-             (variables (remove-duplicates (tree-collect #'variable-p goals))))
-        (flet ((permanent-p (variable)
-                 "Permanent variables are those contained in more than 1 goal."
-                 (> (count-if (curry #'tree-member-p variable)
-                              goals)
-                    1)))
-          (remove-if-not #'permanent-p variables))))))
+      (find-shared-variables (cons (cons head body-first) body-rest)))))
+
+(defun find-head-variables (clause)
+  (if (<= (length clause) 1)
+    (list)
+    (destructuring-bind (head body-first . body-rest) clause
+      (declare (ignore body-rest))
+      (find-shared-variables (list head body-first)))))
 
 
 (defun mark-label (wam functor arity store)
@@ -504,9 +537,9 @@
 
 (defun make-query-code-store ()
   (make-array 64
-              :fill-pointer 0
-              :adjustable t
-              :element-type 'code-word))
+    :fill-pointer 0
+    :adjustable t
+    :element-type 'code-word))
 
 
 (defun compile-clause (wam store head body)
@@ -518,15 +551,31 @@
   "
   (let* ((permanent-variables
            (find-permanent-variables (cons head body)))
+         (head-variables
+           (set-difference (find-head-variables (cons head body))
+                           permanent-variables))
+         (head-arity
+           (max (1- (length head))
+                (1- (length (car body)))))
          (head-tokens
            (when head
              (multiple-value-bind (tokens functor arity)
-                 (tokenize-program-term head permanent-variables)
+                 (tokenize-program-term head
+                                        permanent-variables
+                                        head-variables
+                                        head-arity)
                (mark-label wam functor arity store) ; TODO: this is ugly
                tokens)))
          (body-tokens
-           (loop :for term :in body :append
-                 (tokenize-query-term term permanent-variables))))
+           (when body
+             (append
+               (tokenize-query-term (first body)
+                                    permanent-variables
+                                    head-variables
+                                    head-arity)
+               (loop :for term :in (rest body) :append
+                     (tokenize-query-term term
+                                          permanent-variables))))))
     (flet ((compile% () (compile-tokens wam head-tokens body-tokens store)))
       ;; We need to compile facts and rules differently.  Facts end with
       ;; a PROCEED and rules are wrapped in ALOC/DEAL.

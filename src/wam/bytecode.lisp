@@ -9,17 +9,27 @@
 
   "
   (eswitch (opcode)
-    (+opcode-get-structure+ 3)
-    (+opcode-unify-variable+ 2)
-    (+opcode-unify-value+ 2)
-    (+opcode-get-variable+ 3)
-    (+opcode-get-value+ 3)
+    (+opcode-get-structure-local+ 3)
+    (+opcode-get-structure-stack+ 3)
+    (+opcode-unify-variable-local+ 2)
+    (+opcode-unify-variable-stack+ 2)
+    (+opcode-unify-value-local+ 2)
+    (+opcode-unify-value-stack+ 2)
+    (+opcode-get-variable-local+ 3)
+    (+opcode-get-variable-stack+ 3)
+    (+opcode-get-value-local+ 3)
+    (+opcode-get-value-stack+ 3)
 
-    (+opcode-put-structure+ 3)
-    (+opcode-set-variable+ 2)
-    (+opcode-set-value+ 2)
-    (+opcode-put-variable+ 3)
-    (+opcode-put-value+ 3)
+    (+opcode-put-structure-local+ 3)
+    (+opcode-put-structure-stack+ 3)
+    (+opcode-set-variable-local+ 2)
+    (+opcode-set-variable-stack+ 2)
+    (+opcode-set-value-local+ 2)
+    (+opcode-set-value-stack+ 2)
+    (+opcode-put-variable-local+ 3)
+    (+opcode-put-variable-stack+ 3)
+    (+opcode-put-value-local+ 3)
+    (+opcode-put-value-stack+ 3)
 
     (+opcode-call+ 2)
     (+opcode-proceed+ 1)
@@ -30,17 +40,27 @@
 (defun* opcode-name ((opcode opcode))
   (:returns string)
   (eswitch (opcode)
-    (+opcode-get-structure+ "GET-STRUCTURE")
-    (+opcode-unify-variable+ "UNIFY-VARIABLE")
-    (+opcode-unify-value+ "UNIFY-VALUE")
-    (+opcode-get-variable+ "GET-VARIABLE")
-    (+opcode-get-value+ "GET-VALUE")
+    (+opcode-get-structure-local+ "GET-STRUCTURE")
+    (+opcode-get-structure-stack+ "GET-STRUCTURE")
+    (+opcode-unify-variable-local+ "UNIFY-VARIABLE")
+    (+opcode-unify-variable-stack+ "UNIFY-VARIABLE")
+    (+opcode-unify-value-local+ "UNIFY-VALUE")
+    (+opcode-unify-value-stack+ "UNIFY-VALUE")
+    (+opcode-get-variable-local+ "GET-VARIABLE")
+    (+opcode-get-variable-stack+ "GET-VARIABLE")
+    (+opcode-get-value-local+ "GET-VALUE")
+    (+opcode-get-value-stack+ "GET-VALUE")
 
-    (+opcode-put-structure+ "PUT-STRUCTURE")
-    (+opcode-set-variable+ "SET-VARIABLE")
-    (+opcode-set-value+ "SET-VALUE")
-    (+opcode-put-variable+ "PUT-VARIABLE")
-    (+opcode-put-value+ "PUT-VALUE")
+    (+opcode-put-structure-local+ "PUT-STRUCTURE")
+    (+opcode-put-structure-stack+ "PUT-STRUCTURE")
+    (+opcode-set-variable-local+ "SET-VARIABLE")
+    (+opcode-set-variable-stack+ "SET-VARIABLE")
+    (+opcode-set-value-local+ "SET-VALUE")
+    (+opcode-set-value-stack+ "SET-VALUE")
+    (+opcode-put-variable-local+ "PUT-VARIABLE")
+    (+opcode-put-variable-stack+ "PUT-VARIABLE")
+    (+opcode-put-value-local+ "PUT-VALUE")
+    (+opcode-put-value-stack+ "PUT-VALUE")
 
     (+opcode-call+ "CALL")
     (+opcode-proceed+ "PROCEED")
@@ -50,76 +70,30 @@
 (defun* opcode-short-name ((opcode opcode))
   (:returns string)
   (eswitch (opcode)
-    (+opcode-get-structure+ "GETS")
-    (+opcode-unify-variable+ "UVAR")
-    (+opcode-unify-value+ "UVLU")
-    (+opcode-get-variable+ "GVAR")
-    (+opcode-get-value+ "GVLU")
+    (+opcode-get-structure-local+ "GETS")
+    (+opcode-get-structure-stack+ "GETS")
+    (+opcode-unify-variable-local+ "UVAR")
+    (+opcode-unify-variable-stack+ "UVAR")
+    (+opcode-unify-value-local+ "UVLU")
+    (+opcode-unify-value-stack+ "UVLU")
+    (+opcode-get-variable-local+ "GVAR")
+    (+opcode-get-variable-stack+ "GVAR")
+    (+opcode-get-value-local+ "GVLU")
+    (+opcode-get-value-stack+ "GVLU")
 
-    (+opcode-put-structure+ "PUTS")
-    (+opcode-set-variable+ "SVAR")
-    (+opcode-set-value+ "SVLU")
-    (+opcode-put-variable+ "PVAR")
-    (+opcode-put-value+ "PVLU")
+    (+opcode-put-structure-local+ "PUTS")
+    (+opcode-put-structure-stack+ "PUTS")
+    (+opcode-set-variable-local+ "SVAR")
+    (+opcode-set-variable-stack+ "SVAR")
+    (+opcode-set-value-local+ "SVLU")
+    (+opcode-set-value-stack+ "SVLU")
+    (+opcode-put-variable-local+ "PVAR")
+    (+opcode-put-variable-stack+ "PVAR")
+    (+opcode-put-value-local+ "PVLU")
+    (+opcode-put-value-stack+ "PVLU")
 
     (+opcode-call+ "CALL")
     (+opcode-proceed+ "PROC")
     (+opcode-allocate+ "ALOC")
     (+opcode-deallocate+ "DEAL")))
 
-
-;;;; Register Designators
-;;; A register designator is a number that specifies a particular register.
-;;;
-;;; The register might be a local register (A_n or X_n in WAMspeak) for holding
-;;; temporary things or a stack register (Y_n) for holding permanent variables.
-;;;
-;;; Internally register designators are implemented as a bitmasked value/tag:
-;;;
-;;;    value          tag bit
-;;;    rrrrrrrrrrrrrrrT
-;;;
-;;; But you should probably just use this interface to interact with them.
-
-(defun* register-designator-tag ((register-designator register-designator))
-  (:returns register-designator-tag)
-  (logand register-designator +register-designator-tag-bitmask+))
-
-(defun* register-designator-value ((register-designator register-designator))
-  (:returns register-index)
-  (ash register-designator -1))
-
-
-(defun* register-designator-local-p ((register-designator register-designator))
-  (:returns boolean)
-  (= +tag-local-register+
-     (register-designator-tag register-designator)))
-
-(defun* register-designator-stack-p ((register-designator register-designator))
-  (:returns boolean)
-  (= +tag-stack-register+
-     (register-designator-tag register-designator)))
-
-
-(defun* make-register-designator ((register register-index)
-                                  (tag register-designator-tag))
-  (:returns register-designator)
-  (logior (ash register 1)
-          tag))
-
-(defun* make-local-register-designator ((register register-index))
-  (:returns register-designator)
-  (make-register-designator register +tag-local-register+))
-
-(defun* make-stack-register-designator ((register register-index))
-  (:returns register-designator)
-  (make-register-designator register +tag-stack-register+))
-
-(defun* register-designator-to-string ((register-designator register-designator))
-  (format nil
-          (if (register-designator-local-p register-designator)
-            ;; Unfortunately we've lost the X/A distinction by this point.
-            "X~D"
-            "Y~D")
-          (+ (register-designator-value register-designator)
-             (if *off-by-one* 1 0))))

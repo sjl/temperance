@@ -39,16 +39,7 @@
 
 
 (deftype opcode ()
-  '(integer 0 14))
-
-
-(deftype register-designator ()
-  'code-word)
-
-(deftype register-designator-tag ()
-  `(member
-    ,+tag-stack-register+
-    ,+tag-local-register+))
+  '(integer 0 23))
 
 
 (deftype stack-frame-size ()

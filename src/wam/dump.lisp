@@ -117,52 +117,98 @@
           (pretty-arguments arguments)))
 
 
-(defmethod instruction-details ((opcode (eql +opcode-set-variable+)) arguments functor-list)
-  (format nil "SVAR~A      ; ~A <- new unbound REF"
+(defmethod instruction-details ((opcode (eql +opcode-set-variable-local+)) arguments functor-list)
+  (format nil "SVAR~A      ; X~A <- new unbound REF"
           (pretty-arguments arguments)
-          (register-designator-to-string (first arguments))))
+          (first arguments)))
 
-(defmethod instruction-details ((opcode (eql +opcode-set-value+)) arguments functor-list)
-  (format nil "SVLU~A      ; new REF to ~A"
+(defmethod instruction-details ((opcode (eql +opcode-set-variable-stack+)) arguments functor-list)
+  (format nil "SVAR~A      ; Y~A <- new unbound REF"
           (pretty-arguments arguments)
-          (register-designator-to-string (first arguments))))
+          (first arguments)))
 
-(defmethod instruction-details ((opcode (eql +opcode-get-structure+)) arguments functor-list)
-  (format nil "GETS~A ; ~A = ~A"
+(defmethod instruction-details ((opcode (eql +opcode-set-value-local+)) arguments functor-list)
+  (format nil "SVLU~A      ; new REF to X~A"
           (pretty-arguments arguments)
-          (register-designator-to-string (second arguments))
+          (first arguments)))
+
+(defmethod instruction-details ((opcode (eql +opcode-set-value-stack+)) arguments functor-list)
+  (format nil "SVLU~A      ; new REF to Y~A"
+          (pretty-arguments arguments)
+          (first arguments)))
+
+(defmethod instruction-details ((opcode (eql +opcode-get-structure-local+)) arguments functor-list)
+  (format nil "GETS~A ; X~A = ~A"
+          (pretty-arguments arguments)
+          (second arguments)
           (pretty-functor (first arguments) functor-list)))
 
-(defmethod instruction-details ((opcode (eql +opcode-put-structure+)) arguments functor-list)
-  (format nil "PUTS~A ; ~A <- new ~A"
+(defmethod instruction-details ((opcode (eql +opcode-get-structure-stack+)) arguments functor-list)
+  (format nil "GETS~A ; Y~A = ~A"
           (pretty-arguments arguments)
-          (register-designator-to-string (second arguments))
+          (second arguments)
+          (pretty-functor (first arguments) functor-list)))
+
+(defmethod instruction-details ((opcode (eql +opcode-put-structure-local+)) arguments functor-list)
+  (format nil "PUTS~A ; X~A <- new ~A"
+          (pretty-arguments arguments)
+          (second arguments)
+          (pretty-functor (first arguments) functor-list)))
+
+(defmethod instruction-details ((opcode (eql +opcode-put-structure-stack+)) arguments functor-list)
+  (format nil "PUTS~A ; Y~A <- new ~A"
+          (pretty-arguments arguments)
+          (second arguments)
           (pretty-functor (first arguments) functor-list)))
 
 
-(defmethod instruction-details ((opcode (eql +opcode-get-variable+)) arguments functor-list)
-  (format nil "GVAR~A ; ~A <- ~A"
+(defmethod instruction-details ((opcode (eql +opcode-get-variable-local+)) arguments functor-list)
+  (format nil "GVAR~A ; X~A <- A~A"
           (pretty-arguments arguments)
-          (register-designator-to-string (first arguments))
-          (register-designator-to-string (second arguments))))
+          (first arguments)
+          (second arguments)))
 
-(defmethod instruction-details ((opcode (eql +opcode-get-value+)) arguments functor-list)
-  (format nil "GVLU~A ; ~A = ~A"
+(defmethod instruction-details ((opcode (eql +opcode-get-variable-stack+)) arguments functor-list)
+  (format nil "GVAR~A ; Y~A <- A~A"
           (pretty-arguments arguments)
-          (register-designator-to-string (second arguments))
-          (register-designator-to-string (first arguments))))
+          (first arguments)
+          (second arguments)))
 
-(defmethod instruction-details ((opcode (eql +opcode-put-variable+)) arguments functor-list)
-  (format nil "PVAR~A ; ~A <- ~A <- new unbound REF"
+(defmethod instruction-details ((opcode (eql +opcode-get-value-local+)) arguments functor-list)
+  (format nil "GVLU~A ; X~A = A~A"
           (pretty-arguments arguments)
-          (register-designator-to-string (second arguments))
-          (register-designator-to-string (first arguments))))
+          (first arguments)
+          (second arguments)))
 
-(defmethod instruction-details ((opcode (eql +opcode-put-value+)) arguments functor-list)
-  (format nil "PVLU~A ; ~A <- ~A"
+(defmethod instruction-details ((opcode (eql +opcode-get-value-stack+)) arguments functor-list)
+  (format nil "GVLU~A ; Y~A = A~A"
           (pretty-arguments arguments)
-          (register-designator-to-string (second arguments))
-          (register-designator-to-string (first arguments))))
+          (first arguments)
+          (second arguments)))
+
+(defmethod instruction-details ((opcode (eql +opcode-put-variable-local+)) arguments functor-list)
+  (format nil "PVAR~A ; X~A <- A~A <- new unbound REF"
+          (pretty-arguments arguments)
+          (first arguments)
+          (second arguments)))
+
+(defmethod instruction-details ((opcode (eql +opcode-put-variable-stack+)) arguments functor-list)
+  (format nil "PVAR~A ; Y~A <- A~A <- new unbound REF"
+          (pretty-arguments arguments)
+          (second arguments)
+          (first arguments)))
+
+(defmethod instruction-details ((opcode (eql +opcode-put-value-local+)) arguments functor-list)
+  (format nil "PVLU~A ; A~A <- X~A"
+          (pretty-arguments arguments)
+          (second arguments)
+          (first arguments)))
+
+(defmethod instruction-details ((opcode (eql +opcode-put-value-stack+)) arguments functor-list)
+  (format nil "PVLU~A ; A~A <- Y~A"
+          (pretty-arguments arguments)
+          (second arguments)
+          (first arguments)))
 
 
 (defmethod instruction-details ((opcode (eql +opcode-call+)) arguments functor-list)
@@ -182,7 +228,11 @@
         (when lbl
           (format t ";;;; BEGIN ~A~%"
                   (pretty-functor lbl (wam-functors wam)))))
-      (format t "; ~4,'0X: " addr)
+      (format t ";~A~4,'0X: "
+              (if (= (wam-program-counter wam) addr)
+                ">>"
+                "  ")
+              addr)
       (let ((instruction (retrieve-instruction code-store addr)))
         (format t "~A~%" (instruction-details (aref instruction 0)
                                               (rest (coerce instruction 'list))

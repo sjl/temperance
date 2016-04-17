@@ -1,2 +1,3 @@
 (2 code-push-instruction!)
 (1 repeat)
+(2 define-instruction define-instructions)
