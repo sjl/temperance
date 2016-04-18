@@ -300,7 +300,6 @@
          ;; flattened away anyway.
          (stack-registers (make-array (length permanent-variables)
                             :initial-contents permanent-variables)))
-    ;; TODO: document this clusterfuck
     (loop :for variable :in reserved-variables :do
           (vector-push-extend variable local-registers))
     (labels
