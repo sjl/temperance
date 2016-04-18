@@ -368,14 +368,14 @@
 ;;;
 ;;; Turns:
 ;;;
-;;;   X0 -> p(X1, X2)
-;;;   X1 -> A
-;;;   X2 -> q(X1, X3)
-;;;   X3 -> B
+;;;   X0 <- p(X1, X2)
+;;;   X1 <- A
+;;;   X2 <- q(X1, X3)
+;;;   X3 <- B
 ;;;
 ;;; into something like:
 ;;;
-;;;   X2 -> q(X1, X3), X0 -> p(X1, X2)
+;;;   X2 <- q(X1, X3), X0 <- p(X1, X2)
 
 (defun find-dependencies (assignments)
   "Return a list of dependencies amongst the given registers.
@@ -431,7 +431,7 @@
 ;;;
 ;;; It turns:
 ;;;
-;;;   X2 -> q(X1, X3), X0 -> p(X1, X2), A3 <- X4
+;;;   X2 <- q(X1, X3), X0 <- p(X1, X2), A3 <- X4
 ;;;
 ;;; into something like:
 ;;;
