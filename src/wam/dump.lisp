@@ -226,7 +226,13 @@
                                               (wam-functors wam)))
         (incf addr (length instruction))))))
 
-(defun dump-code (wam &optional (from 0) (to (length (wam-code wam))))
+(defun dump-code
+    (wam
+     &optional
+     (from (max (- (wam-program-counter wam) 4) ; wow
+                0)) ; this
+     (to (min (+ (wam-program-counter wam) 6) ; is
+              (length (wam-code wam))))) ; bad
   (format t "CODE~%")
   (dump-code-store wam (wam-code wam) from to))
 

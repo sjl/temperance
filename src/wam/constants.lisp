@@ -55,7 +55,7 @@
   :documentation "The maximum allowed arity of functors.")
 
 
-(define-constant +maximum-query-size+ 256
+(define-constant +maximum-query-size+ 48
   :documentation
   "The maximum size (in bytes of bytecode) a query may compile to.")
 
@@ -85,35 +85,38 @@
 
 ;;;; Opcodes
 ;;; Program
-(define-constant +opcode-get-structure-local+ 0)
-(define-constant +opcode-unify-variable-local+ 1)
-(define-constant +opcode-unify-variable-stack+ 2)
-(define-constant +opcode-unify-value-local+ 3)
-(define-constant +opcode-unify-value-stack+ 4)
-(define-constant +opcode-get-variable-local+ 5)
-(define-constant +opcode-get-variable-stack+ 6)
-(define-constant +opcode-get-value-local+ 7)
-(define-constant +opcode-get-value-stack+ 8)
+(define-constant +opcode-noop+ 0)
+(define-constant +opcode-get-structure-local+ 1)
+(define-constant +opcode-unify-variable-local+ 2)
+(define-constant +opcode-unify-variable-stack+ 3)
+(define-constant +opcode-unify-value-local+ 4)
+(define-constant +opcode-unify-value-stack+ 5)
+(define-constant +opcode-get-variable-local+ 6)
+(define-constant +opcode-get-variable-stack+ 7)
+(define-constant +opcode-get-value-local+ 8)
+(define-constant +opcode-get-value-stack+ 9)
 
 
 ;;; Query
-(define-constant +opcode-put-structure-local+ 9)
-(define-constant +opcode-set-variable-local+ 10)
-(define-constant +opcode-set-variable-stack+ 11)
-(define-constant +opcode-set-value-local+ 12)
-(define-constant +opcode-set-value-stack+ 13)
-(define-constant +opcode-put-variable-local+ 14)
-(define-constant +opcode-put-variable-stack+ 15)
-(define-constant +opcode-put-value-local+ 16)
-(define-constant +opcode-put-value-stack+ 17)
+(define-constant +opcode-put-structure-local+ 10)
+(define-constant +opcode-set-variable-local+ 11)
+(define-constant +opcode-set-variable-stack+ 12)
+(define-constant +opcode-set-value-local+ 13)
+(define-constant +opcode-set-value-stack+ 14)
+(define-constant +opcode-put-variable-local+ 15)
+(define-constant +opcode-put-variable-stack+ 16)
+(define-constant +opcode-put-value-local+ 17)
+(define-constant +opcode-put-value-stack+ 18)
 
 
 ;;; Control
-(define-constant +opcode-call+ 18)
-(define-constant +opcode-proceed+ 19)
-(define-constant +opcode-allocate+ 20)
-(define-constant +opcode-deallocate+ 21)
+(define-constant +opcode-call+ 19)
+(define-constant +opcode-proceed+ 20)
+(define-constant +opcode-allocate+ 21)
+(define-constant +opcode-deallocate+ 22)
+(define-constant +opcode-done+ 23)
 
 
 ;;;; Debug Config
 (defparameter *off-by-one* nil)
+

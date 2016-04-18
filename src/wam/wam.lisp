@@ -11,9 +11,13 @@
      :reader wam-heap
      :documentation "The actual heap (stack).")
    (code
-     :initform (make-array 1024
+     ;; The WAM bytecode is all stored in this array.  The first
+     ;; `+maximum-query-size+` words are reserved for query bytecode, which will
+     ;; get loaded in (overwriting the previous query) when making a query.
+     ;; Everything after that is for the actual database.
+     :initform (make-array (+ +maximum-query-size+ 1024)
                  :adjustable t
-                 :fill-pointer 0
+                 :fill-pointer +maximum-query-size+
                  :initial-element 0
                  :element-type 'code-word)
      :reader wam-code
@@ -308,7 +312,7 @@
           (opcode-name opcode)
           (length arguments)
           arguments
-          (instruction-size opcode))
+          (1- (instruction-size opcode)))
   (prog1
       (code-push-word! store opcode)
     (dolist (arg arguments)
@@ -322,6 +326,18 @@
 
 (defun (setf wam-code-label) (new-value wam functor)
   (setf (gethash functor (wam-code-labels wam)) new-value))
+
+
+(defun* wam-load-query-code! ((wam wam) query-code)
+  (:returns :void)
+  (when (> (length query-code) +maximum-query-size+)
+    (error "WAM query store exhausted."))
+  ;; TODO: there must be a better way to do this
+  (loop :for word :across query-code
+        :for addr :from 0
+        :do (setf (aref (wam-code wam) addr)
+                  word))
+  (values))
 
 
 ;;;; Registers

@@ -411,13 +411,10 @@
     results))
 
 
-(defun run-program (wam functor &optional (step nil))
+(defun run-program (wam &optional (step nil))
   (with-slots (code program-counter fail) wam
-    (macrolet ((instruction (inst args &body body)
-                 `(progn
-                    (instruction-call wam ,inst code program-counter ,args)
-                   ,@body)))
-      (setf program-counter (wam-code-label wam functor))
+    (macrolet ((instruction (inst args)
+                 `(instruction-call wam ,inst code program-counter ,args)))
       (loop
         :while (and (not fail) ; failure
                     (not (= program-counter +code-sentinal+))) ; finished
@@ -449,11 +446,19 @@
             (+opcode-get-value-stack+      (instruction %get-value-stack 2))
             ;; Control
             (+opcode-allocate+             (instruction %allocate 1))
-            ;; need to skip the PC increment for PROC/CALL/DEAL
+            ;; need to skip the PC increment for PROC/CALL/DEAL/DONE
             ;; TODO: this is ugly
-            (+opcode-deallocate+   (instruction %deallocate 0 (return-from op)))
-            (+opcode-proceed+      (instruction %proceed 0 (return-from op)))
-            (+opcode-call+         (instruction %call 1 (return-from op))))
+            (+opcode-deallocate+
+              (instruction %deallocate 0)
+              (return-from op))
+            (+opcode-proceed+
+              (instruction %proceed 0)
+              (return-from op))
+            (+opcode-call+
+              (instruction %call 1)
+              (return-from op))
+            (+opcode-done+
+              (return-from run-program)))
           (incf program-counter (instruction-size opcode))
           (when (>= program-counter (fill-pointer code))
             (error "Fell off the end of the program code store!")))))
@@ -464,42 +469,19 @@
 
   Resets the heap, etc before running.
 
-  When `step` is true, break into the debugger before calling the procedure.
+  When `step` is true, break into the debugger before calling the procedure and
+  after each instruction.
 
   "
-  ;; TODO: dedupe this interpreter code
-  (macrolet ((instruction (inst args &body body)
-               `(progn
-                 (instruction-call wam ,inst code pc ,args)
-                 ,@body)))
-    (let ((code (compile-query wam term)))
-      (when step
-        (dump-code-store wam code))
-      (wam-reset! wam)
-      (loop
-        :with pc = 0 ; local program counter for this hunk of query code
-        :for opcode = (aref code pc)
-        :do
-        (progn
-          (eswitch (opcode)
-            (+opcode-put-structure-local+  (instruction %put-structure-local 2))
-            (+opcode-set-variable-local+   (instruction %set-variable-local 1))
-            (+opcode-set-variable-stack+   (instruction %set-variable-stack 1))
-            (+opcode-set-value-local+      (instruction %set-value-local 1))
-            (+opcode-set-value-stack+      (instruction %set-value-stack 1))
-            (+opcode-put-variable-local+   (instruction %put-variable-local 2))
-            (+opcode-put-variable-stack+   (instruction %put-variable-stack 2))
-            (+opcode-put-value-local+      (instruction %put-value-local 2))
-            (+opcode-put-value-stack+      (instruction %put-value-stack 2))
-            (+opcode-call+
-              (when step
-                (break "Built query on the heap, about to call program code."))
-              (setf (wam-continuation-pointer wam) +code-sentinal+)
-              (run-program wam (aref code (+ pc 1)) step)
-              (return)))
-          (incf pc (instruction-size opcode))
-          (when (>= pc (length code)) ; queries SHOULD always end in a CALL...
-            (error "Fell off the end of the query code store!"))))))
+  (let ((code (compile-query wam term)))
+    (wam-reset! wam)
+    (wam-load-query-code! wam code)
+    (setf (wam-program-counter wam) 0
+          (wam-continuation-pointer wam) +code-sentinal+)
+    (when step
+      (format *debug-io* "Built query code:~%")
+      (dump-code-store wam code)))
+  (run-program wam step)
   (if (wam-fail wam)
     (princ "No.")
     (princ "Yes."))

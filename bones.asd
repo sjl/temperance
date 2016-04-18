@@ -19,9 +19,11 @@
   :components ((:file "src/quickutils") ; quickutils package ordering crap
                (:file "package")
                (:module "src"
+                :serial t
                 :components ((:file "paip")
                              (:file "utils")
                              (:module "wam"
+                              :serial t
                               :components ((:file "constants")
                                            (:file "types")
                                            (:file "cells")

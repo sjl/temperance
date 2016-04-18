@@ -539,72 +539,6 @@
       ('(:register nil :query   :stack) +opcode-set-value-stack+))))
 
 
-(defun compile-tokens (wam head-tokens body-tokens store)
-  "Generate a series of machine instructions from a stream of head and body
-  tokens.
-
-  The `head-tokens` should be program-style tokens, and are compiled in program
-  mode.  The `body-tokens` should be query-style tokens, and are compiled in
-  query mode.
-
-  Actual queries are a special case where the `head-tokens` stream is `nil`
-
-  The compiled instructions will be appended to `store` using
-  `code-push-instructions!`.
-
-  "
-  (let ((seen (list))
-        (mode nil))
-    (labels
-        ((handle-argument (argument-register source-register)
-           ;; OP X_n A_i
-           (let ((newp (push-if-new source-register seen :test #'register=)))
-             (code-push-instruction! store
-                 (find-opcode :argument newp mode source-register)
-               (register-number source-register)
-               (register-number argument-register))))
-         (handle-structure (destination-register functor arity)
-           ;; OP functor reg
-           (push destination-register seen)
-           (code-push-instruction! store
-               (find-opcode :structure nil mode destination-register)
-             (wam-ensure-functor-index wam (cons functor arity))
-             (register-number destination-register)))
-         (handle-call (functor arity)
-           ;; CALL functor
-           (code-push-instruction! store
-               +opcode-call+
-             (wam-ensure-functor-index wam (cons functor arity))))
-         (handle-register (register)
-           ;; OP reg
-           (let ((newp (push-if-new register seen :test #'register=)))
-             (code-push-instruction! store
-                 (find-opcode :register newp mode register)
-               (register-number register))))
-         (handle-stream (tokens)
-           (loop :for token :in tokens :collect
-                 (ematch token
-                   ((guard `(:argument ,argument-register ,source-register)
-                           (and (eql (register-type argument-register) :argument)
-                                (member (register-type source-register)
-                                        '(:local :permanent))))
-                    (handle-argument argument-register source-register))
-                   ((guard `(:structure ,destination-register ,functor ,arity)
-                           (member (register-type destination-register)
-                                   '(:local :argument)))
-                    (handle-structure destination-register functor arity))
-                   (`(:call ,functor ,arity)
-                    (handle-call functor arity))
-                   ((guard register
-                           (typep register 'register))
-                    (handle-register register))))))
-      (when head-tokens
-        (setf mode :program)
-        (handle-stream head-tokens))
-      (setf mode :query)
-      (handle-stream body-tokens))))
-
-
 ;;;; UI
 (defun find-shared-variables (terms)
   "Return a list of all variables shared by two or more terms."
@@ -710,6 +644,7 @@
   "
   (let ((store (make-query-code-store)))
     (compile-clause wam store nil query)
+    (code-push-instruction! store +opcode-done+)
     store))
 
 (defun compile-program (wam rule)
