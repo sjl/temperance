@@ -609,12 +609,13 @@
 (defun find-shared-variables (terms)
   "Return a list of all variables shared by two or more terms."
   (let* ((variables (remove-duplicates (tree-collect #'variable-p terms))))
-    (flet ((permanent-p (variable)
-             "Permanent variables are those contained in more than 1 term."
-             (> (count-if (curry #'tree-member-p variable)
-                          terms)
-                1)))
-      (remove-if-not #'permanent-p variables))))
+    (labels
+        ((count-uses (variable)
+           (count-if (curry #'tree-member-p variable)
+                     terms))
+         (shared-p (variable)
+           (> (count-uses variable) 1)))
+      (remove-if-not #'shared-p variables))))
 
 (defun find-permanent-variables (clause)
   "Return a list of all the 'permanent' variables in `clause`.
