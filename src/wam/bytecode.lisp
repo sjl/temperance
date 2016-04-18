@@ -10,7 +10,6 @@
   "
   (eswitch (opcode)
     (+opcode-get-structure-local+ 3)
-    (+opcode-get-structure-stack+ 3)
     (+opcode-unify-variable-local+ 2)
     (+opcode-unify-variable-stack+ 2)
     (+opcode-unify-value-local+ 2)
@@ -21,7 +20,6 @@
     (+opcode-get-value-stack+ 3)
 
     (+opcode-put-structure-local+ 3)
-    (+opcode-put-structure-stack+ 3)
     (+opcode-set-variable-local+ 2)
     (+opcode-set-variable-stack+ 2)
     (+opcode-set-value-local+ 2)
@@ -41,7 +39,6 @@
   (:returns string)
   (eswitch (opcode)
     (+opcode-get-structure-local+ "GET-STRUCTURE")
-    (+opcode-get-structure-stack+ "GET-STRUCTURE")
     (+opcode-unify-variable-local+ "UNIFY-VARIABLE")
     (+opcode-unify-variable-stack+ "UNIFY-VARIABLE")
     (+opcode-unify-value-local+ "UNIFY-VALUE")
@@ -52,7 +49,6 @@
     (+opcode-get-value-stack+ "GET-VALUE")
 
     (+opcode-put-structure-local+ "PUT-STRUCTURE")
-    (+opcode-put-structure-stack+ "PUT-STRUCTURE")
     (+opcode-set-variable-local+ "SET-VARIABLE")
     (+opcode-set-variable-stack+ "SET-VARIABLE")
     (+opcode-set-value-local+ "SET-VALUE")
@@ -71,7 +67,6 @@
   (:returns string)
   (eswitch (opcode)
     (+opcode-get-structure-local+ "GETS")
-    (+opcode-get-structure-stack+ "GETS")
     (+opcode-unify-variable-local+ "UVAR")
     (+opcode-unify-variable-stack+ "UVAR")
     (+opcode-unify-value-local+ "UVLU")
@@ -82,7 +77,6 @@
     (+opcode-get-value-stack+ "GVLU")
 
     (+opcode-put-structure-local+ "PUTS")
-    (+opcode-put-structure-stack+ "PUTS")
     (+opcode-set-variable-local+ "SVAR")
     (+opcode-set-variable-stack+ "SVAR")
     (+opcode-set-value-local+ "SVLU")

@@ -415,10 +415,9 @@
       ('(:argument nil :program :stack) +opcode-get-value-stack+)
       ('(:argument nil :query   :local) +opcode-put-value-local+)
       ('(:argument nil :query   :stack) +opcode-put-value-stack+)
+      ;; Structures can only live locally, they never go on the stack
       ('(:structure nil :program :local) +opcode-get-structure-local+)
-      ('(:structure nil :program :stack) +opcode-get-structure-stack+)
       ('(:structure nil :query   :local) +opcode-put-structure-local+)
-      ('(:structure nil :query   :stack) +opcode-put-structure-stack+)
       ('(:register t   :program :local) +opcode-unify-variable-local+)
       ('(:register t   :program :stack) +opcode-unify-variable-stack+)
       ('(:register t   :query   :local) +opcode-set-variable-local+)

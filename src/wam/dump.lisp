@@ -143,24 +143,11 @@
           (second arguments)
           (pretty-functor (first arguments) functor-list)))
 
-(defmethod instruction-details ((opcode (eql +opcode-get-structure-stack+)) arguments functor-list)
-  (format nil "GETS~A ; Y~A = ~A"
-          (pretty-arguments arguments)
-          (second arguments)
-          (pretty-functor (first arguments) functor-list)))
-
 (defmethod instruction-details ((opcode (eql +opcode-put-structure-local+)) arguments functor-list)
   (format nil "PUTS~A ; X~A <- new ~A"
           (pretty-arguments arguments)
           (second arguments)
           (pretty-functor (first arguments) functor-list)))
-
-(defmethod instruction-details ((opcode (eql +opcode-put-structure-stack+)) arguments functor-list)
-  (format nil "PUTS~A ; Y~A <- new ~A"
-          (pretty-arguments arguments)
-          (second arguments)
-          (pretty-functor (first arguments) functor-list)))
-
 
 (defmethod instruction-details ((opcode (eql +opcode-get-variable-local+)) arguments functor-list)
   (format nil "GVAR~A ; X~A <- A~A"

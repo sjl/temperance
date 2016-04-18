@@ -162,13 +162,13 @@
 
 
 ;;;; Query Instructions
-(define-instructions (%put-structure-local %put-structure-stack)
+(define-instruction %put-structure-local
     ((wam wam)
      (functor functor-index)
      (register register-index))
   (->> (push-new-structure! wam)
     (nth-value 1)
-    (setf (%wam-register% wam register)))
+    (setf (wam-local-register wam register)))
   (push-new-functor! wam functor))
 
 (define-instructions (%set-variable-local %set-variable-stack)
@@ -203,12 +203,11 @@
 
 
 ;;;; Program Instructions
-;; TODO: do we really need both of these variants?
-(define-instructions (%get-structure-local %get-structure-stack)
+(define-instruction %get-structure-local
     ((wam wam)
      (functor functor-index)
      (register register-index))
-  (let* ((addr (deref wam (%wam-register% wam register)))
+  (let* ((addr (deref wam (wam-local-register wam register)))
          (cell (wam-heap-cell wam addr)))
     (cond
       ;; If the register points at a reference cell, we push two new cells onto
@@ -387,7 +386,6 @@
           (eswitch (opcode)
             ;; Query
             (+opcode-put-structure-local+  (instruction %put-structure-local 2))
-            (+opcode-put-structure-stack+  (instruction %put-structure-stack 2))
             (+opcode-set-variable-local+   (instruction %set-variable-local 1))
             (+opcode-set-variable-stack+   (instruction %set-variable-stack 1))
             (+opcode-set-value-local+      (instruction %set-value-local 1))
@@ -398,7 +396,6 @@
             (+opcode-put-value-stack+      (instruction %put-value-stack 2))
             ;; Program
             (+opcode-get-structure-local+  (instruction %get-structure-local 2))
-            (+opcode-get-structure-stack+  (instruction %get-structure-stack 2))
             (+opcode-unify-variable-local+ (instruction %unify-variable-local 1))
             (+opcode-unify-variable-stack+ (instruction %unify-variable-stack 1))
             (+opcode-unify-value-local+    (instruction %unify-value-local 1))
@@ -443,7 +440,6 @@
         (progn
           (eswitch (opcode)
             (+opcode-put-structure-local+  (instruction %put-structure-local 2))
-            (+opcode-put-structure-stack+  (instruction %put-structure-stack 2))
             (+opcode-set-variable-local+   (instruction %set-variable-local 1))
             (+opcode-set-variable-stack+   (instruction %set-variable-stack 1))
             (+opcode-set-value-local+      (instruction %set-value-local 1))
