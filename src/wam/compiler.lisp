@@ -254,7 +254,7 @@
 ;;; predicate any references to X will be point at the (unified) results instead
 ;;; of fresh ones (because they'll be compiled as `put_value` instead of
 ;;; `put_variable`).
-
+;;;
 ;;; But wait: don't we need to substitute into ALL the body terms, not just the
 ;;; first one?  Yes we do, but the trick is that any variables in the REST of
 ;;; the body that would need to be substituted must, by definition, be permanent
