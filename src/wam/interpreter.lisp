@@ -143,13 +143,56 @@
 
 
 ;;;; Instruction Definition
+;;; These macros are a pair of real greasy bastards.
+;;;
+;;; Basically the issue is that there exist two separate types of registers:
+;;; local registers and stack registers.  The process of retrieving the contents
+;;; of a register is different for each type.
+;;;
+;;; Certain machine instructions take a register as an argument and do something
+;;; with it.  Because the two register types require different access methods,
+;;; the instruction needs to know what kind of register it's dealing with.
+;;;
+;;; One possible way to solve this would be to encode whether this is
+;;; a local/stack register in the register argument itself (e.g. with a tag
+;;; bit).  This would work, and a previous version of the code did that, but
+;;; it's not ideal.  It turns out we know the type of the register at compile
+;;; time, so requiring a mask/test at run time for every register access is
+;;; wasteful.
+;;;
+;;; Instead we use an ugly, but fast, solution.  For every instruction that
+;;; takes a register argument we make TWO opcodes instead of just one.  The
+;;; first is the "-local" variant of the instruction, which treats its register
+;;; argument as a local register.  The second is the "-stack" variant.  When we
+;;; compile we can just pick the appropriate opcode, and now we no longer need
+;;; a runtime test for every single register assignment.
+;;;
+;;; To make the process of defining these two "variants" we have these two
+;;; macros.  `define-instruction` (singular) is just a little sugar around
+;;; `defun*`, for those instructions that don't deal with arguments.
+;;;
+;;; `define-instructions` (plural) is the awful one.  You pass it a pair of
+;;; symbols for the two variant names.  Two functions will be defined, both with
+;;; the same body, with the symbol `%wam-register%` macroletted to the
+;;; appropriate access code.  So in the body, instead of using
+;;; `(wam-{local/argument}-register wam register)` you just use
+;;; `(%wam-register% wam register)` and it'll do the right thing.
+
 (defmacro define-instruction (name lambda-list &body body)
+  "Define an instruction function.
+
+  This is just syntactic sugar over `defun*` that will add the `(returns :void)`
+  declaration for you, and also append a `(values)` to the end of the body to
+  make sure it actually does return void.
+
+  "
   `(defun* ,name ,lambda-list
      (:returns :void)
      ,@body
      (values)))
 
 (defmacro define-instructions ((local-name stack-name) lambda-list &body body)
+  "Define a local/stack pair of instructions."
   `(progn
     (macrolet ((%wam-register% (wam register)
                  `(wam-local-register ,wam ,register)))
