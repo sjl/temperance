@@ -431,7 +431,9 @@
 ;;;
 ;;; It turns:
 ;;;
-;;;   X2 <- q(X1, X3), X0 <- p(X1, X2), A3 <- X4
+;;;   X2 <- q(X1, X3)
+;;;   X0 <- p(X1, X2)
+;;;   A3 <- X4
 ;;;
 ;;; into something like:
 ;;;
@@ -442,12 +444,12 @@
   (mapcan
     (lambda (ass)
       ;; Take a single assignment like:
-      ;;   X1 = f(a, b, c)         (1 . (f a b c))
-      ;;   A0 = X5                 (0 . 5)
+      ;;   X1 = f(X4, Y1)         (X1 . (f X4 Y1))
+      ;;   A0 = X5                (A0 . X5)
       ;;
       ;; And turn it into a stream of tokens:
-      ;;   (X1 = f/3), a, b, c     ((:structure 1 f 3) a b c
-      ;;   (A0 = X5)                (:argument 0 5))
+      ;;   (X1 = f/2), X4, Y1      ((:structure X1 f 2) X4 Y1
+      ;;   (A0 = X5)                (:argument A0 X5))
       (if (register-assignment-p ass)
         ;; It might be a register assignment for an argument register.
         (destructuring-bind (argument-register . target-register) ass
