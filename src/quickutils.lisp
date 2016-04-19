@@ -2,7 +2,7 @@
 ;;;; See http://quickutil.org for details.
 
 ;;;; To regenerate:
-;;;; (qtlc:save-utils-as "quickutils.lisp" :utilities '(:DEFINE-CONSTANT :SET-EQUAL :CURRY :SWITCH :ENSURE-BOOLEAN :WHILE :UNTIL :TREE-MEMBER-P :TREE-COLLECT :WITH-GENSYMS :ZIP :ALIST-TO-HASH-TABLE :MAP-TREE) :ensure-package T :package "BONES.QUICKUTILS")
+;;;; (qtlc:save-utils-as "quickutils.lisp" :utilities '(:DEFINE-CONSTANT :SET-EQUAL :CURRY :SWITCH :ENSURE-BOOLEAN :WHILE :UNTIL :TREE-MEMBER-P :TREE-COLLECT :WITH-GENSYMS :ZIP :ALIST-TO-HASH-TABLE :MAP-TREE :RANGE) :ensure-package T :package "BONES.QUICKUTILS")
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (unless (find-package "BONES.QUICKUTILS")
@@ -20,7 +20,7 @@
                                          :SWITCH :ENSURE-BOOLEAN :UNTIL :WHILE
                                          :TREE-MEMBER-P :TREE-COLLECT
                                          :TRANSPOSE :ZIP :ALIST-TO-HASH-TABLE
-                                         :MAP-TREE))))
+                                         :MAP-TREE :RANGE))))
 
   (defun %reevaluate-constant (name value test)
     (if (not (boundp name))
@@ -288,9 +288,17 @@ tuples. Equivalent to `unzip`."
                         (rec (cdr tree)))))))
       (rec tree)))
   
+
+  (defun range (start end &key (step 1) (key 'identity))
+    "Return the list of numbers `n` such that `start <= n < end` and
+`n = start + k*step` for suitable integers `k`. If a function `key` is
+provided, then apply it to each number."
+    (assert (<= start end))
+    (loop :for i :from start :below end :by step :collecting (funcall key i)))
+  
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (export '(define-constant set-equal curry switch eswitch cswitch
             ensure-boolean while until tree-member-p tree-collect with-gensyms
-            with-unique-names zip alist-to-hash-table map-tree)))
+            with-unique-names zip alist-to-hash-table map-tree range)))
 
 ;;;; END OF quickutils.lisp ;;;;

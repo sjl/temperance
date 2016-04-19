@@ -182,8 +182,8 @@
 (defmethod instruction-details ((opcode (eql +opcode-put-variable-stack+)) arguments functor-list)
   (format nil "PVAR~A ; Y~A <- A~A <- new unbound REF"
           (pretty-arguments arguments)
-          (second arguments)
-          (first arguments)))
+          (first arguments)
+          (second arguments)))
 
 (defmethod instruction-details ((opcode (eql +opcode-put-value-local+)) arguments functor-list)
   (format nil "PVLU~A ; A~A <- X~A"
@@ -205,56 +205,41 @@
 
 
 (defun dump-code-store (wam code-store
-                            &optional
-                            (from 0)
-                            (to (length code-store)))
-  (let ((addr from)
+                        &optional
+                        (from 0)
+                        (to (length code-store)))
+  ;; This is a little trickier than might be expected.  We have to walk from
+  ;; address 0 no matter what `from` we get, because instruction sizes vary and
+  ;; aren't aligned.  So if we just start at `from` we might start in the middle
+  ;; of an instruction and everything would be fucked.
+  (let ((addr 0)
         (lbls (bones.utils::invert-hash-table (wam-code-labels wam)))) ; oh god
     (while (< addr to)
-      (let ((lbl (gethash addr lbls))) ; forgive me
-        (when lbl
-          (format t ";;;; BEGIN ~A~%"
-                  (pretty-functor lbl (wam-functors wam)))))
-      (format t ";~A~4,'0X: "
-              (if (= (wam-program-counter wam) addr)
-                ">>"
-                "  ")
-              addr)
       (let ((instruction (retrieve-instruction code-store addr)))
-        (format t "~A~%" (instruction-details (aref instruction 0)
-                                              (rest (coerce instruction 'list))
-                                              (wam-functors wam)))
+        (when (>= addr from)
+          (let ((lbl (gethash addr lbls))) ; forgive me
+            (when lbl
+              (format t ";;;; BEGIN ~A~%"
+                      (pretty-functor lbl (wam-functors wam)))))
+          (format t ";~A~4,'0X: "
+                  (if (= (wam-program-counter wam) addr)
+                    ">>"
+                    "  ")
+                  addr)
+          (format t "~A~%" (instruction-details (aref instruction 0)
+                                                (rest (coerce instruction 'list))
+                                                (wam-functors wam))))
         (incf addr (length instruction))))))
 
 (defun dump-code
     (wam
      &optional
-     (from (max (- (wam-program-counter wam) 4) ; wow
+     (from (max (- (wam-program-counter wam) 8) ; wow
                 0)) ; this
-     (to (min (+ (wam-program-counter wam) 6) ; is
+     (to (min (+ (wam-program-counter wam) 12) ; is
               (length (wam-code wam))))) ; bad
   (format t "CODE~%")
   (dump-code-store wam (wam-code wam) from to))
-
-
-(defun extract-thing (wam address)
-  "Extract the thing at the given heap address."
-  (let ((cell (wam-heap-cell wam (deref wam address))))
-    (cond
-      ((cell-null-p cell)
-       "NULL!")
-      ((cell-reference-p cell)
-       ;; TODO: figure out what the hell to return here
-       (gensym (format nil "var@~4,'0X-" (cell-value cell))))
-      ((cell-structure-p cell)
-       (extract-thing wam (cell-value cell)))
-      ((cell-functor-p cell)
-       (destructuring-bind (functor . arity)
-           (wam-functor-lookup wam (cell-functor-index cell))
-         (list* functor
-                (loop :for i :from (1+ address) :to (+ address arity)
-                      :collect (extract-thing wam i)))))
-      (t (error "What to heck is this?")))))
 
 
 (defun dump-wam-registers (wam)
@@ -269,7 +254,7 @@
                     (format nil "X~D" i)
                     reg
                     (cell-aesthetic contents)
-                    (format nil "; ~A" (extract-thing wam reg)))))
+                    (format nil "; ~A" (first (extract-things wam (list reg)))))))
 
 (defun dump-wam-functors (wam)
   (format t " FUNCTORS: ~S~%" (wam-functors wam)))

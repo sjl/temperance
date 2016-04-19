@@ -246,58 +246,59 @@
 
 
 ;;;; Program Instructions
-(define-instruction %get-structure-local
-    ((wam wam)
-     (functor functor-index)
-     (register register-index))
-  (let* ((addr (deref wam (wam-local-register wam register)))
-         (cell (wam-heap-cell wam addr)))
-    (cond
-      ;; If the register points at a reference cell, we push two new cells onto
-      ;; the heap:
-      ;;
-      ;;     |   N | STR | N+1 |
-      ;;     | N+1 | FUN | f/n |
-      ;;
-      ;; Then we bind this reference cell to point at the new structure and flip
-      ;; over to write mode.
-      ;;
-      ;; It seems a bit confusing that we don't push the rest of the structure
-      ;; stuff on the heap after it too.  But that's going to happen in the next
-      ;; few instructions (which will be unify-*'s, executed in write mode).
-      ((cell-reference-p cell)
-       (let ((new-structure-address (nth-value 1 (push-new-structure! wam))))
-         (push-new-functor! wam functor)
-         (bind! wam addr new-structure-address)
-         (setf (wam-mode wam) :write)))
+(define-instruction %get-structure-local ((wam wam)
+                                          (functor functor-index)
+                                          (register register-index))
+  (with-accessors ((mode wam-mode) (s wam-s)) wam
+    (let* ((addr (deref wam (wam-local-register wam register)))
+           (cell (wam-heap-cell wam addr)))
+      (cond
+        ;; If the register points at a reference cell, we push two new cells onto
+        ;; the heap:
+        ;;
+        ;;     |   N | STR | N+1 |
+        ;;     | N+1 | FUN | f/n |
+        ;;     |     |     |     | <- S
+        ;;
+        ;; Then we bind this reference cell to point at the new structure, set the
+        ;; S register to point beneath it and flip over to write mode.
+        ;;
+        ;; It seems a bit confusing that we don't push the rest of the structure
+        ;; stuff on the heap after it too.  But that's going to happen in the next
+        ;; few instructions (which will be unify-*'s, executed in write mode).
+        ((cell-reference-p cell)
+         (let ((structure-address (nth-value 1 (push-new-structure! wam)))
+               (functor-address (push-new-functor! wam functor)))
+           (bind! wam addr structure-address)
+           (setf mode :write
+                 s (1+ functor-address))))
 
-      ;; If the register points at a structure cell, then we look at where that
-      ;; cell points (which will be the functor cell for the structure):
-      ;;
-      ;;     |   N | STR | M   | points at the structure, not necessarily contiguous
-      ;;     |       ...       |
-      ;;     |   M | FUN | f/2 | the functor (hopefully it matches)
-      ;;     | M+1 | ... | ... | pieces of the structure, always contiguous
-      ;;     | M+2 | ... | ... | and always right after the functor
-      ;;
-      ;; If it matches the functor we're looking for, we can proceed.  We set
-      ;; the S register to the address of the first subform we need to match
-      ;; (M+1 in the example above).
-      ;;
-      ;; What about if it's a 0-arity functor?  The S register will be set to
-      ;; garbage.  But that's okay, because we know the next thing in the stream
-      ;; of instructions will be another get-structure and we'll just blow away
-      ;; the S register there.
-      ((cell-structure-p cell)
-       (let* ((functor-addr (cell-value cell))
-              (functor-cell (wam-heap-cell wam functor-addr)))
-         (if (matching-functor-p functor-cell functor)
-           (progn
-             (setf (wam-s wam) (1+ functor-addr))
-             (setf (wam-mode wam) :read))
-           (fail! wam "Functors don't match in get-struct"))))
-      (t (fail! wam (format nil "get-struct on a non-ref/struct cell ~A"
-                            (cell-aesthetic cell)))))))
+        ;; If the register points at a structure cell, then we look at where that
+        ;; cell points (which will be the functor cell for the structure):
+        ;;
+        ;;     |   N | STR | M   | points at the structure, not necessarily contiguous
+        ;;     |       ...       |
+        ;;     |   M | FUN | f/2 | the functor (hopefully it matches)
+        ;;     | M+1 | ... | ... | pieces of the structure, always contiguous
+        ;;     | M+2 | ... | ... | and always right after the functor
+        ;;
+        ;; If it matches the functor we're looking for, we can proceed.  We set
+        ;; the S register to the address of the first subform we need to match
+        ;; (M+1 in the example above).
+        ;;
+        ;; What about if it's a 0-arity functor?  The S register will be set to
+        ;; garbage.  But that's okay, because we know the next thing in the stream
+        ;; of instructions will be another get-structure and we'll just blow away
+        ;; the S register there.
+        ((cell-structure-p cell)
+         (let* ((functor-addr (cell-value cell))
+                (functor-cell (wam-heap-cell wam functor-addr)))
+           (if (matching-functor-p functor-cell functor)
+             (setf s (1+ functor-addr)
+                   mode :read)
+             (fail! wam "Functors don't match in get-struct"))))
+        (t (fail! wam (format nil "get-struct on a non-ref/struct cell ~A"
+                              (cell-aesthetic cell))))))))
 
 (define-instructions (%unify-variable-local %unify-variable-stack)
     ((wam wam)
@@ -385,33 +386,58 @@
             :collect `(aref ,code-store (+ ,pc ,i)))))
 
 
-(defun extract-query-results (wam goal)
-  ;; TODO: rehaul this
-  (let ((results (list)))
-    (labels ((recur (original result)
-               (cond
-                 ((and (variable-p original)
-                       (not (assoc original results)))
-                  (push (cons original
-                              (match result
-                                (`(,bare-functor) bare-functor)
-                                (r r)))
-                        results))
-                 ((consp original)
-                  (recur (car original) (car result))
-                  (recur (cdr original) (cdr result)))
-                 (t nil))))
-      (loop :for argument :in (cdr goal)
-            :for a :from 0
-            :do (recur argument
-                       (extract-thing
-                         wam
-                         ;; results are stored in local (argument) registers
-                         (wam-local-register wam a)))))
-    results))
+(defun extract-things (wam addresses)
+  "Extract the things at the given heap addresses.
+
+  The things will be returned in the same order as the addresses were given.
+
+  Unbound variables will be turned into uninterned symbols.  There will only be
+  one such symbol for any specific unbound var, so if two addresses are
+  (eventually) bound to the same unbound var, the symbols returned from this
+  function will be `eql`.
+
+  "
+  (let ((unbound-vars (list)))
+    (labels
+        ((mark-unbound-var (address)
+           (let ((symbol (make-symbol (format nil "var-~D" ; lol
+                                              (length unbound-vars)))))
+             (car (push (cons address symbol) unbound-vars))))
+         (extract-var (address)
+           (cdr (or (assoc address unbound-vars)
+                    (mark-unbound-var address))))
+         (recur (address)
+           (let ((cell (wam-heap-cell wam (deref wam address))))
+             (cond
+               ((cell-null-p cell) "NULL?!")
+               ((cell-reference-p cell) (extract-var (cell-value cell)))
+               ((cell-structure-p cell) (recur (cell-value cell)))
+               ((cell-functor-p cell)
+                (destructuring-bind (functor . arity)
+                    (wam-functor-lookup wam (cell-functor-index cell))
+                  (if (zerop arity)
+                    functor
+                    (list* functor
+                           (mapcar #'recur
+                                   (range (+ address 1)
+                                          (+ address arity 1)))))))
+               (t (error "What to heck is this?"))))))
+      (mapcar #'recur addresses))))
+
+(defun extract-query-results (wam vars)
+  ""
+  (let* ((addresses (loop :for var :in vars
+                          :for i :from 0
+                          :collect (wam-stack-frame-arg wam i 0)))
+         (results (extract-things wam addresses)))
+    (pairlis vars results)))
+
+(defun print-query-results (results)
+  (loop :for (var . result) :in results :do
+        (format t "~S = ~S~%" var result)))
 
 
-(defun run-program (wam &optional (step nil))
+(defun run (wam &optional (step nil))
   (with-slots (code program-counter fail) wam
     (macrolet ((instruction (inst args)
                  `(instruction-call wam ,inst code program-counter ,args)))
@@ -458,7 +484,7 @@
               (instruction %call 1)
               (return-from op))
             (+opcode-done+
-              (return-from run-program)))
+              (return-from run)))
           (incf program-counter (instruction-size opcode))
           (when (>= program-counter (fill-pointer code))
             (error "Fell off the end of the program code store!")))))
@@ -473,18 +499,21 @@
   after each instruction.
 
   "
-  (let ((code (compile-query wam term)))
+  (multiple-value-bind (code vars)
+      (compile-query wam term)
     (wam-reset! wam)
     (wam-load-query-code! wam code)
     (setf (wam-program-counter wam) 0
           (wam-continuation-pointer wam) +code-sentinal+)
     (when step
       (format *debug-io* "Built query code:~%")
-      (dump-code-store wam code)))
-  (run-program wam step)
-  (if (wam-fail wam)
-    (princ "No.")
-    (princ "Yes."))
+      (dump-code-store wam code))
+    (run wam step)
+    (if (wam-fail wam)
+      (princ "No.")
+      (progn
+        (print-query-results (extract-query-results wam vars))
+        (princ "Yes."))))
   (values))
 
 

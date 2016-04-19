@@ -15,5 +15,6 @@
                :zip
                :alist-to-hash-table
                :map-tree
+               :range
                )
   :package "BONES.QUICKUTILS")

@@ -538,7 +538,6 @@
       ('(:register nil :query   :local) +opcode-set-value-local+)
       ('(:register nil :query   :stack) +opcode-set-value-stack+))))
 
-
 (defun compile-tokens (wam head-tokens body-tokens store)
   "Generate a series of machine instructions from a stream of head and body
   tokens.
@@ -605,21 +604,22 @@
       (handle-stream body-tokens))))
 
 
-
 ;;;; UI
+(defun find-variables (terms)
+  "Return the set of variables in `terms`."
+  (remove-duplicates (tree-collect #'variable-p terms)))
+
 (defun find-shared-variables (terms)
-  "Return a list of all variables shared by two or more terms."
-  (let* ((variables (remove-duplicates (tree-collect #'variable-p terms))))
-    (labels
-        ((count-uses (variable)
-           (count-if (curry #'tree-member-p variable)
-                     terms))
-         (shared-p (variable)
-           (> (count-uses variable) 1)))
-      (remove-if-not #'shared-p variables))))
+  "Return the set of all variables shared by two or more terms."
+  (labels
+      ((count-uses (variable)
+         (count-if (curry #'tree-member-p variable) terms))
+       (shared-p (variable)
+         (> (count-uses variable) 1)))
+    (remove-if-not #'shared-p (find-variables terms))))
 
 (defun find-permanent-variables (clause)
-  "Return a list of all the 'permanent' variables in `clause`.
+  "Return a list of all the permanent variables in `clause`.
 
   Permanent variables are those that appear in more than one goal of the clause,
   where the head of the clause is considered to be a part of the first goal.
@@ -655,14 +655,20 @@
 
 
 (defun compile-clause (wam store head body)
-  "Compile the clause into the given store array.
+  "Compile the clause directly into `store` and return the permanent variables.
 
-  `head` should be the head of the clause for program clauses, or may be `nil`
-  for query clauses.
+  `head` should be the head of the clause for program clauses, or `nil` for
+  query clauses.
+
+  `body` is the body of the clause, or `nil` for facts.
 
   "
   (let* ((permanent-variables
-           (find-permanent-variables (cons head body)))
+           (if (null head)
+             ;; For query clauses we cheat a bit and make ALL variables
+             ;; permanent, so we can extract their bindings as results later.
+             (find-variables body)
+             (find-permanent-variables (cons head body))))
          (head-variables
            (set-difference (find-head-variables (cons head body))
                            permanent-variables))
@@ -699,26 +705,35 @@
         ((and head (null body)) ; a bare fact
          (compile%)
          (code-push-instruction! store +opcode-proceed+))
-        (t ; just a query
-         (compile%)))))
-  (values))
+        (t ; a query
+         ;; The book doesn't have this ALOC here, but we do it to aid in result
+         ;; extraction.  Basically, to make extracting th results of a query
+         ;; easier we allocate all of its variables on the stack, so we need
+         ;; push a stack frame for them before we get started.  We don't DEAL
+         ;; because we want the frame to be left on the stack at the end so we
+         ;; can poke at it.
+         (code-push-instruction! store +opcode-allocate+ (length permanent-variables))
+         (compile%)
+         (code-push-instruction! store +opcode-done+))))
+    permanent-variables))
 
 (defun compile-query (wam query)
   "Compile `query` into a fresh array of bytecode.
 
   `query` should be a list of goal terms.
 
+  Returns the fresh code array and the permanent variables.
+
   "
-  (let ((store (make-query-code-store)))
-    (compile-clause wam store nil query)
-    (code-push-instruction! store +opcode-done+)
-    store))
+  (let* ((store (make-query-code-store))
+         (permanent-variables (compile-clause wam store nil query)))
+    (values store permanent-variables)))
 
 (defun compile-program (wam rule)
   "Compile `rule` into the WAM's code store.
 
   `rule` should be a clause consisting of a head term and zero or more body
-  terms.  A rule with no body is also called a \"fact\".
+  terms.  A rule with no body is called a fact.
 
   "
   (compile-clause wam (wam-code wam) (first rule) (rest rule))
