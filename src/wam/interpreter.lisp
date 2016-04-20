@@ -59,6 +59,51 @@
      (cell-value functor-cell-2)))
 
 
+;;;; "Ancillary" Functions
+(defun* backtrack! ((wam wam) (reason string))
+  (:returns :void)
+  "Backtrack after a failure.
+
+  If `*break-on-fail*` is true, the debugger will be invoked.
+
+  "
+  (when *break-on-fail*
+    (break "FAIL: ~A" reason))
+  (if (zerop (wam-backtrack-pointer wam))
+    (setf (wam-fail wam) t)
+    (setf (wam-program-counter wam) (wam-stack-choice-bp wam)
+          (wam-backtracked wam) t))
+  (values))
+
+(defun* trail! ((wam wam) (address heap-index))
+  (:returns :void)
+  "Push the given address onto the trail (but only if necessary)."
+  (when (< address (wam-heap-backtrack-pointer wam))
+    (wam-trail-push! wam address))
+  (values))
+
+(defun* unbind! ((wam wam) (address heap-index))
+  (:returns :void)
+  "Unbind the reference cell at `address`.
+
+  No error checking is done, so please don't try to unbind something that's not
+  a reference cell.
+
+  "
+  (setf (wam-heap-cell wam address)
+        (make-cell-reference address))
+  (values))
+
+(defun* unwind-trail! ((wam wam)
+                       (trail-start trail-index)
+                       (trail-end trail-index))
+  (:returns :void)
+  "Unbind all the things in the given range of the trail."
+  ;; TODO: seriously can't we just pop back to a certain place?
+  (loop :for i :from trail-start :below trail-end :do
+        (unbind! wam (wam-trail-value wam i)))
+  (values))
+
 (defun* deref ((wam wam) (address heap-index))
   (:returns heap-index)
   "Dereference the address in the WAM to its eventual destination.
@@ -85,27 +130,19 @@
 
   "
   (cond
+    ;; a1 <- a2
     ((unbound-reference-p wam address-1)
      (setf (wam-heap-cell wam address-1)
-           (make-cell-reference address-2)))
+           (make-cell-reference address-2))
+     (trail! wam address-1))
+    ;; a2 <- 1a
     ((unbound-reference-p wam address-2)
      (setf (wam-heap-cell wam address-2)
-           (make-cell-reference address-1)))
+           (make-cell-reference address-1))
+     (trail! wam address-2))
+    ;; wut
     (t (error "At least one cell must be an unbound reference when binding.")))
   (values))
-
-(defun* fail! ((wam wam) (reason string))
-  (:returns :void)
-  "Mark a failure in the WAM.
-
-  If `*break-on-fail*` is true, the debugger will be invoked.
-
-  "
-  (setf (wam-fail wam) t)
-  (when *break-on-fail*
-    (break "FAIL: ~A~%" reason))
-  (values))
-
 
 (defun* unify! ((wam wam) (a1 heap-index) (a2 heap-index))
   (wam-unification-stack-push! wam a1)
@@ -139,7 +176,7 @@
                       (wam-unification-stack-push! wam (+ structure-1-addr i))
                       (wam-unification-stack-push! wam (+ structure-2-addr i)))
                 ;; Otherwise we're hosed.
-                (fail! wam "Functors don't match in unify!")))))))))
+                (backtrack! wam "Functors don't match in unify!")))))))))
 
 
 ;;;; Instruction Definition
@@ -296,9 +333,9 @@
            (if (matching-functor-p functor-cell functor)
              (setf s (1+ functor-addr)
                    mode :read)
-             (fail! wam "Functors don't match in get-struct"))))
-        (t (fail! wam (format nil "get-struct on a non-ref/struct cell ~A"
-                              (cell-aesthetic cell))))))))
+             (backtrack! wam "Functors don't match in get-struct"))))
+        (t (backtrack! wam (format nil "get-struct on a non-ref/struct cell ~A"
+                                   (cell-aesthetic cell))))))))
 
 (define-instructions (%unify-variable-local %unify-variable-stack)
     ((wam wam)
@@ -344,27 +381,29 @@
 (define-instruction %call ((wam wam) (functor functor-index))
   (let ((target (wam-code-label wam functor)))
     (if target
-      (progn
-        (setf (wam-continuation-pointer wam) ; CP <- next instruction
-              (+ (wam-program-counter wam)
-                 (instruction-size +opcode-call+))
-              (wam-program-counter wam) ; PC <- target
-              target))
-      (fail! wam "Tried to call unknown procedure."))))
+      (setf (wam-continuation-pointer wam) ; CP <- next instruction
+            (+ (wam-program-counter wam)
+               (instruction-size +opcode-call+))
+
+            (wam-nargs wam) ; set NARGS
+            (wam-functor-arity wam functor)
+
+            (wam-program-counter wam) ; jump
+            target)
+      (backtrack! wam "Tried to call unknown procedure."))))
 
 (define-instruction %proceed ((wam wam))
   (setf (wam-program-counter wam) ; P <- CP
         (wam-continuation-pointer wam)))
 
 (define-instruction %allocate ((wam wam) (n stack-frame-argcount))
-  ;; Use the slots directly here for speed.  I know this sucks.  I'm sorry.
+  ;; We use the slots directly here for speed.  I know this sucks.  I'm sorry.
   (with-slots (stack environment-pointer) wam
-    (let* ((old-e environment-pointer)
-           (new-e (+ old-e (wam-stack-frame-size wam old-e))))
+    (let ((new-e (wam-stack-top wam)))
       (wam-stack-ensure-size! wam (+ new-e 3 n))
-      (setf (aref stack new-e) old-e ; E
-            (aref stack (+ new-e 1) (wam-continuation-pointer wam)) ; CP
-            (aref stack (+ new-e 2) n) ; N
+      (setf (aref stack new-e) environment-pointer ; CE
+            (aref stack (+ new-e 1)) (wam-continuation-pointer wam) ; CP
+            (aref stack (+ new-e 2)) n ; N
             environment-pointer new-e)))) ; E <- new-e
 
 (define-instruction %deallocate ((wam wam))
@@ -372,6 +411,60 @@
         (wam-stack-frame-cp wam)
         (wam-environment-pointer wam)
         (wam-stack-frame-ce wam)))
+
+
+;;;; Choice Instructions
+(define-instruction %try ((wam wam) (next-clause code-index))
+  (with-slots (stack backtrack-pointer) wam
+    (let ((new-b (wam-stack-top wam))
+          (nargs (wam-nargs wam)))
+      (wam-stack-ensure-size! wam (+ new-b 7 nargs))
+      (setf (aref stack new-b) nargs ; N
+            (aref stack (+ new-b 1)) (wam-environment-pointer wam) ; CE
+            (aref stack (+ new-b 2)) (wam-continuation-pointer wam) ; CP
+            (aref stack (+ new-b 3)) (wam-backtrack-pointer wam) ; CB
+            (aref stack (+ new-b 4)) next-clause ; BP
+            (aref stack (+ new-b 5)) (wam-trail-pointer wam) ; TR
+            (aref stack (+ new-b 6)) (wam-heap-pointer wam) ; H
+            (wam-heap-backtrack-pointer wam) (wam-heap-pointer wam) ; HB
+            (wam-backtrack-pointer wam) new-b) ; B
+      (loop :for i :from 0 :below nargs :do ; A_i
+            (setf (wam-stack-choice-arg wam i new-b)
+                  (wam-local-register wam i))))))
+
+(define-instruction %retry ((wam wam) (next-clause code-index))
+  (let ((b (wam-backtrack-pointer wam)))
+    ;; Restore argument registers
+    (loop :for i :from 0 :below (wam-stack-choice-n wam b) :do
+          (setf (wam-local-register wam i)
+                (wam-stack-choice-arg wam i b)))
+    (unwind-trail! wam (wam-stack-choice-tr wam b) (wam-trail-pointer wam))
+    (setf (wam-environment-pointer wam) (wam-stack-choice-ce wam b)
+          (wam-continuation-pointer wam) (wam-stack-choice-cp wam b)
+          ;; overwrite the next clause address in the choice point
+          (aref (wam-stack wam) (+ b 4)) next-clause
+          (wam-trail-pointer wam) (wam-stack-choice-tr wam b)
+          (wam-heap-pointer wam) (wam-stack-choice-h wam b)
+          (wam-heap-backtrack-pointer wam) (wam-heap-pointer wam))))
+
+(define-instruction %trust ((wam wam))
+  (let ((b (wam-backtrack-pointer wam)))
+    ;; Restore argument registers
+    (loop :for i :from 0 :below (wam-stack-choice-n wam b) :do
+          (setf (wam-local-register wam i)
+                (wam-stack-choice-arg wam i b)))
+    (unwind-trail! wam (wam-stack-choice-tr wam b) (wam-trail-pointer wam))
+    (setf (wam-environment-pointer wam) (wam-stack-choice-ce wam b)
+          (wam-continuation-pointer wam) (wam-stack-choice-cp wam b)
+          (wam-trail-pointer wam) (wam-stack-choice-tr wam b)
+          (wam-heap-pointer wam) (wam-stack-choice-h wam b)
+          (wam-backtrack-pointer wam) (wam-stack-choice-cb wam b)
+          ;; Note that this last one uses the NEW value of b, so the heap
+          ;; backtrack pointer gets set to the heap pointer saved in the
+          ;; PREVIOUS choice point.
+          ;;
+          ;; TODO: What if we just popped off the last stack frame?
+          (wam-heap-backtrack-pointer wam) (wam-stack-choice-h wam))))
 
 
 ;;;; Running
@@ -429,7 +522,7 @@
 (defun extract-query-results (wam vars)
   (let* ((addresses (loop :for var :in vars
                           :for i :from 0
-                          :collect (wam-stack-frame-arg wam i 0)))
+                          :collect (wam-stack-frame-arg wam i)))
          (results (extract-things wam addresses)))
     (pairlis vars results)))
 
@@ -439,7 +532,7 @@
 
 
 (defun run (wam &optional (step nil))
-  (with-slots (code program-counter fail) wam
+  (with-slots (code program-counter fail backtrack) wam
     (macrolet ((instruction (inst args)
                  `(instruction-call wam ,inst code program-counter ,args)))
       (loop
@@ -449,6 +542,7 @@
         :do
         (block op
           (when step
+            (dump) ; todo: make this saner
             (break "About to execute instruction at ~4,'0X" program-counter))
           (eswitch (opcode)
             ;; Query
@@ -471,6 +565,10 @@
             (+opcode-get-variable-stack+   (instruction %get-variable-stack 2))
             (+opcode-get-value-local+      (instruction %get-value-local 2))
             (+opcode-get-value-stack+      (instruction %get-value-stack 2))
+            ;; Choice
+            (+opcode-try+                  (instruction %try 1))
+            (+opcode-retry+                (instruction %retry 1))
+            (+opcode-trust+                (instruction %trust 0))
             ;; Control
             (+opcode-allocate+             (instruction %allocate 1))
             ;; need to skip the PC increment for PROC/CALL/DEAL/DONE
@@ -486,7 +584,10 @@
               (return-from op))
             (+opcode-done+
               (return-from run)))
-          (incf program-counter (instruction-size opcode))
+          ;; Only increment the PC when we didn't backtrack
+          (if (wam-backtracked wam)
+            (setf (wam-backtracked wam) nil)
+            (incf program-counter (instruction-size opcode)))
           (when (>= program-counter (fill-pointer code))
             (error "Fell off the end of the program code store!")))))
     (values)))

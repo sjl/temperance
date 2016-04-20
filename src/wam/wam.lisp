@@ -53,6 +53,11 @@
      :initform nil
      :type boolean
      :documentation "The failure register.")
+   (backtracked
+     :accessor wam-backtracked
+     :initform nil
+     :type boolean
+     :documentation "The backtracked register.")
    (unification-stack
      :reader wam-unification-stack
      :initform (make-array 16
@@ -131,6 +136,9 @@
   "Return the current heap pointer of the WAM."
   (fill-pointer (wam-heap wam)))
 
+(defun (setf wam-heap-pointer) (new-value wam)
+  (setf (fill-pointer (wam-heap wam)) new-value))
+
 
 (defun* wam-heap-cell ((wam wam) (address heap-index))
   (:returns heap-cell)
@@ -146,6 +154,10 @@
   (:returns trail-index)
   "Return the current trail pointer of the WAM."
   (fill-pointer (wam-trail wam)))
+
+(defun (setf wam-trail-pointer) (new-value wam)
+  (setf (fill-pointer (wam-trail wam)) new-value))
+
 
 (defun* wam-trail-push! ((wam wam) (address heap-index))
   (:returns (values heap-index trail-index))
@@ -164,11 +176,25 @@
   "Pop the top address off the trail and return it."
   (vector-pop (wam-trail wam)))
 
+(defun* wam-trail-value ((wam wam) (address trail-index))
+  ;; TODO: can we really not just pop, or is something else gonna do something
+  ;; fucky with the trail?
+  (:returns heap-index)
+  "Return the element (a heap index) in the WAM trail at `address`."
+  (aref (wam-trail wam) address))
+
 
 ;;;; Stack
+;;; The stack is stored as a big ol' hunk of memory in a Lisp array with one
+;;; small glitch: we reserve the first word of the stack (address 0) to mean
+;;; "uninitialized", so we have a nice sentinal value for the various pointers
+;;; into the stack.
+
 (defun* wam-stack-word ((wam wam) (address stack-index))
   (:returns stack-word)
   "Return the stack word at the given address."
+  (assert (not (zerop address)) (address)
+          "Cannot write to stack address zero.")
   (aref (wam-stack wam) address))
 
 (defun (setf wam-stack-word) (new-value wam address)
@@ -365,6 +391,25 @@
   (+ (wam-stack-choice-n wam b) 7))
 
 
+(defun* wam-stack-top ((wam wam))
+  (:returns stack-index)
+  "Return the top of the stack.
+
+  This is the first place it's safe to overwrite in the stack.
+
+  "
+  ;; The book is wrong here -- it looks up the "current frame size" to
+  ;; determine where the next frame should start, but on the first allocation
+  ;; there IS no current frame so it looks at garbage.  Fuckin' great.
+  (with-slots ((e environment-pointer) (b backtrack-pointer)) wam
+    (cond
+      ((= 0 b e) 1) ; first allocation
+      ((> e b) ; the last thing on the stack is a frame
+       (+ e (wam-stack-frame-size wam e)))
+      (t ; the last thing on the stack is a choice point
+       (+ b (wam-stack-choice-size wam b))))))
+
+
 ;;;; Resetting
 (defun* wam-truncate-heap! ((wam wam))
   (setf (fill-pointer (wam-heap wam)) 0))
@@ -383,7 +428,6 @@
 
 (defun* wam-reset! ((wam wam))
   (wam-truncate-heap! wam)
-  (wam-truncate-stack! wam)
   (wam-truncate-trail! wam)
   (wam-truncate-unification-stack! wam)
   (wam-reset-local-registers! wam)

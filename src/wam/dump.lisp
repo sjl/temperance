@@ -69,38 +69,70 @@
                    (e wam-environment-pointer)
                    (b wam-backtrack-pointer))
       wam
-    (when (not (= e b)) ; lame way to check for an empty stack...
-      (loop :with n = nil
-            :with limit = (max (+ e 3) (+ b 7))
+    (when (not (= 0 e b))
+      (loop :with nargs = nil
+            :with limit = (max (+ e 3) (+ b 7 2)) ; todo fix this limiting
             :with arg = 0
-            :for addr :from 0 :to limit
+            :with currently-in = nil
+            :for addr :from 0 :below limit
             :for cell = (aref (wam-stack wam) addr)
             :for offset = 0 :then (1+ offset)
             :do
+            (when (not (zerop addr))
+              (switch (addr :test #'=)
+                (e (setf currently-in :frame offset 0 arg 0))
+                (b (setf currently-in :choice offset 0 arg 0))))
             (format t "  | ~4,'0X | ~8,'0X | ~30A|~A~A~%"
                     addr
                     cell
-                    (cond
-                      ((= offset 0) "CE ===========================")
-                      ((= offset 1) "CP")
-                      ((= offset 2)
-                       (if (zerop cell)
-                         (progn
-                           (setf offset -1)
-                           "N: EMPTY")
-                         (progn
-                           (setf n cell)
-                           (format nil "N: ~D" cell))))
-                      ((< arg n)
-                       (prog1
-                           (format nil " Y~D: ~4,'0X"
-                                   arg
-                                   ;; look up the actual cell in the heap
-                                   (cell-aesthetic (wam-heap-cell wam cell)))
-                         (when (= n (incf arg))
-                           (setf offset -1
-                                 n nil
-                                 arg 0)))))
+                    (case currently-in ; jesus christ this needs to get fixed
+                      (:frame
+                       (cond
+                         ((= addr 0) "")
+                         ((= offset 0) "CE ===========================")
+                         ((= offset 1) "CP")
+                         ((= offset 2)
+                          (if (zerop cell)
+                            (progn
+                              (setf currently-in nil)
+                              "N: EMPTY")
+                            (progn
+                              (setf nargs cell)
+                              (format nil "N: ~D" cell))))
+                         ((< arg nargs)
+                          (prog1
+                              (format nil " Y~D: ~4,'0X"
+                                      arg
+                                      ;; look up the actual cell in the heap
+                                      (cell-aesthetic (wam-heap-cell wam cell)))
+                            (when (= nargs (incf arg))
+                              (setf currently-in nil))))))
+                      (:choice ; sweet lord make it stop
+                       (cond
+                         ((= addr 0) "")
+                         ((= offset 0)
+                          (if (zerop cell)
+                            (progn
+                              (setf currently-in nil)
+                              "N: EMPTY =================")
+                            (progn
+                              (setf nargs cell)
+                              (format nil "N: ~D =============" cell))))
+                         ((= offset 1) "CE saved env pointer")
+                         ((= offset 2) "CP saved cont pointer")
+                         ((= offset 3) "CB previous choice")
+                         ((= offset 4) "BP next clause")
+                         ((= offset 5) "TR saved trail pointer")
+                         ((= offset 6) "H  saved heap pointer")
+                         ((< arg nargs)
+                          (prog1
+                              (format nil " Y~D: ~4,'0X"
+                                      arg
+                                      ;; look up the actual cell in the heap
+                                      (cell-aesthetic (wam-heap-cell wam cell)))
+                            (when (= nargs (incf arg))
+                              (setf currently-in nil))))))
+                      (t ""))
                     (if (= addr e) " <- E" "")
                     (if (= addr b) " <- B" "")))))
   (format t "  +------+----------+-------------------------------+~%"))
@@ -242,7 +274,7 @@
      &optional
      (from (max (- (wam-program-counter wam) 8) ; wow
                 0)) ; this
-     (to (min (+ (wam-program-counter wam) 12) ; is
+     (to (min (+ (wam-program-counter wam) 8) ; is
               (length (wam-code wam))))) ; bad
   (format t "CODE~%")
   (dump-code-store wam (wam-code wam) from to))
@@ -265,6 +297,14 @@
 (defun dump-wam-functors (wam)
   (format t " FUNCTORS: ~S~%" (wam-functors wam)))
 
+(defun dump-wam-trail (wam)
+  (format t "    TRAIL: ")
+  (loop :for addr :across (wam-trail wam) :do
+        (format t "~4,'0X ~A //"
+                addr
+                (cell-aesthetic (wam-heap-cell wam addr))))
+  (format t "~%"))
+
 (defun dump-labels (wam)
   (format t "LABELS:~%~{  ~A -> ~4,'0X~^~%~}~%"
           (loop :for functor-index
@@ -280,9 +320,10 @@
   (format t "     MODE: ~S~%" (wam-mode wam))
   (dump-wam-functors wam)
   (format t "HEAP SIZE: ~A~%" (length (wam-heap wam)))
-  (format t "PROGRAM C: ~A~%" (wam-program-counter wam))
-  (format t "CONT  PTR: ~A~%" (wam-continuation-pointer wam))
-  (format t "ENVIR PTR: ~A~%" (wam-environment-pointer wam))
+  (format t "PROGRAM C: ~4,'0X~%" (wam-program-counter wam))
+  (format t "CONT  PTR: ~4,'0X~%" (wam-continuation-pointer wam))
+  (format t "ENVIR PTR: ~4,'0X~%" (wam-environment-pointer wam))
+  (dump-wam-trail wam)
   (dump-wam-registers wam)
   (format t "~%")
   (dump-heap wam from to highlight)
