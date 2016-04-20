@@ -16,6 +16,9 @@
 (deftype stack-index ()
   `(integer 0 ,(1- +stack-limit+)))
 
+(deftype trail-index ()
+  `(integer 0 ,(1- +trail-limit+)))
+
 (deftype register-index ()
   `(integer 0 ,(1- +register-count+)))
 
@@ -39,14 +42,17 @@
 
 
 (deftype opcode ()
-  '(integer 0 23))
+  '(integer 0 26))
 
 
 (deftype stack-frame-size ()
   `(integer 3 ,+stack-frame-size-limit+))
 
+(deftype stack-choice-size ()
+  `(integer 7 ,+stack-frame-size-limit+))
+
 (deftype stack-frame-argcount ()
-  `(integer 0 ,+register-count+))
+  'arity)
 
 (deftype continuation-pointer ()
   'code-index)
@@ -54,9 +60,27 @@
 (deftype environment-pointer ()
   'stack-index)
 
-(deftype stack-word ()
+(deftype backtrack-pointer ()
+  'stack-index)
+
+
+(deftype stack-frame-word ()
   '(or
     environment-pointer ; CE
     continuation-pointer ; CP
     stack-frame-argcount ; N
-    heap-index)) ; YN
+    heap-index)) ; Yn
+
+(deftype stack-choice-word ()
+  '(or
+    environment-pointer ; CE
+    backtrack-pointer ; B
+    continuation-pointer ; CP, BP
+    stack-frame-argcount ; N
+    trail-index ; TR
+    heap-index))  ; An, H
+
+(deftype stack-word ()
+  '(or stack-frame-word stack-choice-word))
+
+

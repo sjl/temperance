@@ -35,7 +35,10 @@
     (+opcode-proceed+ 1)
     (+opcode-allocate+ 2)
     (+opcode-deallocate+ 1)
-    (+opcode-done+ 1)))
+    (+opcode-done+ 1)
+    (+opcode-try+ 2)
+    (+opcode-retry+ 2)
+    (+opcode-trust+ 1)))
 
 
 (defun* opcode-name ((opcode opcode))
@@ -66,7 +69,10 @@
     (+opcode-proceed+ "PROCEED")
     (+opcode-allocate+ "ALLOCATE")
     (+opcode-deallocate+ "DEALLOCATE")
-    (+opcode-done+ "DONE")))
+    (+opcode-done+ "DONE")
+    (+opcode-try+ "TRY")
+    (+opcode-retry+ "RETRY")
+    (+opcode-trust+ "TRUST")))
 
 (defun* opcode-short-name ((opcode opcode))
   (:returns string)
@@ -97,5 +103,8 @@
     (+opcode-proceed+ "PROC")
     (+opcode-allocate+ "ALOC")
     (+opcode-deallocate+ "DEAL")
-    (+opcode-done+ "DONE")))
+    (+opcode-done+ "DONE")
+    (+opcode-try+ "TRYM")
+    (+opcode-retry+ "RTRY")
+    (+opcode-trust+ "TRST")))
 

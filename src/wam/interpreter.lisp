@@ -249,7 +249,7 @@
 (define-instruction %get-structure-local ((wam wam)
                                           (functor functor-index)
                                           (register register-index))
-  (with-accessors ((mode wam-mode) (s wam-s)) wam
+  (with-accessors ((mode wam-mode) (s wam-subterm)) wam
     (let* ((addr (deref wam (wam-local-register wam register)))
            (cell (wam-heap-cell wam addr)))
       (cond
@@ -305,11 +305,11 @@
      (register register-index))
   (ecase (wam-mode wam)
     (:read (setf (%wam-register% wam register)
-                 (wam-s wam)))
+                 (wam-subterm wam)))
     (:write (->> (push-unbound-reference! wam)
               (nth-value 1)
               (setf (%wam-register% wam register)))))
-  (incf (wam-s wam)))
+  (incf (wam-subterm wam)))
 
 (define-instructions (%unify-value-local %unify-value-stack)
     ((wam wam)
@@ -317,12 +317,12 @@
   (ecase (wam-mode wam)
     (:read (unify! wam
                    (%wam-register% wam register)
-                   (wam-s wam)))
+                   (wam-subterm wam)))
     (:write (wam-heap-push! wam
                             (->> register
                               (%wam-register% wam)
                               (wam-heap-cell wam)))))
-  (incf (wam-s wam)))
+  (incf (wam-subterm wam)))
 
 (define-instructions (%get-variable-local %get-variable-stack)
     ((wam wam)
@@ -369,7 +369,7 @@
 (define-instruction %deallocate ((wam wam))
   (setf (wam-program-counter wam)
         (wam-stack-frame-cp wam))
-  (wam-stack-pop-environment! wam))
+  (wam-stack-pop-frame! wam))
 
 
 ;;;; Running

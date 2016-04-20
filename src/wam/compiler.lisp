@@ -474,12 +474,12 @@
 
 (defun tokenize-program-term
     (term permanent-variables reserved-variables reserved-arity)
-  "Tokenize `term` as a program term, returning its tokens, functor, and arity."
-  (tokenize-term term
-                 permanent-variables
-                 reserved-variables
-                 reserved-arity
-                 #'flatten-program))
+  "Tokenize `term` as a program term, returning its tokens."
+  (values (tokenize-term term
+                         permanent-variables
+                         reserved-variables
+                         reserved-arity
+                         #'flatten-program)))
 
 (defun tokenize-query-term
     (term permanent-variables &optional reserved-variables reserved-arity)
@@ -604,7 +604,7 @@
       (handle-stream body-tokens))))
 
 
-;;;; UI
+;;;; Compilation
 (defun find-variables (terms)
   "Return the set of variables in `terms`."
   (remove-duplicates (tree-collect #'variable-p terms)))
@@ -640,20 +640,6 @@
       (find-shared-variables (list head body-first)))))
 
 
-(defun mark-label (wam functor arity store)
-  "Set the code label `(functor . arity)` to point at the next space in `store`."
-  ;; todo make this less ugly
-  (setf (wam-code-label wam (wam-ensure-functor-index wam (cons functor arity)))
-        (fill-pointer store)))
-
-
-(defun make-query-code-store ()
-  (make-array 64
-    :fill-pointer 0
-    :adjustable t
-    :element-type 'code-word))
-
-
 (defun compile-clause (wam store head body)
   "Compile the clause directly into `store` and return the permanent variables.
 
@@ -677,13 +663,10 @@
                 (1- (length (car body)))))
          (head-tokens
            (when head
-             (multiple-value-bind (tokens functor arity)
-                 (tokenize-program-term head
-                                        permanent-variables
-                                        head-variables
-                                        head-arity)
-               (mark-label wam functor arity store) ; TODO: this is ugly
-               tokens)))
+             (tokenize-program-term head
+                                    permanent-variables
+                                    head-variables
+                                    head-arity)))
          (body-tokens
            (when body
              (append
@@ -717,6 +700,14 @@
          (code-push-instruction! store +opcode-done+))))
     permanent-variables))
 
+
+;;; Queries
+(defun make-query-code-store ()
+  (make-array 64
+    :fill-pointer 0
+    :adjustable t
+    :element-type 'code-word))
+
 (defun compile-query (wam query)
   "Compile `query` into a fresh array of bytecode.
 
@@ -729,13 +720,65 @@
          (permanent-variables (compile-clause wam store nil query)))
     (values store permanent-variables)))
 
-(defun compile-program (wam rule)
-  "Compile `rule` into the WAM's code store.
 
-  `rule` should be a clause consisting of a head term and zero or more body
-  terms.  A rule with no body is called a fact.
+;;; Rules
+(defun mark-label (wam functor arity address)
+  "Set the code label `functor`/`arity` to point at `address`."
+  (setf (wam-code-label wam functor arity) address))
+
+(defun find-arity (rule)
+  (let ((head (first rule)))
+    (cond
+      ((null head) (error "Rule ~S has a NIL head." rule))
+      ((atom head) 0) ; constants are 0-arity
+      (t (1- (length head))))))
+
+(defun check-rules (rules)
+  (let* ((predicates (mapcar #'caar rules))
+         (arities (mapcar #'find-arity rules))
+         (functors (zip predicates arities)))
+    (assert (= 1 (length (remove-duplicates functors :test #'equal))) ()
+      "Must add exactly 1 predicate at a time (got: ~S)."
+      functors)
+    (values (first predicates) (first arities))))
+
+(defun compile-rules (wam rules)
+  "Compile `rules` into the WAM's code store.
+
+  Each rule in `rules` should be a clause consisting of a head term and zero or
+  more body terms.  A rule with no body is called a fact.
 
   "
-  (compile-clause wam (wam-code wam) (first rule) (rest rule))
+  (assert rules () "Cannot compile an empty program.")
+  (*let ((code (wam-code wam))
+         (previous-jump nil)
+         ((:values functor arity) (check-rules rules)))
+    (labels
+        ((fill-jump (address)
+           (when previous-jump
+             (setf (aref code (1+ previous-jump)) address))
+           (setf previous-jump address))
+         (push-branch-instruction (first-p last-p)
+           (cond
+             (first-p
+              (fill-jump (code-push-instruction! code +opcode-try+ 999)))
+             (last-p
+              (fill-jump (code-push-instruction! code +opcode-trust+)))
+             (t
+              (fill-jump (code-push-instruction! code +opcode-retry+ 999))))))
+      ;; Mark the label to point at where we're about to stick the code.
+      ;; TODO: this is ugly
+      (mark-label wam functor arity (fill-pointer code))
+      (if (= 1 (length rules))
+        ;; Single-clause rules don't need to bother setting up a choice point.
+        (destructuring-bind ((head . body)) rules
+          (compile-clause wam code head body))
+        ;; Otherwise we need to loop through each of the clauses, pushing their
+        ;; choice point instruction first, then their actual code.
+        (loop :for ((head . body) . remaining) :on rules
+              :for first-p = t :then nil
+              :do
+              (push-branch-instruction first-p (null remaining))
+              (compile-clause wam code head body)))))
   (values))
 

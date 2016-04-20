@@ -63,26 +63,48 @@
                  :adjustable t
                  :element-type 'heap-index)
      :documentation "The unification stack.")
-   (s
-     :accessor wam-s
+   (trail
+     :reader wam-trail
+     :initform (make-array 64
+                 :fill-pointer 0
+                 :adjustable t
+                 :element-type 'heap-index)
+     :documentation "The trail of variables to unbind on backtracking.")
+   (number-of-arguments
+     :accessor wam-nargs
+     :initform 0
+     :type arity
+     :documentation "The Number of Arguments register (global var).")
+   (subterm
+     :accessor wam-subterm
      :initform nil
      :type (or null heap-index)
-     :documentation "The S register (address of next subterm to match).")
+     :documentation "The Subterm register (S).")
    (program-counter
      :accessor wam-program-counter
      :initform 0
      :type code-index
-     :documentation "The Program Counter into the WAM code store.")
+     :documentation "The Program Counter (P) into the WAM code store.")
    (continuation-pointer
      :accessor wam-continuation-pointer
      :initform 0
      :type code-index
-     :documentation "The Continuation Pointer into the WAM code store.")
+     :documentation "The Continuation Pointer (CP) into the WAM code store.")
    (environment-pointer
      :accessor wam-environment-pointer
      :initform 0
-     :type stack-index
-     :documentation "The Environment Pointer into the WAM stack.")
+     :type environment-pointer
+     :documentation "The Environment Pointer (E) into the WAM stack.")
+   (backtrack-pointer
+     :accessor wam-backtrack-pointer
+     :initform 0
+     :type backtrack-pointer
+     :documentation "The Backtrack Pointer (B) into the WAM stack.")
+   (heap-backtrack-pointer
+     :accessor wam-heap-backtrack-pointer
+     :initform 0
+     :type heap-index
+     :documentation "The Heap Backtrack Pointer (HB) into the WAM heap.")
    (mode
      :accessor wam-mode
      :initform nil
@@ -122,7 +144,74 @@
   (setf (aref (wam-heap wam) address) new-value))
 
 
+;;;; Trail
+(defun* wam-trail-pointer ((wam wam))
+  (:returns trail-index)
+  "Return the current trail pointer of the WAM."
+  (fill-pointer (wam-trail wam)))
+
+(defun* wam-trail-push! ((wam wam) (address heap-index))
+  (:returns (values heap-index trail-index))
+  "Push `address` onto the trail.
+
+  Returns the address and the trail address it was pushed to.
+
+  "
+  (with-slots (trail) wam
+    (if (= +trail-limit+ (fill-pointer trail))
+      (error "WAM trail exhausted.")
+      (values address (vector-push-extend address trail)))))
+
+(defun* wam-trail-pop! ((wam wam))
+  (:returns heap-index)
+  "Pop the top address off the trail and return it."
+  (vector-pop (wam-trail wam)))
+
+
 ;;;; Stack
+(defun* wam-stack-pointer ((wam wam))
+  (:returns stack-index)
+  "Return the current stack pointer of the WAM."
+  (fill-pointer (wam-stack wam)))
+
+
+(defun* wam-stack-word ((wam wam) (address stack-index))
+  (:returns stack-word)
+  "Return the stack word at the given address."
+  (aref (wam-stack wam) address))
+
+(defun (setf wam-stack-word) (new-value wam address)
+  (setf (aref (wam-stack wam) address) new-value))
+
+
+(defun* wam-stack-push! ((wam wam) (word stack-word))
+  (:returns (values stack-word stack-index))
+  "Push the word onto the WAM stack and increment the stack pointer.
+
+  Returns the word and the address it was pushed to.
+
+  "
+  (with-slots (stack) wam
+    (if (= +stack-limit+ (fill-pointer stack))
+      (error "WAM stack exhausted.")
+      (values word (vector-push-extend word stack)))))
+
+(defun* wam-stack-extend! ((wam wam) (words integer))
+  (:returns :void)
+  "Extend the WAM stack by the given number of words.
+
+  Each word is initialized to 0.
+
+  "
+  ;; TODO: this sucks, fix it
+  (with-slots (stack) wam
+    (repeat words
+      (if (= +stack-limit+ (fill-pointer stack))
+        (error "WAM stack exhausted.")
+        (vector-push-extend 0 stack))))
+  (values))
+
+
 ;;; Stack frames are laid out like so:
 ;;;
 ;;;     |PREV|
@@ -131,24 +220,8 @@
 ;;;     | N  |
 ;;;     | Y0 |
 ;;;     | .. |
-;;;     | YN |
+;;;     | Yn |
 ;;;     |NEXT| <-- fill-pointer
-
-(defun* wam-stack-pointer ((wam wam))
-  (:returns stack-index)
-  "Return the current stack pointer of the WAM."
-  (fill-pointer (wam-stack wam)))
-
-
-(defun* wam-stack-word ((wam wam) (address stack-index))
-  (:returns stack-index)
-  "Return the stack word at the given address."
-  (aref (wam-stack wam) address))
-
-(defun (setf wam-stack-word) (new-value wam address)
-  (setf (aref (wam-stack wam) address) new-value))
-
-
 (defun* wam-stack-frame-ce
     ((wam wam)
      &optional
@@ -172,6 +245,7 @@
       (wam-environment-pointer wam)))
   (:returns stack-frame-argcount)
   (wam-stack-word wam (+ 2 e)))
+
 
 (defun* wam-stack-frame-arg
     ((wam wam)
@@ -206,39 +280,128 @@
   (+ (wam-stack-frame-n wam e) 3))
 
 
-(defun* wam-stack-push! ((wam wam) (word stack-word))
-  (:returns (values stack-word stack-index))
-  "Push the word onto the WAM stack and increment the stack pointer.
-
-  Returns the word and the address it was pushed to.
-
-  "
-  (with-slots (stack) wam
-    (if (= +stack-limit+ (fill-pointer stack))
-      (error "WAM stack exhausted.")
-      (values word (vector-push-extend word stack)))))
-
-(defun* wam-stack-extend! ((wam wam) (words integer))
-  (:returns :void)
-  "Extend the WAM stack by the given number of words.
-
-  Each word is initialized to 0.
-
-  "
-  ;; TODO: this sucks, fix it
-  (with-slots (stack) wam
-    (repeat words
-      (if (= +stack-limit+ (fill-pointer stack))
-        (error "WAM stack exhausted.")
-        (vector-push-extend 0 stack))))
-  (values))
-
-(defun* wam-stack-pop-environment! ((wam wam))
+(defun* wam-stack-pop-frame! ((wam wam))
   "Pop an environment (stack frame) off the WAM stack."
-  (let ((frame-size (wam-stack-frame-size wam)))
+  (let ((size (wam-stack-frame-size wam)))
     (with-slots (stack environment-pointer) wam
-      (setf environment-pointer (wam-stack-frame-ce wam)) ; E <- CE
-      (decf (fill-pointer stack) frame-size)))) ; its fine
+      (setf environment-pointer
+            (wam-stack-frame-ce wam environment-pointer)) ; E <- CE
+      (decf (fill-pointer stack) size)))) ; its fine
+
+
+;;; Choice point frames are laid out like so:
+;;;
+;;;         |PREV|
+;;;       0 | N  | <-- backtrack-pointer
+;;;       1 | CE |
+;;;       2 | CP | This is a bit different than the book.  We stick the
+;;;       3 | CB | arguments at the end of the frame instead of the beginning,
+;;;       4 | BP | so it's easier to retrieve the other values.
+;;;       5 | TR |
+;;;       6 | H  |
+;;;       7 | A0 |
+;;;         | .. |
+;;;     7+n | An |
+;;;         |NEXT| <-- fill-pointer
+
+(defun* wam-stack-choice-n
+    ((wam wam)
+     &optional
+     ((b backtrack-pointer)
+      (wam-backtrack-pointer wam)))
+  (:returns arity)
+  (wam-stack-word wam b))
+
+(defun* wam-stack-choice-ce
+    ((wam wam)
+     &optional
+     ((b backtrack-pointer)
+      (wam-backtrack-pointer wam)))
+  (:returns environment-pointer)
+  (wam-stack-word wam (+ b 1)))
+
+(defun* wam-stack-choice-cp
+    ((wam wam)
+     &optional
+     ((b backtrack-pointer)
+      (wam-backtrack-pointer wam)))
+  (:returns continuation-pointer)
+  (wam-stack-word wam (+ b 2)))
+
+(defun* wam-stack-choice-cb
+    ((wam wam)
+     &optional
+     ((b backtrack-pointer)
+      (wam-backtrack-pointer wam)))
+  (:returns backtrack-pointer)
+  (wam-stack-word wam (+ b 3)))
+
+(defun* wam-stack-choice-bp
+    ((wam wam)
+     &optional
+     ((b backtrack-pointer)
+      (wam-backtrack-pointer wam)))
+  (:returns continuation-pointer)
+  (wam-stack-word wam (+ b 4)))
+
+(defun* wam-stack-choice-tr
+    ((wam wam)
+     &optional
+     ((b backtrack-pointer)
+      (wam-backtrack-pointer wam)))
+  (:returns trail-index)
+  (wam-stack-word wam (+ b 5)))
+
+(defun* wam-stack-choice-h
+    ((wam wam)
+     &optional
+     ((b backtrack-pointer)
+      (wam-backtrack-pointer wam)))
+  (:returns heap-index)
+  (wam-stack-word wam (+ b 6)))
+
+
+(defun* wam-stack-choice-arg
+    ((wam wam)
+     (n arity)
+     &optional
+     ((b backtrack-pointer)
+      (wam-backtrack-pointer wam)))
+  (:returns heap-index)
+  (wam-stack-word wam (+ b 7 n)))
+
+(defun (setf wam-stack-choice-arg)
+    (new-value wam n &optional (b (wam-backtrack-pointer wam)))
+  (setf (wam-stack-word wam (+ b 7 n))
+        new-value))
+
+(defun* wam-stack-choice-arg-cell
+    ((wam wam)
+     (n arity)
+     &optional
+     ((b backtrack-pointer)
+      (wam-backtrack-pointer wam)))
+  (:returns heap-cell)
+  (wam-heap-cell wam (wam-stack-choice-arg wam n b)))
+
+
+(defun* wam-stack-choice-size
+    ((wam wam)
+     &optional
+     ((b backtrack-pointer)
+      (wam-backtrack-pointer wam)))
+  (:returns stack-choice-size)
+  "Return the size of the choice frame starting at backtrack pointer `b`."
+  (+ (wam-stack-choice-n wam b) 7))
+
+
+(defun* wam-stack-pop-choice! ((wam wam))
+  "Pop a choice frame off the WAM stack."
+  (let ((size (wam-stack-choice-size wam)))
+    (with-slots (stack backtrack-pointer) wam
+      (setf backtrack-pointer
+            (wam-stack-choice-cb wam backtrack-pointer)) ; B <- CB
+      (decf (fill-pointer stack) size)))) ; its fine
 
 
 ;;;; Resetting
@@ -248,15 +411,23 @@
 (defun* wam-truncate-stack! ((wam wam))
   (setf (fill-pointer (wam-stack wam)) 0))
 
+(defun* wam-truncate-trail! ((wam wam))
+  (setf (fill-pointer (wam-trail wam)) 0))
+
+(defun* wam-truncate-unification-stack! ((wam wam))
+  (setf (fill-pointer (wam-unification-stack wam)) 0))
+
 (defun* wam-reset-local-registers! ((wam wam))
   (loop :for i :from 0 :below +register-count+ :do
         (setf (wam-local-register wam i)
               (1- +heap-limit+)))
-  (setf (wam-s wam) nil))
+  (setf (wam-subterm wam) nil))
 
 (defun* wam-reset! ((wam wam))
   (wam-truncate-heap! wam)
   (wam-truncate-stack! wam)
+  (wam-truncate-trail! wam)
+  (wam-truncate-unification-stack! wam)
   (wam-reset-local-registers! wam)
   (setf (wam-program-counter wam) 0
         (wam-continuation-pointer wam) 0
@@ -324,8 +495,11 @@
   (:returns (or null code-index))
   (gethash functor (wam-code-labels wam)))
 
-(defun (setf wam-code-label) (new-value wam functor)
-  (setf (gethash functor (wam-code-labels wam)) new-value))
+;; Note that this takes a functor/arity and not a cons.
+(defun (setf wam-code-label) (new-value wam functor arity)
+  (setf (gethash (wam-ensure-functor-index wam (cons functor arity))
+                 (wam-code-labels wam))
+        new-value))
 
 
 (defun* wam-load-query-code! ((wam wam) query-code)
@@ -380,7 +554,7 @@
   If S is unbound, throws an error.
 
   "
-  (let ((s (wam-s wam)))
+  (let ((s (wam-subterm wam)))
     (if (null s)
       (error "Cannot dereference unbound S register.")
       (wam-heap-cell wam s))))

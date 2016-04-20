@@ -197,7 +197,6 @@
           (second arguments)
           (first arguments)))
 
-
 (defmethod instruction-details ((opcode (eql +opcode-call+)) arguments functor-list)
   (format nil "CALL~A      ; ~A"
           (pretty-arguments arguments)
@@ -244,7 +243,7 @@
 
 (defun dump-wam-registers (wam)
   (format t "REGISTERS:~%")
-  (format t  "~5@A ->~6@A~%" "S" (wam-s wam))
+  (format t  "~5@A ->~6@A~%" "S" (wam-subterm wam))
   (loop :for i :from 0
         :for reg :across (wam-local-registers wam)
         :for contents = (when (not (= reg (1- +heap-limit+)))
@@ -285,6 +284,10 @@
   (format t "~%")
   (dump-labels wam)
   (dump-code wam))
+
+(defun dump-wam-code (wam)
+  (with-slots (code) wam
+    (dump-code-store wam code +maximum-query-size+ (length code))))
 
 (defun dump-wam-full (wam)
   (dump-wam wam 0 (length (wam-heap wam)) -1))

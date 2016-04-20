@@ -48,23 +48,16 @@
   :documentation "Bitmask for the functor arity bits.")
 
 
-(define-constant +register-count+ 16
+(define-constant +register-count+ 2048
   :documentation "The number of registers the WAM has available.")
 
-(define-constant +maximum-arity+ (1- (expt 2 +functor-arity-width+))
+(define-constant +maximum-arity+ 1024
   :documentation "The maximum allowed arity of functors.")
 
 
 (define-constant +maximum-query-size+ 48
   :documentation
   "The maximum size (in bytes of bytecode) a query may compile to.")
-
-
-(define-constant +tag-local-register+ #b0
-  :documentation "A local register (X_n or A_n).")
-
-(define-constant +tag-stack-register+ #b1
-  :documentation "A stack register (Y_n).")
 
 
 (define-constant +stack-word-size+ 16
@@ -79,8 +72,14 @@
   ;; too large.
   :documentation "Maximum size of the WAM stack.")
 
-(define-constant +stack-frame-size-limit+ (+ 3 +register-count+)
+(define-constant +stack-frame-size-limit+ (+ 7 +register-count+)
   :documentation "The maximum size, in stack frame words, that a stack frame could be.")
+
+
+(define-constant +trail-limit+ (expt 2 +stack-word-size+)
+  ;; The trail's fill pointer is stored inside choice frames on the stack, so it
+  ;; needs to be able to fit inside a stack word.
+  :documentation "The maximum number of variables that may exist in the trail.")
 
 
 ;;;; Opcodes
@@ -115,6 +114,9 @@
 (define-constant +opcode-allocate+ 21)
 (define-constant +opcode-deallocate+ 22)
 (define-constant +opcode-done+ 23)
+(define-constant +opcode-try+ 24)
+(define-constant +opcode-retry+ 25)
+(define-constant +opcode-trust+ 26)
 
 
 ;;;; Debug Config
