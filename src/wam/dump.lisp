@@ -60,42 +60,49 @@
     (values)))
 
 
-(defun dump-stack (wam &optional (e (wam-environment-pointer wam)))
+(defun dump-stack (wam)
   (format t "STACK~%")
   (format t "  +------+----------+-------------------------------+~%")
   (format t "  | ADDR |    VALUE |                               |~%")
   (format t "  +------+----------+-------------------------------+~%")
-  (loop :with n = nil
-        :with arg = 0
-        :for offset = 0 :then (1+ offset)
-        :for cell :across (wam-stack wam)
-        :for addr :from 0 :do
-        (format t "  | ~4,'0X | ~8,'0X | ~30A|~A~A~%"
-                addr
-                cell
-                (cond
-                  ((= offset 0) "CE ===========================")
-                  ((= offset 1) "CP")
-                  ((= offset 2)
-                   (if (zerop cell)
-                     (progn
-                       (setf offset -1)
-                       "N: EMPTY")
-                     (progn
-                       (setf n cell)
-                       (format nil "N: ~D" cell))))
-                  ((< arg n)
-                   (prog1
-                       (format nil " Y~D: ~4,'0X"
-                               arg
-                               ;; look up the actual cell in the heap
-                               (cell-aesthetic (wam-heap-cell wam cell)))
-                     (when (= n (incf arg))
-                       (setf offset -1
-                             n nil
-                             arg 0)))))
-                (if (= addr (wam-environment-pointer wam)) " <- E" "")
-                (if (= addr e) " <- FRAME" "")))
+  (with-accessors ((stack wam-stack)
+                   (e wam-environment-pointer)
+                   (b wam-backtrack-pointer))
+      wam
+    (when (not (= e b)) ; lame way to check for an empty stack...
+      (loop :with n = nil
+            :with limit = (max (+ e 3) (+ b 7))
+            :with arg = 0
+            :for addr :from 0 :to limit
+            :for cell = (aref (wam-stack wam) addr)
+            :for offset = 0 :then (1+ offset)
+            :do
+            (format t "  | ~4,'0X | ~8,'0X | ~30A|~A~A~%"
+                    addr
+                    cell
+                    (cond
+                      ((= offset 0) "CE ===========================")
+                      ((= offset 1) "CP")
+                      ((= offset 2)
+                       (if (zerop cell)
+                         (progn
+                           (setf offset -1)
+                           "N: EMPTY")
+                         (progn
+                           (setf n cell)
+                           (format nil "N: ~D" cell))))
+                      ((< arg n)
+                       (prog1
+                           (format nil " Y~D: ~4,'0X"
+                                   arg
+                                   ;; look up the actual cell in the heap
+                                   (cell-aesthetic (wam-heap-cell wam cell)))
+                         (when (= n (incf arg))
+                           (setf offset -1
+                                 n nil
+                                 arg 0)))))
+                    (if (= addr e) " <- E" "")
+                    (if (= addr b) " <- B" "")))))
   (format t "  +------+----------+-------------------------------+~%"))
 
 

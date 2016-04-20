@@ -45,10 +45,7 @@
      :reader wam-stack
      :initform (make-array 1024
                  :adjustable t
-                 :fill-pointer 0
-                 ;; Initialize to the last element in the heap for debugging.
-                 ;; todo: don't do this
-                 :initial-element (1- +heap-limit+)
+                 :initial-element 0
                  :element-type 'stack-word)
      :documentation "The local stack for storing stack frames.")
    (fail
@@ -169,12 +166,6 @@
 
 
 ;;;; Stack
-(defun* wam-stack-pointer ((wam wam))
-  (:returns stack-index)
-  "Return the current stack pointer of the WAM."
-  (fill-pointer (wam-stack wam)))
-
-
 (defun* wam-stack-word ((wam wam) (address stack-index))
   (:returns stack-word)
   "Return the stack word at the given address."
@@ -183,32 +174,20 @@
 (defun (setf wam-stack-word) (new-value wam address)
   (setf (aref (wam-stack wam) address) new-value))
 
-
-(defun* wam-stack-push! ((wam wam) (word stack-word))
-  (:returns (values stack-word stack-index))
-  "Push the word onto the WAM stack and increment the stack pointer.
-
-  Returns the word and the address it was pushed to.
-
-  "
-  (with-slots (stack) wam
-    (if (= +stack-limit+ (fill-pointer stack))
-      (error "WAM stack exhausted.")
-      (values word (vector-push-extend word stack)))))
-
-(defun* wam-stack-extend! ((wam wam) (words integer))
+(defun* wam-stack-ensure-size! ((wam wam)
+                                (address stack-index))
   (:returns :void)
-  "Extend the WAM stack by the given number of words.
+  "Ensure the WAM stack is large enough to be able to write to `address`.
 
-  Each word is initialized to 0.
+  It will be adjusted (but not beyond the limit) if necessary.
 
   "
-  ;; TODO: this sucks, fix it
   (with-slots (stack) wam
-    (repeat words
-      (if (= +stack-limit+ (fill-pointer stack))
-        (error "WAM stack exhausted.")
-        (vector-push-extend 0 stack))))
+    (if (>= address +stack-limit+)
+      (error "WAM stack exhausted.")
+      (while (>= address (array-total-size stack))
+        ;; i uh, let's just hope this never executes more than once...
+        (adjust-array stack (* 2 (array-total-size stack))))))
   (values))
 
 
@@ -278,15 +257,6 @@
   (:returns stack-frame-size)
   "Return the size of the stack frame starting at environment pointer `e`."
   (+ (wam-stack-frame-n wam e) 3))
-
-
-(defun* wam-stack-pop-frame! ((wam wam))
-  "Pop an environment (stack frame) off the WAM stack."
-  (let ((size (wam-stack-frame-size wam)))
-    (with-slots (stack environment-pointer) wam
-      (setf environment-pointer
-            (wam-stack-frame-ce wam environment-pointer)) ; E <- CE
-      (decf (fill-pointer stack) size)))) ; its fine
 
 
 ;;; Choice point frames are laid out like so:
@@ -395,21 +365,9 @@
   (+ (wam-stack-choice-n wam b) 7))
 
 
-(defun* wam-stack-pop-choice! ((wam wam))
-  "Pop a choice frame off the WAM stack."
-  (let ((size (wam-stack-choice-size wam)))
-    (with-slots (stack backtrack-pointer) wam
-      (setf backtrack-pointer
-            (wam-stack-choice-cb wam backtrack-pointer)) ; B <- CB
-      (decf (fill-pointer stack) size)))) ; its fine
-
-
 ;;;; Resetting
 (defun* wam-truncate-heap! ((wam wam))
   (setf (fill-pointer (wam-heap wam)) 0))
-
-(defun* wam-truncate-stack! ((wam wam))
-  (setf (fill-pointer (wam-stack wam)) 0))
 
 (defun* wam-truncate-trail! ((wam wam))
   (setf (fill-pointer (wam-trail wam)) 0))

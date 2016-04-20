@@ -357,19 +357,21 @@
         (wam-continuation-pointer wam)))
 
 (define-instruction %allocate ((wam wam) (n stack-frame-argcount))
-  (setf (wam-environment-pointer wam) ; E <- new E
-        (->> wam
-          wam-environment-pointer
-          (wam-stack-push! wam) ; CE
-          (nth-value 1)))
-  (wam-stack-push! wam (wam-continuation-pointer wam)) ; CP
-  (wam-stack-push! wam n) ; N
-  (wam-stack-extend! wam n)) ; Y_n (TODO: this sucks)
+  ;; Use the slots directly here for speed.  I know this sucks.  I'm sorry.
+  (with-slots (stack environment-pointer) wam
+    (let* ((old-e environment-pointer)
+           (new-e (+ old-e (wam-stack-frame-size wam old-e))))
+      (wam-stack-ensure-size! wam (+ new-e 3 n))
+      (setf (aref stack new-e) old-e ; E
+            (aref stack (+ new-e 1) (wam-continuation-pointer wam)) ; CP
+            (aref stack (+ new-e 2) n) ; N
+            environment-pointer new-e)))) ; E <- new-e
 
 (define-instruction %deallocate ((wam wam))
   (setf (wam-program-counter wam)
-        (wam-stack-frame-cp wam))
-  (wam-stack-pop-frame! wam))
+        (wam-stack-frame-cp wam)
+        (wam-environment-pointer wam)
+        (wam-stack-frame-ce wam)))
 
 
 ;;;; Running
@@ -425,7 +427,6 @@
       (mapcar #'recur addresses))))
 
 (defun extract-query-results (wam vars)
-  ""
   (let* ((addresses (loop :for var :in vars
                           :for i :from 0
                           :collect (wam-stack-frame-arg wam i 0)))
