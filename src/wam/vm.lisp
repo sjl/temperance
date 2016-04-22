@@ -3,6 +3,7 @@
 
 ;;;; Config
 (defparameter *break-on-fail* nil)
+(defparameter *step* nil)
 
 
 ;;;; Utilities
@@ -526,12 +527,8 @@
          (results (extract-things wam addresses)))
     (pairlis vars results)))
 
-(defun print-query-results (results)
-  (loop :for (var . result) :in results :do
-        (format t "~S = ~S~%" var result)))
 
-
-(defun run (wam &optional (step nil))
+(defun run (wam done-thunk)
   (with-slots (code program-counter fail backtrack) wam
     (macrolet ((instruction (inst args)
                  `(instruction-call wam ,inst code program-counter ,args)))
@@ -541,7 +538,7 @@
         :for opcode = (aref code program-counter)
         :do
         (block op
-          (when step
+          (when *step*
             (dump) ; todo: make this saner
             (break "About to execute instruction at ~4,'0X" program-counter))
           (eswitch (opcode)
@@ -583,7 +580,9 @@
               (instruction %call 1)
               (return-from op))
             (+opcode-done+
-              (return-from run)))
+              (if (funcall done-thunk)
+                (return-from run)
+                (backtrack! wam "done-function returned false"))))
           ;; Only increment the PC when we didn't backtrack
           (if (wam-backtracked wam)
             (setf (wam-backtracked wam) nil)
@@ -592,12 +591,12 @@
             (error "Fell off the end of the program code store!")))))
     (values)))
 
-(defun run-query (wam term &optional (step nil))
+(defun run-query (wam term result-function)
   "Compile query `term` and run the instructions on the `wam`.
 
   Resets the heap, etc before running.
 
-  When `step` is true, break into the debugger before calling the procedure and
+  When `*step*` is true, break into the debugger before calling the procedure and
   after each instruction.
 
   "
@@ -607,15 +606,15 @@
     (wam-load-query-code! wam code)
     (setf (wam-program-counter wam) 0
           (wam-continuation-pointer wam) +code-sentinal+)
-    (when step
+    (when *step*
       (format *debug-io* "Built query code:~%")
       (dump-code-store wam code))
-    (run wam step)
+    (run wam (lambda ()
+               (funcall result-function
+                        (extract-query-results wam vars))))
     (if (wam-fail wam)
       (princ "No.")
-      (progn
-        (print-query-results (extract-query-results wam vars))
-        (princ "Yes."))))
+      (princ "Yes.")))
   (values))
 
 

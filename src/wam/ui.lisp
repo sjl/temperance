@@ -8,25 +8,63 @@
      ,@body))
 
 
-
 (defun add-rules (rules)
   (compile-rules *database* rules))
-
-(defun perform-query (query step)
-  (run-query *database* query step))
 
 
 (defmacro rule (&body body)
   `(add-rules '(,body)))
 
+(defmacro fact (&body body)
+  `(add-rules '(,body)))
+
 (defmacro rules (&body rules)
   `(add-rules ',rules))
 
-(defmacro query (&body body)
-  `(perform-query ',body nil))
+(defmacro facts (&body rules)
+  `(add-rules ',(mapcar #'list rules)))
 
-(defmacro query-step (&body body)
-  `(perform-query ',body t))
+
+(defun display-results (results)
+  (format t "~%")
+  (loop :for (var . result) :in results :do
+        (format t "~S = ~S~%" var result)))
+
+(defun result-one (results)
+  (display-results results)
+  t)
+
+(defun result-all (results)
+  (display-results results)
+  nil)
+
+(defun result-interactive (results)
+  (display-results results)
+  (format t "~%More? [Yn] ")
+  (force-output)
+  (switch ((read-line) :test #'string=)
+    ("y" nil)
+    ("" nil)
+    ("n" t)
+    (t t)))
+
+
+(defun perform-query (query mode)
+  (run-query *database* query
+             (ecase mode
+               (:interactive #'result-interactive)
+               (:all #'result-all)
+               (:one #'result-one))))
+
+
+(defmacro query (&body body)
+  `(perform-query ',body :interactive))
+
+(defmacro query-all (&body body)
+  `(perform-query ',body :all))
+
+(defmacro query-one (&body body)
+  `(perform-query ',body :one))
 
 
 (defun dump (&optional full-code)
