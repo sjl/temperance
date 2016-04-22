@@ -30,7 +30,7 @@
                                            (:file "bytecode")
                                            (:file "wam")
                                            (:file "compiler")
-                                           (:file "interpreter")
+                                           (:file "vm")
                                            (:file "dump")
                                            (:file "ui")))
                              (:file "bones")))))
