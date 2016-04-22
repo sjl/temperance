@@ -525,7 +525,7 @@
                           :for i :from 0
                           :collect (wam-stack-frame-arg wam i)))
          (results (extract-things wam addresses)))
-    (pairlis vars results)))
+    (weave vars results)))
 
 
 (defun run (wam done-thunk)
@@ -591,7 +591,10 @@
             (error "Fell off the end of the program code store!")))))
     (values)))
 
-(defun run-query (wam term result-function)
+(defun run-query (wam term
+                  &key
+                  (result-function (lambda (results) (declare (ignore results))))
+                  (status-function (lambda (fail-p) (declare (ignore fail-p)))))
   "Compile query `term` and run the instructions on the `wam`.
 
   Resets the heap, etc before running.
@@ -612,9 +615,8 @@
     (run wam (lambda ()
                (funcall result-function
                         (extract-query-results wam vars))))
-    (if (wam-fail wam)
-      (princ "No.")
-      (princ "Yes.")))
+    (when status-function
+      (funcall status-function (wam-fail wam))))
   (values))
 
 

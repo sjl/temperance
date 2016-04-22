@@ -2,6 +2,7 @@
 
 
 (defparameter *database* nil)
+(defvar *results* nil)
 
 (defmacro with-database (&body body)
   `(let ((*database* (make-wam)))
@@ -27,18 +28,18 @@
 
 (defun display-results (results)
   (format t "~%")
-  (loop :for (var . result) :in results :do
+  (loop :for (var result . more) :on results :by #'cddr :do
         (format t "~S = ~S~%" var result)))
 
-(defun result-one (results)
+(defun display-results-one (results)
   (display-results results)
   t)
 
-(defun result-all (results)
+(defun display-results-all (results)
   (display-results results)
   nil)
 
-(defun result-interactive (results)
+(defun display-results-interactive (results)
   (display-results results)
   (format t "~%More? [Yn] ")
   (force-output)
@@ -51,10 +52,36 @@
 
 (defun perform-query (query mode)
   (run-query *database* query
+             :result-function
              (ecase mode
-               (:interactive #'result-interactive)
-               (:all #'result-all)
-               (:one #'result-one))))
+               (:interactive #'display-results-interactive)
+               (:all #'display-results-all)
+               (:one #'display-results-one))
+             :status-function
+             (lambda (fail-p)
+               (if fail-p
+                 (princ "No.")
+                 (princ "Yes."))))
+  (values))
+
+
+(defun return-results-one (results)
+  (setf *results* results)
+  t)
+
+(defun return-results-all (results)
+  (push results *results*)
+  nil)
+
+
+(defun perform-return (query mode)
+  (let ((*results* nil))
+    (run-query *database* query
+               :result-function
+               (ecase mode
+                 (:all #'return-results-all)
+                 (:one #'return-results-one)))
+    *results*))
 
 
 (defmacro query (&body body)
@@ -65,6 +92,12 @@
 
 (defmacro query-one (&body body)
   `(perform-query ',body :one))
+
+(defmacro return-all (&body body)
+  `(perform-return ',body :all))
+
+(defmacro return-one (&body body)
+  `(perform-return ',body :one))
 
 
 (defun dump (&optional full-code)
