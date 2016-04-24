@@ -9,5 +9,6 @@
                (:module "test"
                 :serial t
                 :components ((:file "bones")
-                             (:file "paip")))))
+                             (:file "paip")
+                             (:file "wam")))))
 

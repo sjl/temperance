@@ -12,5 +12,6 @@
 
 (test :bones)
 (test :bones.paip)
+(test :bones.wam)
 
 (sb-ext:exit :code (if *passed* 0 1))
