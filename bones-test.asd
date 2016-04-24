@@ -7,6 +7,7 @@
   :serial t
   :components ((:file "package-test")
                (:module "test"
+                :serial t
                 :components ((:file "bones")
                              (:file "paip")))))
 

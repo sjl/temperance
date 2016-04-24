@@ -2,7 +2,7 @@
 ;;;; See http://quickutil.org for details.
 
 ;;;; To regenerate:
-;;;; (qtlc:save-utils-as "quickutils.lisp" :utilities '(:DEFINE-CONSTANT :SET-EQUAL :CURRY :SWITCH :ENSURE-BOOLEAN :WHILE :UNTIL :TREE-MEMBER-P :TREE-COLLECT :WITH-GENSYMS :ZIP :ALIST-TO-HASH-TABLE :MAP-TREE :WEAVE :RANGE) :ensure-package T :package "BONES.QUICKUTILS")
+;;;; (qtlc:save-utils-as "quickutils.lisp" :utilities '(:DEFINE-CONSTANT :SET-EQUAL :CURRY :SWITCH :ENSURE-BOOLEAN :WHILE :UNTIL :TREE-MEMBER-P :TREE-COLLECT :WITH-GENSYMS :ZIP :ALIST-TO-HASH-TABLE :MAP-TREE :WEAVE :RANGE :ALIST-PLIST) :ensure-package T :package "BONES.QUICKUTILS")
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (unless (find-package "BONES.QUICKUTILS")
@@ -20,7 +20,8 @@
                                          :SWITCH :ENSURE-BOOLEAN :UNTIL :WHILE
                                          :TREE-MEMBER-P :TREE-COLLECT
                                          :TRANSPOSE :ZIP :ALIST-TO-HASH-TABLE
-                                         :MAP-TREE :WEAVE :RANGE))))
+                                         :MAP-TREE :WEAVE :RANGE :SAFE-ENDP
+                                         :ALIST-PLIST))))
 
   (defun %reevaluate-constant (name value test)
     (if (not (boundp name))
@@ -302,9 +303,34 @@ provided, then apply it to each number."
     (assert (<= start end))
     (loop :for i :from start :below end :by step :collecting (funcall key i)))
   
+
+  (declaim (inline safe-endp))
+  (defun safe-endp (x)
+    (declare (optimize safety))
+    (endp x))
+  
+
+  (defun alist-plist (alist)
+    "Returns a property list containing the same keys and values as the
+association list ALIST in the same order."
+    (let (plist)
+      (dolist (pair alist)
+        (push (car pair) plist)
+        (push (cdr pair) plist))
+      (nreverse plist)))
+
+  (defun plist-alist (plist)
+    "Returns an association list containing the same keys and values as the
+property list PLIST in the same order."
+    (let (alist)
+      (do ((tail plist (cddr tail)))
+          ((safe-endp tail) (nreverse alist))
+        (push (cons (car tail) (cadr tail)) alist))))
+  
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (export '(define-constant set-equal curry switch eswitch cswitch
             ensure-boolean while until tree-member-p tree-collect with-gensyms
-            with-unique-names zip alist-to-hash-table map-tree weave range)))
+            with-unique-names zip alist-to-hash-table map-tree weave range
+            alist-plist plist-alist)))
 
 ;;;; END OF quickutils.lisp ;;;;

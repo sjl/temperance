@@ -4,9 +4,16 @@
 (defparameter *database* nil)
 (defvar *results* nil)
 
-(defmacro with-database (&body body)
-  `(let ((*database* (make-wam)))
+
+(defun make-database ()
+  (make-wam))
+
+(defmacro with-database (database &body body)
+  `(let ((*database* ,database))
      ,@body))
+
+(defmacro with-fresh-database (&body body)
+  `(with-database (make-database) ,body))
 
 
 (defun add-rules (rules)
@@ -58,8 +65,8 @@
                (:all #'display-results-all)
                (:one #'display-results-one))
              :status-function
-             (lambda (fail-p)
-               (if fail-p
+             (lambda (failp)
+               (if failp
                  (princ "No.")
                  (princ "Yes."))))
   (values))
@@ -75,13 +82,17 @@
 
 
 (defun perform-return (query mode)
-  (let ((*results* nil))
+  (let ((*results* nil)
+        (success nil))
     (run-query *database* query
+               :status-function
+               (lambda (failp)
+                 (setf success (not failp)))
                :result-function
                (ecase mode
                  (:all #'return-results-all)
                  (:one #'return-results-one)))
-    *results*))
+    (values *results* success)))
 
 
 (defmacro query (&body body)

@@ -17,5 +17,6 @@
                :map-tree
                :weave
                :range
+               :alist-plist
                )
   :package "BONES.QUICKUTILS")

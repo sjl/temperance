@@ -594,7 +594,7 @@
 (defun run-query (wam term
                   &key
                   (result-function (lambda (results) (declare (ignore results))))
-                  (status-function (lambda (fail-p) (declare (ignore fail-p)))))
+                  (status-function (lambda (failp) (declare (ignore failp)))))
   "Compile query `term` and run the instructions on the `wam`.
 
   Resets the heap, etc before running.
