@@ -47,9 +47,7 @@
              ((likes kim cats))
 
              ((likes kim :who)
-              (likes :who cats))
-
-             )
+              (likes :who cats)))
 
       (rules ((narcissist :person)
               (likes :person :person))))
@@ -66,10 +64,6 @@
 
 (defun results= (r1 r2)
   (set-equal r1 r2 :test #'result=))
-
-; (defmacro status (successp query)
-;   `(eql )
-;   )
 
 (defmacro q (&body query)
   `(with-database *test-database*
