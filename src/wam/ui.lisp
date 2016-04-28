@@ -13,7 +13,7 @@
      ,@body))
 
 (defmacro with-fresh-database (&body body)
-  `(with-database (make-database) ,body))
+  `(with-database (make-database) ,@body))
 
 
 (defun add-rules (rules)
