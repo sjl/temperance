@@ -41,13 +41,6 @@
   :documentation "A functor.")
 
 
-(define-constant +functor-arity-width+ 4
-  :documentation "Number of bits dedicated to functor arity.")
-
-(define-constant +functor-arity-bitmask+ #b1111
-  :documentation "Bitmask for the functor arity bits.")
-
-
 (define-constant +register-count+ 2048
   :documentation "The number of registers the WAM has available.")
 
@@ -55,7 +48,7 @@
   :documentation "The maximum allowed arity of functors.")
 
 
-(define-constant +maximum-query-size+ 48
+(define-constant +maximum-query-size+ 1024
   :documentation
   "The maximum size (in bytes of bytecode) a query may compile to.")
 
@@ -121,4 +114,3 @@
 
 ;;;; Debug Config
 (defparameter *off-by-one* nil)
-

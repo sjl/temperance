@@ -434,7 +434,11 @@
   (setf (wam-program-counter wam) 0
         (wam-continuation-pointer wam) 0
         (wam-environment-pointer wam) 0
+        (wam-backtrack-pointer wam) 0
+        (wam-heap-backtrack-pointer wam) 0
+        (wam-backtracked wam) nil
         (wam-fail wam) nil
+        (wam-subterm wam) nil
         (wam-mode wam) nil))
 
 

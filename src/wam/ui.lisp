@@ -82,17 +82,24 @@
 
 
 (defun perform-return (query mode)
-  (let ((*results* nil)
-        (success nil))
-    (run-query *database* query
-               :status-function
-               (lambda (failp)
-                 (setf success (not failp)))
-               :result-function
-               (ecase mode
-                 (:all #'return-results-all)
-                 (:one #'return-results-one)))
-    (values *results* success)))
+  (ecase mode
+    (:all (let ((*results* nil))
+            (run-query *database* query
+                       :result-function
+                       #'return-results-all)
+            (values *results* (ensure-boolean *results*))))
+    (:one (let* ((no-results (gensym))
+                 (*results* no-results))
+            (run-query *database* query
+                       :result-function
+                       #'return-results-one)
+            (if (eql *results* no-results)
+              (values nil nil)
+              (values *results* t))))))
+
+
+(defun perform-prove (query)
+  (nth-value 1 (perform-return query :one)))
 
 
 (defmacro query (&body body)
@@ -104,11 +111,15 @@
 (defmacro query-one (&body body)
   `(perform-query ',body :one))
 
+
 (defmacro return-all (&body body)
   `(perform-return ',body :all))
 
 (defmacro return-one (&body body)
   `(perform-return ',body :one))
+
+(defmacro prove (&body body)
+  `(perform-prove ',body))
 
 
 (defun dump (&optional full-code)

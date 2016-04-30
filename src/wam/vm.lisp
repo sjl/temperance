@@ -172,7 +172,7 @@
               (if (functors-match-p functor-1 functor-2)
                 ;; If the functors match, push their pairs of arguments onto
                 ;; the stack to be unified.
-                (loop :with arity = (cdr (wam-functor-lookup wam functor-1))
+                (loop :with arity = (cdr (wam-functor-lookup wam (cell-value functor-1)))
                       :for i :from 1 :to arity :do
                       (wam-unification-stack-push! wam (+ structure-1-addr i))
                       (wam-unification-stack-push! wam (+ structure-2-addr i)))

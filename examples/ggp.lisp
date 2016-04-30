@@ -1,239 +1,281 @@
-(in-package #:bones.paip)
+(in-package #:bones.wam)
 
-;;;; Games
-(defun dont-press-the-button ()
-  (clear-db)
-  (fact role you)
+(declaim (optimize (speed 1) (safety 3) (debug 1)))
+; (declaim (optimize (speed 3) (safety 1) (debug 0)))
 
-  (fact init (button off))
-  (fact init (turn 0))
+(defparameter *d* (make-database))
 
-  (fact always) ; work around broken gamestepper
+(with-database *d*
+  (rules ((member :thing (cons :thing :rest)))
+         ((member :thing (cons :other :rest))
+          (member :thing :rest)))
 
-  (rule (legal you press) (always))
-  (rule (legal you wait) (always))
+  (rule (true :state :thing)
+        (member :thing :state))
 
-  (rule (next (button on))
-        (does you press))
+  (rule (does :performed :role :move)
+        (member (does :role :move) :performed))
 
-  (rule (next (button off))
-        (does you wait))
+  (fact (role robot))
 
-  (rule (next (turn ?x))
-        (true (turn ?current))
-        (succ ?current ?x))
+  (facts (init (off p))
+         (init (off q))
+         (init (off r))
+         (init (off s))
+         (init (step num1))))
 
-  (rule (terminal)
-        (true (button on)))
+(with-database *d*
+  (rules ((next :state :performed (on p))
+          (does :performed robot a)
+          (true :state (off p)))
+         ((next :state :performed (on q))
+          (does :performed robot a)
+          (true :state (on q)))
+         ((next :state :performed (on r))
+          (does :performed robot a)
+          (true :state (on r)))
+         ((next :state :performed (off p))
+          (does :performed robot a)
+          (true :state (on p)))
+         ((next :state :performed (off q))
+          (does :performed robot a)
+          (true :state (off q)))
+         ((next :state :performed (off r))
+          (does :performed robot a)
+          (true :state (off r)))
 
-  (rule (terminal)
-        (true (turn 4)))
+         ((next :state :performed (on p))
+          (does :performed robot b)
+          (true :state (on q)))
+         ((next :state :performed (on q))
+          (does :performed robot b)
+          (true :state (on p)))
+         ((next :state :performed (on r))
+          (does :performed robot b)
+          (true :state (on r)))
+         ((next :state :performed (off p))
+          (does :performed robot b)
+          (true :state (off q)))
+         ((next :state :performed (off q))
+          (does :performed robot b)
+          (true :state (off p)))
+         ((next :state :performed (off r))
+          (does :performed robot b)
+          (true :state (off r)))
 
-  (rule (goal you 100)
-        (true (button off)))
+         ((next :state :performed (on p))
+          (does :performed robot c)
+          (true :state (on p)))
+         ((next :state :performed (on q))
+          (does :performed robot c)
+          (true :state (on r)))
+         ((next :state :performed (on r))
+          (does :performed robot c)
+          (true :state (on q)))
+         ((next :state :performed (off p))
+          (does :performed robot c)
+          (true :state (off p)))
+         ((next :state :performed (off q))
+          (does :performed robot c)
+          (true :state (off r)))
+         ((next :state :performed (off r))
+          (does :performed robot c)
+          (true :state (off q)))
 
-  (rule (goal you 0)
-        (true (button on)))
+         ((next :state :performed (off s))
+          (does :performed robot a)
+          (true :state (off s)))
+         ((next :state :performed (off s))
+          (does :performed robot b)
+          (true :state (off s)))
+         ((next :state :performed (off s))
+          (does :performed robot c)
+          (true :state (off s)))
+         ((next :state :performed (on s))
+          (does :performed robot a)
+          (true :state (on s)))
+         ((next :state :performed (on s))
+          (does :performed robot b)
+          (true :state (on s)))
+         ((next :state :performed (on s))
+          (does :performed robot c)
+          (true :state (on s)))
+         ((next :state :performed (off s))
+          (does :performed robot d)
+          (true :state (on s)))
+         ((next :state :performed (on s))
+          (does :performed robot d)
+          (true :state (off s)))
 
-  (fact succ 0 1)
-  (fact succ 1 2)
-  (fact succ 2 3)
-  (fact succ 3 4))
+         ((next :state :performed (on p))
+          (does :performed robot d)
+          (true :state (on p)))
+         ((next :state :performed (off p))
+          (does :performed robot d)
+          (true :state (off p)))
 
-(defun tic-tac-toe ()
-  (clear-db)
+         ((next :state :performed (on q))
+          (does :performed robot d)
+          (true :state (on q)))
+         ((next :state :performed (off q))
+          (does :performed robot d)
+          (true :state (off q)))
 
-  (fact role xplayer)
-  (fact role oplayer)
+         ((next :state :performed (on r))
+          (does :performed robot d)
+          (true :state (on r)))
+         ((next :state :performed (off r))
+          (does :performed robot d)
+          (true :state (off r)))
 
-  (fact index 1)
-  (fact index 2)
-  (fact index 3)
-  (rule (base (cell ?x ?y b)) (index ?x) (index ?y))
-  (rule (base (cell ?x ?y x)) (index ?x) (index ?y))
-  (rule (base (cell ?x ?y o)) (index ?x) (index ?y))
-  (rule (base (control ?p)) (role ?p))
+         ((next :state :performed (step :y))
+          (true :state (step :x))
+          (succ :x :y))))
 
-  (rule (input ?p (mark ?x ?y)) (index ?x) (index ?y) (role ?p))
-  (rule (input ?p noop) (role ?p))
+(with-database *d*
+  (facts (succ num1 num2)
+         (succ num2 num3)
+         (succ num3 num4)
+         (succ num4 num5)
+         (succ num5 num6)
+         (succ num6 num7)
+         (succ num7 num8))
 
-  (fact init (cell 1 1 b))
-  (fact init (cell 1 2 b))
-  (fact init (cell 1 3 b))
-  (fact init (cell 2 1 b))
-  (fact init (cell 2 2 b))
-  (fact init (cell 2 3 b))
-  (fact init (cell 3 1 b))
-  (fact init (cell 3 2 b))
-  (fact init (cell 3 3 b))
-  (fact init (control xplayer))
+  (facts (legal robot a)
+         (legal robot b)
+         (legal robot c)
+         (legal robot d)))
 
-  (rule (next (cell ?m ?n x))
-        (does xplayer (mark ?m ?n))
-        (true (cell ?m ?n b)))
+(with-database *d*
+  (rules ((goal :state robot num100)
+          (true :state (on p))
+          (true :state (on q))
+          (true :state (on r))
+          (true :state (on s))
+          )
+         ((goal :state robot num0)
+          (true :state (off p)))
+         ((goal :state robot num0)
+          (true :state (off q)))
+         ((goal :state robot num0)
+          (true :state (off r)))
+         ((goal :state robot num0)
+          (true :state (off s)))
+         )
 
-  (rule (next (cell ?m ?n o))
-        (does oplayer (mark ?m ?n))
-        (true (cell ?m ?n b)))
-
-  (rule (next (cell ?m ?n ?w))
-        (true (cell ?m ?n ?w))
-        (distinct ?w b))
-
-  (rule (next (cell ?m ?n b))
-        (does ?w (mark ?j ?k))
-        (true (cell ?m ?n b))
-        (or (distinct ?m ?j) (distinct ?n ?k)))
-
-  (rule (next (control xplayer))
-        (true (control oplayer)))
-
-  (rule (next (control oplayer))
-        (true (control xplayer)))
-
-  (rule (row ?m ?x)
-        (true (cell ?m 1 ?x))
-        (true (cell ?m 2 ?x))
-        (true (cell ?m 3 ?x)))
-
-  (rule (column ?n ?x)
-        (true (cell 1 ?n ?x))
-        (true (cell 2 ?n ?x))
-        (true (cell 3 ?n ?x)))
-
-  (rule (diagonal ?x)
-        (true (cell 1 1 ?x))
-        (true (cell 2 2 ?x))
-        (true (cell 3 3 ?x)))
-
-  (rule (diagonal ?x)
-        (true (cell 1 3 ?x))
-        (true (cell 2 2 ?x))
-        (true (cell 3 1 ?x)))
-
-  (rule (line ?x) (row ?m ?x))
-  (rule (line ?x) (column ?m ?x))
-  (rule (line ?x) (diagonal ?x))
-
-  (rule (open)
-        (true (cell ?m ?n b)))
-
-  (rule (legal ?w (mark ?x ?y))
-        (true (cell ?x ?y b))
-        (true (control ?w)))
-
-  (rule (legal xplayer noop)
-        (true (control oplayer)))
-
-  (rule (legal oplayer noop)
-        (true (control xplayer)))
-
-  (rule (goal xplayer 100)
-        (line x))
-
-  (rule (goal xplayer 50)
-        (not (line x))
-        (not (line o))
-        (not open))
-
-  (rule (goal xplayer 0)
-        (line o))
-
-  (rule (goal oplayer 100)
-        (line o))
-
-  (rule (goal oplayer 50)
-        (not (line x))
-        (not (line o))
-        (not open))
-
-  (rule (goal oplayer 0)
-        (line x))
-
-  (rule (terminal)
-        (line x))
-
-  (rule (terminal)
-        (line o))
-
-  (rule (terminal)
-        (not open)))
+  (rules ((terminal :state)
+          (true :state (step num8)))
+         ((terminal :state)
+          (true :state (on p))
+          (true :state (on q))
+          (true :state (on r))
+          (true :state (on s))
+          )))
 
 
-;;;; GGP
-(defun random-elt (seq)
-  (elt seq (random (length seq))))
+(defun extract (key results)
+  (mapcar (lambda (result) (getf result key)) results))
 
-(defun clear-state! ()
-  (clear-predicate 'true)
-  (clear-predicate 'does))
+(defun to-fake-list (l)
+  (if (null l)
+    'nil
+    `(cons ,(car l) ,(to-fake-list (cdr l)))))
 
-(defun extract-results (bindings)
-  (loop :for binding-list :in bindings
-        :collect (cdar binding-list)))
+(defun initial-state ()
+  (to-fake-list
+    (with-database *d*
+      (extract :what (return-all (init :what))))))
 
-(defun build-init! ()
-  (let ((initial-state (return-all (init ?state))))
-    (loop :for state :in (extract-results initial-state)
-          :do (add-fact `(true ,state))))
-  (values))
+(defun terminalp (state)
+  (with-database *d*
+    (perform-prove `((terminal ,state)))))
 
-(defun legal-moves (role)
-  (extract-results (return-all-for `((legal ,role ?move)))))
-
-(defun make-move! (role move)
-  (add-fact `(does ,role ,move)))
-
-(defun advance-state! ()
-  (let ((next-facts (extract-results (return-all-for '((next ?state))))))
-    (clear-state!)
-    (mapc (lambda (n) (add-fact `(true ,n))) next-facts)))
+(defun legal-moves (state)
+  (declare (ignore state))
+  (with-database *d*
+    (return-all (legal :role :move))))
 
 (defun roles ()
-  (extract-results (return-all (role ?r))))
+  (with-database *d*
+    (extract :role (return-all (role :role)))))
 
-(defun random-moves ()
-  (loop :for role :in (roles)
-        :collect (cons role (random-elt (legal-moves role)))))
+(defun goal-value (state role)
+  (with-database *d*
+    (getf (perform-return `((goal ,state ,role :goal)) :one) :goal)))
 
-(defun make-random-moves! ()
-  (loop :for (role . move) :in (random-moves)
-        :do (make-move! role move)))
+(defun goal-values (state)
+  (with-database *d*
+    (perform-return `((goal ,state :role :goal)) :all)))
 
-(defun terminal-p ()
-  (provable-p (terminal)))
-
-(defun goals ()
-  (loop :for result :in (return-all (goal ?role ?val))
-        :collect (cons (cdr (assoc '?role result))
-                       (cdr (assoc '?val result)))))
-
-(defun depth-charge! ()
-  (if (terminal-p)
-    (goals)
-    (progn
-      (make-random-moves!)
-      (advance-state!)
-      (depth-charge!))))
-
-(defun fresh-depth-charge! ()
-  (progn (clear-state!)
-         (build-init!)
-         (depth-charge!)))
+(defun next-state (current-state move)
+  (let ((does (to-fake-list `((does
+                                ,(getf move :role)
+                                ,(getf move :move))))))
+    (with-database *d*
+      (to-fake-list
+        (extract :what
+               (perform-return `((next ,current-state ,does :what)) :all))))))
 
 
-;;;; Run
-(dont-press-the-button)
-(tic-tac-toe)
-(clear-state!)
-(build-init!)
-(advance-state!)
-(make-random-moves!)
-(query-all (next ?x))
-(query-all (true ?x))
-(query-all (does ?r ?m))
+(defstruct search-path state (path nil) (previous nil))
 
-(fresh-depth-charge!)
-(time
-  (dotimes (i 100000)
-    (fresh-depth-charge!)))
+(defun tree-search (states goal-p children combine)
+  (labels
+      ((recur (states)
+         (if (null states)
+           nil
+           (destructuring-bind (state . remaining) states
+             ; (format t "Searching: ~S (~D remaining)~%" state (length remaining))
+             (if (funcall goal-p state)
+               state
+               (recur (funcall combine
+                               (funcall children state)
+                               remaining)))))))
+    (let ((result (recur states)))
+      (when result
+        (reverse (search-path-path result))))))
+
+
+(defun buttons-goal-p (search-path)
+  (let ((state (search-path-state search-path)))
+    (and (terminalp state)
+         (eql (goal-value state 'robot) 'num100))))
+
+(defun buttons-children (search-path)
+  (let ((state (search-path-state search-path))
+        (path (search-path-path search-path)))
+    (when (not (terminalp state))
+      (loop :for move :in (legal-moves state)
+            :collect (make-search-path :state (next-state state move)
+                                       :path (cons move path)
+                                       :previous search-path)))))
+
+(defun never (&rest args)
+  (declare (ignore args))
+  nil)
+
+(defun dfs ()
+  (tree-search (list (make-search-path :state (initial-state)))
+               #'buttons-goal-p
+               #'buttons-children
+               #'append))
+
+(defun dfs-exhaust ()
+  (tree-search (list (make-search-path :state (initial-state)))
+               #'never
+               #'buttons-children
+               #'append))
+
+(defun bfs ()
+  (tree-search (list (make-search-path :state (initial-state)))
+               #'buttons-goal-p
+               #'buttons-children
+               (lambda (x y)
+                 (append y x))))
+
+(sb-sprof:with-profiling
+    (:report :flat
+     :sample-interval 0.001
+     :loop nil)
+  (dfs-exhaust)
+  )

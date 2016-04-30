@@ -333,6 +333,10 @@
   (dump-labels wam)
   (dump-code wam))
 
+(defun dump-wam-query-code (wam)
+  (with-slots (code) wam
+    (dump-code-store wam code 0 +maximum-query-size+)))
+
 (defun dump-wam-code (wam)
   (with-slots (code) wam
     (dump-code-store wam code +maximum-query-size+ (length code))))
