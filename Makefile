@@ -1,4 +1,4 @@
-.PHONY: test pubdocs
+.PHONY: test pubdocs bench
 
 sourcefiles = $(shell ffind --full-path --dir src --literal .lisp)
 docfiles = $(shell ls docs/*.markdown)
@@ -24,3 +24,5 @@ pubdocs: docs
 	hg -R ~/src/sjl.bitbucket.org commit -Am 'bones: Update site.'
 	hg -R ~/src/sjl.bitbucket.org push
 
+bench:
+	sbcl-rlwrap --noinform --load examples/bench.lisp  --eval '(quit)'

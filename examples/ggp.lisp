@@ -1,7 +1,7 @@
 (in-package #:bones.wam)
 
-(declaim (optimize (speed 1) (safety 3) (debug 1)))
-; (declaim (optimize (speed 3) (safety 1) (debug 0)))
+; (declaim (optimize (speed 1) (safety 3) (debug 1)))
+(declaim (optimize (speed 3) (safety 1) (debug 0)))
 
 (defparameter *d* (make-database))
 
