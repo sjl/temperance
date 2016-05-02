@@ -386,7 +386,7 @@
             (+ (wam-program-counter wam)
                (instruction-size +opcode-call+))
 
-            (wam-nargs wam) ; set NARGS
+            (wam-number-of-arguments wam) ; set NARGS
             (wam-functor-arity wam functor)
 
             (wam-program-counter wam) ; jump
@@ -398,14 +398,14 @@
         (wam-continuation-pointer wam)))
 
 (define-instruction %allocate ((wam wam) (n stack-frame-argcount))
-  ;; We use the slots directly here for speed.  I know this sucks.  I'm sorry.
-  (with-slots (stack environment-pointer) wam
-    (let ((new-e (wam-stack-top wam)))
-      (wam-stack-ensure-size! wam (+ new-e 3 n))
-      (setf (aref stack new-e) environment-pointer ; CE
-            (aref stack (+ new-e 1)) (wam-continuation-pointer wam) ; CP
-            (aref stack (+ new-e 2)) n ; N
-            environment-pointer new-e)))) ; E <- new-e
+  (let ((stack (wam-stack wam))
+        (old-e (wam-environment-pointer wam))
+        (new-e (wam-stack-top wam)))
+    (wam-stack-ensure-size! wam (+ new-e 3 n))
+    (setf (aref stack new-e) old-e ; CE
+          (aref stack (+ new-e 1)) (wam-continuation-pointer wam) ; CP
+          (aref stack (+ new-e 2)) n ; N
+          (wam-environment-pointer wam) new-e))) ; E <- new-e
 
 (define-instruction %deallocate ((wam wam))
   (setf (wam-program-counter wam)
@@ -416,22 +416,22 @@
 
 ;;;; Choice Instructions
 (define-instruction %try ((wam wam) (next-clause code-index))
-  (with-slots (stack backtrack-pointer) wam
-    (let ((new-b (wam-stack-top wam))
-          (nargs (wam-nargs wam)))
-      (wam-stack-ensure-size! wam (+ new-b 7 nargs))
-      (setf (aref stack new-b) nargs ; N
-            (aref stack (+ new-b 1)) (wam-environment-pointer wam) ; CE
-            (aref stack (+ new-b 2)) (wam-continuation-pointer wam) ; CP
-            (aref stack (+ new-b 3)) (wam-backtrack-pointer wam) ; CB
-            (aref stack (+ new-b 4)) next-clause ; BP
-            (aref stack (+ new-b 5)) (wam-trail-pointer wam) ; TR
-            (aref stack (+ new-b 6)) (wam-heap-pointer wam) ; H
-            (wam-heap-backtrack-pointer wam) (wam-heap-pointer wam) ; HB
-            (wam-backtrack-pointer wam) new-b) ; B
-      (loop :for i :from 0 :below nargs :do ; A_i
-            (setf (wam-stack-choice-arg wam i new-b)
-                  (wam-local-register wam i))))))
+  (let ((stack (wam-stack wam))
+        (new-b (wam-stack-top wam))
+        (nargs (wam-number-of-arguments wam)))
+    (wam-stack-ensure-size! wam (+ new-b 7 nargs))
+    (setf (aref stack new-b) nargs ; N
+          (aref stack (+ new-b 1)) (wam-environment-pointer wam) ; CE
+          (aref stack (+ new-b 2)) (wam-continuation-pointer wam) ; CP
+          (aref stack (+ new-b 3)) (wam-backtrack-pointer wam) ; CB
+          (aref stack (+ new-b 4)) next-clause ; BP
+          (aref stack (+ new-b 5)) (wam-trail-pointer wam) ; TR
+          (aref stack (+ new-b 6)) (wam-heap-pointer wam) ; H
+          (wam-heap-backtrack-pointer wam) (wam-heap-pointer wam) ; HB
+          (wam-backtrack-pointer wam) new-b) ; B
+    (loop :for i :from 0 :below nargs :do ; A_i
+          (setf (wam-stack-choice-arg wam i new-b)
+                (wam-local-register wam i)))))
 
 (define-instruction %retry ((wam wam) (next-clause code-index))
   (let ((b (wam-backtrack-pointer wam)))
@@ -529,66 +529,67 @@
 
 
 (defun run (wam done-thunk)
-  (with-slots (code program-counter fail backtrack) wam
-    (macrolet ((instruction (inst args)
-                 `(instruction-call wam ,inst code program-counter ,args)))
-      (loop
-        :while (and (not fail) ; failure
-                    (not (= program-counter +code-sentinal+))) ; finished
-        :for opcode = (aref code program-counter)
-        :do
-        (block op
-          (when *step*
-            (dump) ; todo: make this saner
-            (break "About to execute instruction at ~4,'0X" program-counter))
-          (eswitch (opcode)
-            ;; Query
-            (+opcode-put-structure-local+  (instruction %put-structure-local 2))
-            (+opcode-set-variable-local+   (instruction %set-variable-local 1))
-            (+opcode-set-variable-stack+   (instruction %set-variable-stack 1))
-            (+opcode-set-value-local+      (instruction %set-value-local 1))
-            (+opcode-set-value-stack+      (instruction %set-value-stack 1))
-            (+opcode-put-variable-local+   (instruction %put-variable-local 2))
-            (+opcode-put-variable-stack+   (instruction %put-variable-stack 2))
-            (+opcode-put-value-local+      (instruction %put-value-local 2))
-            (+opcode-put-value-stack+      (instruction %put-value-stack 2))
-            ;; Program
-            (+opcode-get-structure-local+  (instruction %get-structure-local 2))
-            (+opcode-unify-variable-local+ (instruction %unify-variable-local 1))
-            (+opcode-unify-variable-stack+ (instruction %unify-variable-stack 1))
-            (+opcode-unify-value-local+    (instruction %unify-value-local 1))
-            (+opcode-unify-value-stack+    (instruction %unify-value-stack 1))
-            (+opcode-get-variable-local+   (instruction %get-variable-local 2))
-            (+opcode-get-variable-stack+   (instruction %get-variable-stack 2))
-            (+opcode-get-value-local+      (instruction %get-value-local 2))
-            (+opcode-get-value-stack+      (instruction %get-value-stack 2))
-            ;; Choice
-            (+opcode-try+                  (instruction %try 1))
-            (+opcode-retry+                (instruction %retry 1))
-            (+opcode-trust+                (instruction %trust 0))
-            ;; Control
-            (+opcode-allocate+             (instruction %allocate 1))
-            ;; need to skip the PC increment for PROC/CALL/DEAL/DONE
-            ;; TODO: this is ugly
-            (+opcode-deallocate+
-              (instruction %deallocate 0)
-              (return-from op))
-            (+opcode-proceed+
-              (instruction %proceed 0)
-              (return-from op))
-            (+opcode-call+
-              (instruction %call 1)
-              (return-from op))
-            (+opcode-done+
-              (if (funcall done-thunk)
-                (return-from run)
-                (backtrack! wam "done-function returned false"))))
-          ;; Only increment the PC when we didn't backtrack
-          (if (wam-backtracked wam)
-            (setf (wam-backtracked wam) nil)
-            (incf program-counter (instruction-size opcode)))
-          (when (>= program-counter (fill-pointer code))
-            (error "Fell off the end of the program code store!")))))
+  (with-accessors ((pc wam-program-counter)) wam
+    (let ((code (wam-code wam)))
+      (macrolet ((instruction (inst args)
+                   `(instruction-call wam ,inst code pc ,args)))
+        (loop
+          :while (and (not (wam-fail wam)) ; failure
+                      (not (= pc +code-sentinal+))) ; finished
+          :for opcode = (aref code pc)
+          :do
+          (block op
+            (when *step*
+              (dump) ; todo: make this saner
+              (break "About to execute instruction at ~4,'0X" pc))
+            (eswitch (opcode)
+              ;; Query
+              (+opcode-put-structure-local+  (instruction %put-structure-local 2))
+              (+opcode-set-variable-local+   (instruction %set-variable-local 1))
+              (+opcode-set-variable-stack+   (instruction %set-variable-stack 1))
+              (+opcode-set-value-local+      (instruction %set-value-local 1))
+              (+opcode-set-value-stack+      (instruction %set-value-stack 1))
+              (+opcode-put-variable-local+   (instruction %put-variable-local 2))
+              (+opcode-put-variable-stack+   (instruction %put-variable-stack 2))
+              (+opcode-put-value-local+      (instruction %put-value-local 2))
+              (+opcode-put-value-stack+      (instruction %put-value-stack 2))
+              ;; Program
+              (+opcode-get-structure-local+  (instruction %get-structure-local 2))
+              (+opcode-unify-variable-local+ (instruction %unify-variable-local 1))
+              (+opcode-unify-variable-stack+ (instruction %unify-variable-stack 1))
+              (+opcode-unify-value-local+    (instruction %unify-value-local 1))
+              (+opcode-unify-value-stack+    (instruction %unify-value-stack 1))
+              (+opcode-get-variable-local+   (instruction %get-variable-local 2))
+              (+opcode-get-variable-stack+   (instruction %get-variable-stack 2))
+              (+opcode-get-value-local+      (instruction %get-value-local 2))
+              (+opcode-get-value-stack+      (instruction %get-value-stack 2))
+              ;; Choice
+              (+opcode-try+                  (instruction %try 1))
+              (+opcode-retry+                (instruction %retry 1))
+              (+opcode-trust+                (instruction %trust 0))
+              ;; Control
+              (+opcode-allocate+             (instruction %allocate 1))
+              ;; need to skip the PC increment for PROC/CALL/DEAL/DONE
+              ;; TODO: this is ugly
+              (+opcode-deallocate+
+                (instruction %deallocate 0)
+                (return-from op))
+              (+opcode-proceed+
+                (instruction %proceed 0)
+                (return-from op))
+              (+opcode-call+
+                (instruction %call 1)
+                (return-from op))
+              (+opcode-done+
+                (if (funcall done-thunk)
+                  (return-from run)
+                  (backtrack! wam "done-function returned false"))))
+            ;; Only increment the PC when we didn't backtrack
+            (if (wam-backtracked wam)
+              (setf (wam-backtracked wam) nil)
+              (incf pc (instruction-size opcode)))
+            (when (>= pc (fill-pointer code))
+              (error "Fell off the end of the program code store!"))))))
     (values)))
 
 (defun run-query (wam term

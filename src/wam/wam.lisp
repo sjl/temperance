@@ -1,121 +1,122 @@
 (in-package #:bones.wam)
 
 ;;;; WAM
-(defclass wam ()
-  ((heap
-     :initform (make-array 1024
-                 :fill-pointer 0
-                 :adjustable t
-                 :initial-element (make-cell-null)
-                 :element-type 'heap-cell)
-     :reader wam-heap
-     :documentation "The actual heap (stack).")
-   (code
-     ;; The WAM bytecode is all stored in this array.  The first
-     ;; `+maximum-query-size+` words are reserved for query bytecode, which will
-     ;; get loaded in (overwriting the previous query) when making a query.
-     ;; Everything after that is for the actual database.
-     :initform (make-array (+ +maximum-query-size+ 1024)
-                 :adjustable t
-                 :fill-pointer +maximum-query-size+
-                 :initial-element 0
-                 :element-type 'code-word)
-     :reader wam-code
-     :documentation "The code store.")
-   (functors
-     :initform (make-array 64
-                 :fill-pointer 0
-                 :adjustable t
-                 :element-type 'functor)
-     :accessor wam-functors
-     :documentation "The array of functors in this WAM.")
-   (code-labels
-     :initform (make-hash-table)
-     :accessor wam-code-labels
-     :documentation "The mapping of functor indices -> code store addresses.")
-   (registers
-     :reader wam-local-registers
-     :initform (make-array +register-count+
-                 ;; Initialize to the last element in the heap for debugging.
-                 ;; todo: don't do this
-                 :initial-element (1- +heap-limit+)
-                 :element-type 'heap-index)
-     :documentation "An array of the local X_i registers.")
-   (stack
-     :reader wam-stack
-     :initform (make-array 1024
-                 :adjustable t
-                 :initial-element 0
-                 :element-type 'stack-word)
-     :documentation "The local stack for storing stack frames.")
-   (fail
-     :accessor wam-fail
-     :initform nil
-     :type boolean
-     :documentation "The failure register.")
-   (backtracked
-     :accessor wam-backtracked
-     :initform nil
-     :type boolean
-     :documentation "The backtracked register.")
-   (unification-stack
-     :reader wam-unification-stack
-     :initform (make-array 16
-                 :fill-pointer 0
-                 :adjustable t
-                 :element-type 'heap-index)
-     :documentation "The unification stack.")
-   (trail
-     :reader wam-trail
-     :initform (make-array 64
-                 :fill-pointer 0
-                 :adjustable t
-                 :element-type 'heap-index)
-     :documentation "The trail of variables to unbind on backtracking.")
-   (number-of-arguments
-     :accessor wam-nargs
-     :initform 0
-     :type arity
-     :documentation "The Number of Arguments register (global var).")
-   (subterm
-     :accessor wam-subterm
-     :initform nil
-     :type (or null heap-index)
-     :documentation "The Subterm register (S).")
-   (program-counter
-     :accessor wam-program-counter
-     :initform 0
-     :type code-index
-     :documentation "The Program Counter (P) into the WAM code store.")
-   (continuation-pointer
-     :accessor wam-continuation-pointer
-     :initform 0
-     :type code-index
-     :documentation "The Continuation Pointer (CP) into the WAM code store.")
-   (environment-pointer
-     :accessor wam-environment-pointer
-     :initform 0
-     :type environment-pointer
-     :documentation "The Environment Pointer (E) into the WAM stack.")
-   (backtrack-pointer
-     :accessor wam-backtrack-pointer
-     :initform 0
-     :type backtrack-pointer
-     :documentation "The Backtrack Pointer (B) into the WAM stack.")
-   (heap-backtrack-pointer
-     :accessor wam-heap-backtrack-pointer
-     :initform 0
-     :type heap-index
-     :documentation "The Heap Backtrack Pointer (HB) into the WAM heap.")
-   (mode
-     :accessor wam-mode
-     :initform nil
-     :type (or null (member :read :write))
-     :documentation "Current unification mode (:READ or :WRITE (or NIL)).")))
+(declaim
+  ;; Inline all these struct accessors, otherwise things get REAL slow.
+  (inline wam-heap
+          wam-code
+          wam-functors
+          wam-code-labels
+          wam-local-registers
+          wam-stack
+          wam-fail
+          wam-backtracked
+          wam-unification-stack
+          wam-trail
+          wam-number-of-arguments
+          wam-subterm
+          wam-program-counter
+          wam-continuation-pointer
+          wam-environment-pointer
+          wam-backtrack-pointer
+          wam-heap-backtrack-pointer
+          wam-mode))
 
+(defstruct (wam (:type vector) :named)
+  (heap
+    (make-array 1024
+      :fill-pointer 0
+      :adjustable t
+      :initial-element (make-cell-null)
+      :element-type 'heap-cell)
+    :type (vector heap-cell)
+    :read-only t)
+  (code
+    ;; The WAM bytecode is all stored in this array.  The first
+    ;; `+maximum-query-size+` words are reserved for query bytecode, which will
+    ;; get loaded in (overwriting the previous query) when making a query.
+    ;; Everything after that is for the actual database.
+    (make-array (+ +maximum-query-size+ 1024)
+      :adjustable t
+      :fill-pointer +maximum-query-size+
+      :initial-element 0
+      :element-type 'code-word)
+    :type (vector code-word)
+    :read-only t)
+  (functors
+    (make-array 64
+      :fill-pointer 0
+      :adjustable t
+      :element-type 'functor)
+    :type (vector functor)
+    :read-only t)
+  (code-labels
+    (make-hash-table)
+    :read-only t)
+  (local-registers
+    (make-array +register-count+
+      ;; Initialize to the last element in the heap for debugging.
+      ;; todo: don't do this
+      :initial-element (1- +heap-limit+)
+      :element-type 'heap-index)
+    :type (simple-array heap-index)
+    :read-only t)
+  (stack
+    (make-array 1024
+      :adjustable t
+      :initial-element 0
+      :element-type 'stack-word)
+    :type (vector stack-word)
+    :read-only t)
+  (fail
+    nil
+    :type boolean)
+  (backtracked
+    nil
+    :type boolean)
+  (unification-stack
+    (make-array 16
+      :fill-pointer 0
+      :adjustable t
+      :element-type 'heap-index)
+    :type (vector heap-index)
+    :read-only t)
+  (trail
+    (make-array 64
+      :fill-pointer 0
+      :adjustable t
+      :initial-element 0
+      :element-type 'heap-index)
+    :type (vector heap-index)
+    :read-only t)
+  (number-of-arguments
+    0
+    :type arity)
+  (subterm
+    nil
+    :type (or null heap-index))
+  (program-counter ; P
+    0
+    :type code-index)
+  (continuation-pointer ; CP
+    0
+    :type code-index)
+  (environment-pointer ; E
+    0
+    :type environment-pointer)
+  (backtrack-pointer ; B
+    0
+    :type backtrack-pointer)
+  (heap-backtrack-pointer ; HB
+    0
+    :type heap-index)
+  (mode
+    nil
+    :type (or null (member :read :write))))
 
-(defun make-wam ()
-  (make-instance 'wam))
+(deftype wam ()
+  ; todo lol
+  '(simple-vector 19))
 
 
 ;;;; Heap
@@ -126,7 +127,7 @@
   Returns the cell and the address it was pushed to.
 
   "
-  (with-slots (heap) wam
+  (let ((heap (wam-heap wam)))
     (if (= +heap-limit+ (fill-pointer heap))
       (error "WAM heap exhausted.")
       (values cell (vector-push-extend cell heap)))))
@@ -166,7 +167,7 @@
   Returns the address and the trail address it was pushed to.
 
   "
-  (with-slots (trail) wam
+  (let ((trail (wam-trail wam)))
     (if (= +trail-limit+ (fill-pointer trail))
       (error "WAM trail exhausted.")
       (values address (vector-push-extend address trail)))))
@@ -208,7 +209,7 @@
   It will be adjusted (but not beyond the limit) if necessary.
 
   "
-  (with-slots (stack) wam
+  (let ((stack (wam-stack wam)))
     (if (>= address +stack-limit+)
       (error "WAM stack exhausted.")
       (while (>= address (array-total-size stack))
@@ -401,7 +402,8 @@
   ;; The book is wrong here -- it looks up the "current frame size" to
   ;; determine where the next frame should start, but on the first allocation
   ;; there IS no current frame so it looks at garbage.  Fuckin' great.
-  (with-slots ((e environment-pointer) (b backtrack-pointer)) wam
+  (let ((e (wam-environment-pointer wam))
+        (b (wam-backtrack-pointer wam)))
     (cond
       ((= 0 b e) 1) ; first allocation
       ((> e b) ; the last thing on the stack is a frame
@@ -577,7 +579,7 @@
   If the functor is not already in the table it will be added.
 
   "
-  (with-slots (functors) wam
+  (let ((functors (wam-functors wam)))
     (or (position functor functors :test #'equal)
         (vector-push-extend functor functors))))
 
