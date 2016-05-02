@@ -25,4 +25,6 @@ pubdocs: docs
 	hg -R ~/src/sjl.bitbucket.org push
 
 bench:
+	# jesus christ quicklisp
+	rm -rf ~/.cache/common-lisp
 	sbcl-rlwrap --noinform --load examples/bench.lisp  --eval '(quit)'

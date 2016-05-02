@@ -7,8 +7,8 @@
 
 (in-package :bones.paip)
 (format t "PAIP ------------------------------~%")
-(time (dfs))
+(time (dfs-exhaust))
 
 (in-package :bones.wam)
 (format t "WAM -------------------------------~%")
-(time (dfs))
+(time (dfs-exhaust))
