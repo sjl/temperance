@@ -217,6 +217,9 @@
                (perform-return `((next ,current-state ,does :what)) :all))))))
 
 
+
+(defvar *count* 0)
+
 (defstruct search-path state (path nil) (previous nil))
 
 (defun tree-search (states goal-p children combine)
@@ -225,6 +228,7 @@
          (if (null states)
            nil
            (destructuring-bind (state . remaining) states
+             (incf *count*)
              ; (format t "Searching: ~S (~D remaining)~%" state (length remaining))
              (if (funcall goal-p state)
                state
@@ -261,10 +265,13 @@
                #'append))
 
 (defun dfs-exhaust ()
-  (tree-search (list (make-search-path :state (initial-state)))
-               #'never
-               #'buttons-children
-               #'append))
+  (let ((*count* 0))
+    (prog1
+        (tree-search (list (make-search-path :state (initial-state)))
+                     #'never
+                     #'buttons-children
+                     #'append)
+      (format t "Searched ~D nodes.~%" *count*))))
 
 (defun bfs ()
   (tree-search (list (make-search-path :state (initial-state)))
@@ -273,9 +280,9 @@
                (lambda (x y)
                  (append y x))))
 
-(sb-sprof:with-profiling
-    (:report :flat
-     :sample-interval 0.001
-     :loop nil)
-  (dfs-exhaust)
-  )
+; (sb-sprof:with-profiling
+;     (:report :flat
+;      :sample-interval 0.001
+;      :loop nil)
+;   (dfs-exhaust)
+;   )

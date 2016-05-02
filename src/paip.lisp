@@ -414,9 +414,19 @@
 (defmacro return-one (&rest goals)
   `(top-level-find ',goals 'return-one-result))
 
+(defun raw-return-one (&rest goals)
+  (top-level-find goals 'return-one-result))
+
 (defmacro return-all (&rest goals)
   `(top-level-find ',goals 'return-all-results))
 
+(defun raw-return-all (&rest goals)
+  (top-level-find goals 'return-all-results))
+
+
 (defmacro provable-p (&rest goals)
   `(top-level-find ',goals 'return-boolean))
+
+(defun raw-provable-p (&rest goals)
+  (top-level-find goals 'return-boolean))
 
