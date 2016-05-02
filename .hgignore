@@ -3,3 +3,4 @@ syntax: glob
 docs/build
 scratch.lisp
 STATUS
+bench-results.txt
