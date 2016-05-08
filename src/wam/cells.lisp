@@ -65,12 +65,12 @@
           (eswitch ((cell-type cell))
             (+tag-null+ "")
             (+tag-structure+
-              (format nil " ~D" (cell-value cell)))
+              (format nil " ~X" (cell-value cell)))
             (+tag-functor+
-              (format nil " ~D"
+              (format nil " ~X"
                       (cell-functor-index cell)))
             (+tag-reference+
-              (format nil " ~D" (cell-value cell))))))
+              (format nil " ~X" (cell-value cell))))))
 
 
 (defun* cell-null-p ((cell heap-cell))

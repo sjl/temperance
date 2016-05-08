@@ -70,7 +70,7 @@
   "
   (when *break-on-fail*
     (break "FAIL: ~A" reason))
-  (if (zerop (wam-backtrack-pointer wam))
+  (if (wam-backtrack-pointer-unset-p wam)
     (setf (wam-fail wam) t)
     (setf (wam-program-counter wam) (wam-stack-choice-bp wam)
           (wam-backtracked wam) t))
@@ -306,13 +306,13 @@
         ;; few instructions (which will be unify-*'s, executed in write mode).
         ((cell-reference-p cell)
          (let ((structure-address (nth-value 1 (push-new-structure! wam)))
-               (functor-address (push-new-functor! wam functor)))
+               (functor-address (nth-value 1 (push-new-functor! wam functor))))
            (bind! wam addr structure-address)
            (setf mode :write
                  s (1+ functor-address))))
 
-        ;; If the register points at a structure cell, then we look at where that
-        ;; cell points (which will be the functor cell for the structure):
+        ;; If the register points at a structure cell, then we look at where
+        ;; that cell points (which will be the functor cell for the structure):
         ;;
         ;;     |   N | STR | M   | points at the structure, not necessarily contiguous
         ;;     |       ...       |
@@ -325,15 +325,15 @@
         ;; (M+1 in the example above).
         ;;
         ;; What about if it's a 0-arity functor?  The S register will be set to
-        ;; garbage.  But that's okay, because we know the next thing in the stream
-        ;; of instructions will be another get-structure and we'll just blow away
-        ;; the S register there.
+        ;; garbage.  But that's okay, because we know the next thing in the
+        ;; stream of instructions will be another get-structure and we'll just
+        ;; blow away the S register there.
         ((cell-structure-p cell)
          (let* ((functor-addr (cell-value cell))
                 (functor-cell (wam-heap-cell wam functor-addr)))
            (if (matching-functor-p functor-cell functor)
-             (setf s (1+ functor-addr)
-                   mode :read)
+             (setf mode :read
+                   s (1+ functor-addr))
              (backtrack! wam "Functors don't match in get-struct"))))
         (t (backtrack! wam (format nil "get-struct on a non-ref/struct cell ~A"
                                    (cell-aesthetic cell))))))))
@@ -398,13 +398,12 @@
         (wam-continuation-pointer wam)))
 
 (define-instruction %allocate ((wam wam) (n stack-frame-argcount))
-  (let ((stack (wam-stack wam))
-        (old-e (wam-environment-pointer wam))
+  (let ((old-e (wam-environment-pointer wam))
         (new-e (wam-stack-top wam)))
-    (wam-stack-ensure-size! wam (+ new-e 3 n))
-    (setf (aref stack new-e) old-e ; CE
-          (aref stack (+ new-e 1)) (wam-continuation-pointer wam) ; CP
-          (aref stack (+ new-e 2)) n ; N
+    (wam-stack-ensure-size wam (+ new-e 3 n))
+    (setf (wam-stack-word wam new-e) old-e ; CE
+          (wam-stack-word wam (+ new-e 1)) (wam-continuation-pointer wam) ; CP
+          (wam-stack-word wam (+ new-e 2)) n ; N
           (wam-environment-pointer wam) new-e))) ; E <- new-e
 
 (define-instruction %deallocate ((wam wam))
@@ -416,17 +415,16 @@
 
 ;;;; Choice Instructions
 (define-instruction %try ((wam wam) (next-clause code-index))
-  (let ((stack (wam-stack wam))
-        (new-b (wam-stack-top wam))
+  (let ((new-b (wam-stack-top wam))
         (nargs (wam-number-of-arguments wam)))
-    (wam-stack-ensure-size! wam (+ new-b 7 nargs))
-    (setf (aref stack new-b) nargs ; N
-          (aref stack (+ new-b 1)) (wam-environment-pointer wam) ; CE
-          (aref stack (+ new-b 2)) (wam-continuation-pointer wam) ; CP
-          (aref stack (+ new-b 3)) (wam-backtrack-pointer wam) ; CB
-          (aref stack (+ new-b 4)) next-clause ; BP
-          (aref stack (+ new-b 5)) (wam-trail-pointer wam) ; TR
-          (aref stack (+ new-b 6)) (wam-heap-pointer wam) ; H
+    (wam-stack-ensure-size wam (+ new-b 7 nargs))
+    (setf (wam-stack-word wam new-b) nargs ; N
+          (wam-stack-word wam (+ new-b 1)) (wam-environment-pointer wam) ; CE
+          (wam-stack-word wam (+ new-b 2)) (wam-continuation-pointer wam) ; CP
+          (wam-stack-word wam (+ new-b 3)) (wam-backtrack-pointer wam) ; CB
+          (wam-stack-word wam (+ new-b 4)) next-clause ; BP
+          (wam-stack-word wam (+ new-b 5)) (wam-trail-pointer wam) ; TR
+          (wam-stack-word wam (+ new-b 6)) (wam-heap-pointer wam) ; H
           (wam-heap-backtrack-pointer wam) (wam-heap-pointer wam) ; HB
           (wam-backtrack-pointer wam) new-b) ; B
     (loop :for i :from 0 :below nargs :do ; A_i
@@ -443,13 +441,14 @@
     (setf (wam-environment-pointer wam) (wam-stack-choice-ce wam b)
           (wam-continuation-pointer wam) (wam-stack-choice-cp wam b)
           ;; overwrite the next clause address in the choice point
-          (aref (wam-stack wam) (+ b 4)) next-clause
+          (wam-stack-word wam (+ b 4)) next-clause
           (wam-trail-pointer wam) (wam-stack-choice-tr wam b)
           (wam-heap-pointer wam) (wam-stack-choice-h wam b)
           (wam-heap-backtrack-pointer wam) (wam-heap-pointer wam))))
 
 (define-instruction %trust ((wam wam))
-  (let ((b (wam-backtrack-pointer wam)))
+  (let* ((b (wam-backtrack-pointer wam))
+         (old-b (wam-stack-choice-cb wam b)))
     ;; Restore argument registers
     (loop :for i :from 0 :below (wam-stack-choice-n wam b) :do
           (setf (wam-local-register wam i)
@@ -459,13 +458,22 @@
           (wam-continuation-pointer wam) (wam-stack-choice-cp wam b)
           (wam-trail-pointer wam) (wam-stack-choice-tr wam b)
           (wam-heap-pointer wam) (wam-stack-choice-h wam b)
-          (wam-backtrack-pointer wam) (wam-stack-choice-cb wam b)
-          ;; Note that this last one uses the NEW value of b, so the heap
-          ;; backtrack pointer gets set to the heap pointer saved in the
-          ;; PREVIOUS choice point.
+          (wam-backtrack-pointer wam) old-b
+
+          ;; The book is wrong here: this last one uses the NEW value of b, so
+          ;; the heap backtrack pointer gets set to the heap pointer saved in
+          ;; the PREVIOUS choice point.  Thanks to the errata at
+          ;; https://github.com/a-yiorgos/wambook/blob/master/wamerratum.txt for
+          ;; pointing this out.
           ;;
-          ;; TODO: What if we just popped off the last stack frame?
-          (wam-heap-backtrack-pointer wam) (wam-stack-choice-h wam))))
+          ;; ... well, almost.  The errata is also wrong here.  If we're popping
+          ;; the FIRST choice point, then just using the "previous choice
+          ;; point"'s HB is going to give us garbage, so we should check for that
+          ;; edge case too.  Please kill me.
+          (wam-heap-backtrack-pointer wam)
+          (if (wam-backtrack-pointer-unset-p wam old-b)
+            +heap-start+
+            (wam-stack-choice-h wam old-b)))))
 
 
 ;;;; Running

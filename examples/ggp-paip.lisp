@@ -1,8 +1,5 @@
 (in-package #:bones.paip)
 
-(declaim (optimize (speed 1) (safety 3) (debug 1)))
-; (declaim (optimize (speed 3) (safety 1) (debug 0)))
-
 (clear-db)
 
 (rule (member ?thing (cons ?thing ?rest)))

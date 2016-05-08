@@ -9,6 +9,7 @@
     #:bones.quickutils)
   (:export
     #:repeat
+    #:hex
     #:topological-sort
     #:push-if-new))
 

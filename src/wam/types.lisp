@@ -10,11 +10,14 @@
   `(unsigned-byte ,+cell-value-width+))
 
 
+(deftype store-index ()
+  `(integer 0 ,(1- +store-limit+)))
+
 (deftype heap-index ()
-  `(integer 0 ,(1- +heap-limit+)))
+  `(integer ,+heap-start+ ,(1- +store-limit+)))
 
 (deftype stack-index ()
-  `(integer 0 ,(1- +stack-limit+)))
+  `(integer ,+stack-start+ ,(1- +stack-end+)))
 
 (deftype trail-index ()
   `(integer 0 ,(1- +trail-limit+)))
@@ -23,7 +26,7 @@
   `(integer 0 ,(1- +register-count+)))
 
 (deftype functor-index ()
-  `(integer 0 ,(1- array-total-size-limit)))
+  `(integer 0 ,(1- +functor-limit+)))
 
 
 (deftype arity ()
@@ -37,7 +40,7 @@
   `(unsigned-byte ,+code-word-size+))
 
 (deftype code-index ()
-  ; either an address or the sentinal
+  ;; either an address or the sentinal
   `(integer 0 ,(1- +code-limit+)))
 
 

@@ -34,6 +34,9 @@
   `(dotimes (,(gensym) ,n)
      ,@body))
 
+(defun hex (d)
+  (format nil "~X" d))
+
 
 ;;;; Topological Sort
 ;;; Adapted from the AMOP book to add some flexibility (and remove the

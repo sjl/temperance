@@ -3,12 +3,10 @@
 ;;;; WAM
 (declaim
   ;; Inline all these struct accessors, otherwise things get REAL slow.
-  (inline wam-heap
+  (inline wam-store
           wam-code
           wam-functors
           wam-code-labels
-          wam-local-registers
-          wam-stack
           wam-fail
           wam-backtracked
           wam-unification-stack
@@ -22,10 +20,26 @@
           wam-heap-backtrack-pointer
           wam-mode))
 
-(defstruct (wam (:type vector) :named)
-  (heap
-    (make-array 1024
-      :fill-pointer 0
+(defstruct (wam
+             (:print-function
+              (lambda (wam stream depth)
+                (declare (ignore depth))
+                (print-unreadable-object
+                  (wam stream :type t :identity t)
+                  (format stream "an wam")))))
+  (store
+    ;; The main WAM store contains three separate blocks of values:
+    ;;
+    ;;     [0, +register-count+)        -> the local X_n registers
+    ;;     [+stack-start+, +stack-end+) -> the stack
+    ;;     [+heap-start+, ...)          -> the heap
+    ;;
+    ;; `+register-count+` and `+stack-start+` are the same number, and
+    ;; `+stack-end+` and `+heap-start+` are the same number as well.
+    (make-array (+ +register-count+ ; TODO: make all these configurable per-WAM
+                   +stack-limit+
+                   4096)
+      :fill-pointer +stack-end+
       :adjustable t
       :initial-element (make-cell-null)
       :element-type 'heap-cell)
@@ -53,27 +67,6 @@
   (code-labels
     (make-hash-table)
     :read-only t)
-  (local-registers
-    (make-array +register-count+
-      ;; Initialize to the last element in the heap for debugging.
-      ;; todo: don't do this
-      :initial-element (1- +heap-limit+)
-      :element-type 'heap-index)
-    :type (simple-array heap-index)
-    :read-only t)
-  (stack
-    (make-array 1024
-      :adjustable t
-      :initial-element 0
-      :element-type 'stack-word)
-    :type (vector stack-word)
-    :read-only t)
-  (fail
-    nil
-    :type boolean)
-  (backtracked
-    nil
-    :type boolean)
   (unification-stack
     (make-array 16
       :fill-pointer 0
@@ -89,37 +82,27 @@
       :element-type 'heap-index)
     :type (vector heap-index)
     :read-only t)
-  (number-of-arguments
-    0
-    :type arity)
-  (subterm
-    nil
-    :type (or null heap-index))
-  (program-counter ; P
-    0
-    :type code-index)
-  (continuation-pointer ; CP
-    0
-    :type code-index)
-  (environment-pointer ; E
-    0
-    :type environment-pointer)
-  (backtrack-pointer ; B
-    0
-    :type backtrack-pointer)
-  (heap-backtrack-pointer ; HB
-    0
-    :type heap-index)
-  (mode
-    nil
-    :type (or null (member :read :write))))
 
-(deftype wam ()
-  ; todo lol
-  '(simple-vector 19))
+  ;; Unique registers
+  (number-of-arguments    0             :type arity)                ; NARGS
+  (subterm                nil           :type (or null heap-index)) ; S
+  (program-counter        0             :type code-index)           ; P
+  (stack-pointer          +stack-start+ :type stack-index)          ; SP
+  (continuation-pointer   0             :type code-index)           ; CP
+  (environment-pointer    +stack-start+ :type environment-pointer)  ; E
+  (backtrack-pointer      +stack-start+ :type backtrack-pointer)    ; B
+  (heap-backtrack-pointer +heap-start+  :type heap-index)           ; HB
+
+  ;; Other global "registers"
+  (fail        nil :type boolean)
+  (backtracked nil :type boolean)
+  (mode        nil :type (or null (member :read :write))))
 
 
 ;;;; Heap
+;;; TODO: Should we privilege heap address 0 to mean "unset" so we have a good
+;;; sentinal value for HB, S, etc?
+
 (defun* wam-heap-push! ((wam wam) (cell heap-cell))
   (:returns (values heap-cell heap-index))
   "Push the cell onto the WAM heap and increment the heap pointer.
@@ -127,27 +110,27 @@
   Returns the cell and the address it was pushed to.
 
   "
-  (let ((heap (wam-heap wam)))
-    (if (= +heap-limit+ (fill-pointer heap))
+  (let ((store (wam-store wam)))
+    (if (= +store-limit+ (fill-pointer store))
       (error "WAM heap exhausted.")
-      (values cell (vector-push-extend cell heap)))))
+      (values cell (vector-push-extend cell store)))))
 
 (defun* wam-heap-pointer ((wam wam))
   (:returns heap-index)
   "Return the current heap pointer of the WAM."
-  (fill-pointer (wam-heap wam)))
+  (fill-pointer (wam-store wam)))
 
 (defun (setf wam-heap-pointer) (new-value wam)
-  (setf (fill-pointer (wam-heap wam)) new-value))
+  (setf (fill-pointer (wam-store wam)) new-value))
 
 
 (defun* wam-heap-cell ((wam wam) (address heap-index))
   (:returns heap-cell)
   "Return the heap cell at the given address."
-  (aref (wam-heap wam) address))
+  (aref (wam-store wam) address))
 
 (defun (setf wam-heap-cell) (new-value wam address)
-  (setf (aref (wam-heap wam) address) new-value))
+  (setf (aref (wam-store wam) address) new-value))
 
 
 ;;;; Trail
@@ -186,36 +169,55 @@
 
 
 ;;;; Stack
-;;; The stack is stored as a big ol' hunk of memory in a Lisp array with one
-;;; small glitch: we reserve the first word of the stack (address 0) to mean
-;;; "uninitialized", so we have a nice sentinal value for the various pointers
-;;; into the stack.
+;;; The stack is stored as a fixed-length hunk of the main WAM store array,
+;;; between the local register and the heap, with small glitch: we reserve the
+;;; first word of the stack (address `+stack-start`) to mean "uninitialized", so
+;;; we have a nice sentinal value for the various pointers into the stack.
+
+(declaim (inline wam-stack-word))
+
+(defun assert-inside-stack (wam address action)
+  (declare (ignore wam))
+  (assert (<= +stack-start+ address (1- +stack-end+)) ()
+    "Cannot ~A stack cell at address ~X (outside the stack range ~X to ~X)"
+    action address +stack-start+ +stack-end+)
+  (assert (not (= +stack-start+ address)) ()
+    "Cannot ~A stack address zero."
+    action))
+
+(defun* wam-stack-ensure-size ((wam wam) (address stack-index))
+  (:returns :void)
+  "Ensure the WAM stack is large enough to be able to write to `address`."
+  (assert-inside-stack wam address "write")
+  (values))
+
 
 (defun* wam-stack-word ((wam wam) (address stack-index))
   (:returns stack-word)
   "Return the stack word at the given address."
-  (assert (not (zerop address)) (address)
-          "Cannot write to stack address zero.")
-  (aref (wam-stack wam) address))
+  (assert-inside-stack wam address "read")
+  (aref (wam-store wam) address))
 
 (defun (setf wam-stack-word) (new-value wam address)
-  (setf (aref (wam-stack wam) address) new-value))
+  (assert-inside-stack wam address "write")
+  (setf (aref (wam-store wam) address) new-value))
 
-(defun* wam-stack-ensure-size! ((wam wam)
-                                (address stack-index))
-  (:returns :void)
-  "Ensure the WAM stack is large enough to be able to write to `address`.
 
-  It will be adjusted (but not beyond the limit) if necessary.
+(defun* wam-backtrack-pointer-unset-p
+  ((wam wam)
+   &optional
+   ((backtrack-pointer backtrack-pointer)
+    (wam-backtrack-pointer wam)))
+  (:returns boolean)
+  (= backtrack-pointer +stack-start+))
 
-  "
-  (let ((stack (wam-stack wam)))
-    (if (>= address +stack-limit+)
-      (error "WAM stack exhausted.")
-      (while (>= address (array-total-size stack))
-        ;; i uh, let's just hope this never executes more than once...
-        (adjust-array stack (* 2 (array-total-size stack))))))
-  (values))
+(defun* wam-environment-pointer-unset-p
+  ((wam wam)
+   &optional
+   ((environment-pointer environment-pointer)
+    (wam-environment-pointer wam)))
+  (:returns boolean)
+  (= environment-pointer +stack-start+))
 
 
 ;;; Stack frames are laid out like so:
@@ -257,7 +259,8 @@
     ((wam wam)
      (n register-index)
      &optional
-     ((e environment-pointer) (wam-environment-pointer wam)))
+     ((e environment-pointer)
+      (wam-environment-pointer wam)))
   (:returns heap-index)
   (wam-stack-word wam (+ 3 n e)))
 
@@ -405,7 +408,9 @@
   (let ((e (wam-environment-pointer wam))
         (b (wam-backtrack-pointer wam)))
     (cond
-      ((= 0 b e) 1) ; first allocation
+      ((and (wam-backtrack-pointer-unset-p wam b)
+            (wam-environment-pointer-unset-p wam e)) ; first allocation 
+       (1+ +stack-start+))
       ((> e b) ; the last thing on the stack is a frame
        (+ e (wam-stack-frame-size wam e)))
       (t ; the last thing on the stack is a choice point
@@ -414,7 +419,7 @@
 
 ;;;; Resetting
 (defun* wam-truncate-heap! ((wam wam))
-  (setf (fill-pointer (wam-heap wam)) 0))
+  (setf (fill-pointer (wam-store wam)) +heap-start+))
 
 (defun* wam-truncate-trail! ((wam wam))
   (setf (fill-pointer (wam-trail wam)) 0))
@@ -424,8 +429,7 @@
 
 (defun* wam-reset-local-registers! ((wam wam))
   (loop :for i :from 0 :below +register-count+ :do
-        (setf (wam-local-register wam i)
-              (1- +heap-limit+)))
+        (setf (wam-local-register wam i) (make-cell-null)))
   (setf (wam-subterm wam) nil))
 
 (defun* wam-reset! ((wam wam))
@@ -435,9 +439,9 @@
   (wam-reset-local-registers! wam)
   (setf (wam-program-counter wam) 0
         (wam-continuation-pointer wam) 0
-        (wam-environment-pointer wam) 0
-        (wam-backtrack-pointer wam) 0
-        (wam-heap-backtrack-pointer wam) 0
+        (wam-environment-pointer wam) +stack-start+
+        (wam-backtrack-pointer wam) +stack-start+
+        (wam-heap-backtrack-pointer wam) +heap-start+
         (wam-backtracked wam) nil
         (wam-fail wam) nil
         (wam-subterm wam) nil
@@ -526,8 +530,8 @@
 ;;; The WAM has two types of registers.  A register (regardless of type) always
 ;;; contains an index into the heap (basically a pointer to a heap cell).
 ;;;
-;;; Local/temporary/arguments registers live in a small, fixed, preallocated
-;;; array called `registers` in the WAM object.
+;;; Local/temporary/arguments registers live at the beginning of the WAM memory
+;;; store.
 ;;;
 ;;; Stack/permanent registers live on the stack, and need some extra math to
 ;;; find their location.
@@ -539,16 +543,16 @@
 ;;; instead of runtime, and register references happen A LOT at runtime.
 
 (defun* wam-local-register ((wam wam) (register register-index))
-  (:returns heap-index)
+  (:returns (or (eql 0) heap-index))
   "Return the value of the WAM local register with the given index."
-  (aref (wam-local-registers wam) register))
+  (aref (wam-store wam) register))
 
 (defun (setf wam-local-register) (new-value wam register)
-  (setf (aref (wam-local-registers wam) register) new-value))
+  (setf (aref (wam-store wam) register) new-value))
 
 
 (defun* wam-stack-register ((wam wam) (register register-index))
-  (:returns heap-index)
+  (:returns (or (eql 0) heap-index))
   "Return the value of the WAM stack register with the given index."
   (wam-stack-frame-arg wam register))
 
