@@ -39,7 +39,7 @@
     (make-array (+ +register-count+ ; TODO: make all these configurable per-WAM
                    +stack-limit+
                    4096)
-      :fill-pointer +stack-end+
+      :fill-pointer (1+ +stack-end+)
       :adjustable t
       :initial-element (make-cell-null)
       :element-type 'cell)
@@ -85,7 +85,7 @@
 
   ;; Unique registers
   (number-of-arguments    0             :type arity)                ; NARGS
-  (subterm                nil           :type (or null heap-index)) ; S
+  (subterm                +heap-start+  :type heap-index)           ; S
   (program-counter        0             :type code-index)           ; P
   (stack-pointer          +stack-start+ :type stack-index)          ; SP
   (continuation-pointer   0             :type code-index)           ; CP
@@ -100,8 +100,18 @@
 
 
 ;;;; Heap
-;;; TODO: Should we privilege heap address 0 to mean "unset" so we have a good
-;;; sentinal value for HB, S, etc?
+;;; The WAM heap is all the memory left in the store after the local registers
+;;; and stack have been accounted for.  Because the store is adjustable and the
+;;; heap lives at the end of it, the heap can grow if necessary.
+;;;
+;;; We reserve the first address in the heap as a sentinal, as an "unset" value
+;;; for various pointers into the heap.
+
+(defun* wam-heap-pointer-unset-p ((wam wam) (address heap-index))
+  (:returns boolean)
+  (declare (ignore wam))
+  (= address +heap-start+))
+
 
 (defun* wam-heap-push! ((wam wam) (cell cell))
   (:returns (values cell heap-index))
@@ -127,9 +137,13 @@
 (defun* wam-heap-cell ((wam wam) (address heap-index))
   (:returns cell)
   "Return the heap cell at the given address."
+  (assert (not (wam-heap-pointer-unset-p wam address)) ()
+    "Cannot read from heap address zero.")
   (aref (wam-store wam) address))
 
 (defun (setf wam-heap-cell) (new-value wam address)
+  (assert (not (wam-heap-pointer-unset-p wam address)) ()
+    "Cannot write to heap address zero.")
   (setf (aref (wam-store wam) address) new-value))
 
 
@@ -409,7 +423,7 @@
         (b (wam-backtrack-pointer wam)))
     (cond
       ((and (wam-backtrack-pointer-unset-p wam b)
-            (wam-environment-pointer-unset-p wam e)) ; first allocation 
+            (wam-environment-pointer-unset-p wam e)) ; first allocation
        (1+ +stack-start+))
       ((> e b) ; the last thing on the stack is a frame
        (+ e (wam-stack-frame-size wam e)))
@@ -419,7 +433,8 @@
 
 ;;;; Resetting
 (defun* wam-truncate-heap! ((wam wam))
-  (setf (fill-pointer (wam-store wam)) +heap-start+))
+  (setf (fill-pointer (wam-store wam))
+        (1+ +heap-start+)))
 
 (defun* wam-truncate-trail! ((wam wam))
   (setf (fill-pointer (wam-trail wam)) 0))
@@ -429,8 +444,7 @@
 
 (defun* wam-reset-local-registers! ((wam wam))
   (loop :for i :from 0 :below +register-count+ :do
-        (setf (wam-local-register wam i) (make-cell-null)))
-  (setf (wam-subterm wam) nil))
+        (setf (wam-local-register wam i) (make-cell-null))))
 
 (defun* wam-reset! ((wam wam))
   (wam-truncate-heap! wam)
@@ -444,7 +458,7 @@
         (wam-heap-backtrack-pointer wam) +heap-start+
         (wam-backtracked wam) nil
         (wam-fail wam) nil
-        (wam-subterm wam) nil
+        (wam-subterm wam) +heap-start+
         (wam-mode wam) nil))
 
 
@@ -567,7 +581,7 @@
 
   "
   (let ((s (wam-subterm wam)))
-    (if (null s)
+    (if (wam-heap-pointer-unset-p wam s)
       (error "Cannot dereference unbound S register.")
       (wam-heap-cell wam s))))
 

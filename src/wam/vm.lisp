@@ -467,9 +467,9 @@
           ;; pointing this out.
           ;;
           ;; ... well, almost.  The errata is also wrong here.  If we're popping
-          ;; the FIRST choice point, then just using the "previous choice
-          ;; point"'s HB is going to give us garbage, so we should check for that
-          ;; edge case too.  Please kill me.
+          ;; the FIRST choice point, then just using the HB from the "previous
+          ;; choice point" is going to give us garbage, so we should check for
+          ;; that edge case too.  Please kill me.
           (wam-heap-backtrack-pointer wam)
           (if (wam-backtrack-pointer-unset-p wam old-b)
             +heap-start+
