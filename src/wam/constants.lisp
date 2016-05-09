@@ -20,6 +20,7 @@
   :documentation "Maximum size of the WAM code store.")
 
 (define-constant +code-sentinal+ (1- +code-limit+)
+  ; TODO: Should this sentinal value be 0 like everything else?
   :documentation "Sentinal value used in the PC and CP.")
 
 
@@ -37,7 +38,7 @@
 
 
 (define-constant +register-count+ 2048
-  :documentation "The number of registers the WAM has available.")
+  :documentation "The number of local registers the WAM has available.")
 
 
 (define-constant +maximum-arity+ 1024
@@ -59,7 +60,8 @@
   :documentation "The address in the store of the first cell of the stack.")
 
 (define-constant +stack-end+ (+ +stack-start+ +stack-limit+)
-  :documentation "The address in the store one past the last cell in the stack.")
+  :documentation
+  "The address in the store one past the last cell in the stack.")
 
 (define-constant +heap-start+ +stack-end+
   :documentation "The address in the store of the first cell of the heap.")
@@ -68,10 +70,15 @@
   ;; The trail's fill pointer is stored inside choice frames on the stack, so it
   ;; needs to be able to fit inside a stack word.  We don't tag it, though, so
   ;; we can technically use all of the cell bits if we want.
+  ;;
+  ;; TODO: should probably limit this to something more reasonable
   :documentation "The maximum number of variables that may exist in the trail.")
 
 
-(define-constant +store-limit+ (expt 2 16)
+(define-constant +store-limit+ (expt 2 +cell-value-width+)
+  ;; Reference cells need to be able to store a heap address in their value
+  ;; bits, so that limits the amount of addressable space we've got to work
+  ;; with.
   :documentation "Maximum size of the WAM store.")
 
 (define-constant +heap-limit+ (- +store-limit+ +register-count+ +stack-limit+)

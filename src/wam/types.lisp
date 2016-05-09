@@ -52,6 +52,8 @@
   `(integer 3 ,+stack-frame-size-limit+))
 
 (deftype stack-choice-size ()
+  ;; TODO: is this actually right?  check on frame size limit vs choice point
+  ;; size limit...
   `(integer 7 ,+stack-frame-size-limit+))
 
 (deftype stack-frame-argcount ()
@@ -72,7 +74,7 @@
     environment-pointer ; CE
     continuation-pointer ; CP
     stack-frame-argcount ; N
-    heap-index)) ; Yn
+    cell)) ; Yn
 
 (deftype stack-choice-word ()
   '(or
@@ -81,9 +83,32 @@
     continuation-pointer ; CP, BP
     stack-frame-argcount ; N
     trail-index ; TR
-    heap-index))  ; An, H
+    heap-index ; H
+    cell)) ; An
 
 (deftype stack-word ()
   '(or stack-frame-word stack-choice-word))
+
+
+;;;; Sanity Checks
+;;; The values on the WAM stack are a bit of a messy situation.  The WAM store
+;;; is defined as an array of cells, but certain things on the stack aren't
+;;; actually cells (e.g. the stored continuation pointer).
+;;;
+;;; This shouldn't be a problem (aside from being ugly) as long as our `cell`
+;;; type is big enough to hold the values of these non-cell things.  So let's
+;;; just make sure that's the case...
+(defun sanity-check-stack-type (type)
+  (assert (subtypep type 'cell) ()
+    "Type ~A is too large to fit into a cell!"
+    type)
+  (values))
+
+(sanity-check-stack-type 'stack-frame-argcount)
+(sanity-check-stack-type 'environment-pointer)
+(sanity-check-stack-type 'continuation-pointer)
+(sanity-check-stack-type 'backtrack-pointer)
+(sanity-check-stack-type 'trail-index)
+(sanity-check-stack-type 'stack-word)
 
 

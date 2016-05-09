@@ -28,19 +28,19 @@
   (wam-heap-push! wam (make-cell-functor functor)))
 
 
-(defun* bound-reference-p ((wam wam) (address heap-index))
+(defun* bound-reference-p ((wam wam) (address store-index))
   (:returns boolean)
   "Return whether the cell at `address` is a bound reference."
   (ensure-boolean
-    (let ((cell (wam-heap-cell wam address)))
+    (let ((cell (wam-store-cell wam address)))
       (and (cell-reference-p cell)
            (not (= (cell-value cell) address))))))
 
-(defun* unbound-reference-p ((wam wam) (address heap-index))
+(defun* unbound-reference-p ((wam wam) (address store-index))
   (:returns boolean)
   "Return whether the cell at `address` is an unbound reference."
   (ensure-boolean
-    (let ((cell (wam-heap-cell wam address)))
+    (let ((cell (wam-store-cell wam address)))
       (and (cell-reference-p cell)
            (= (cell-value cell) address)))))
 
@@ -76,14 +76,14 @@
           (wam-backtracked wam) t))
   (values))
 
-(defun* trail! ((wam wam) (address heap-index))
+(defun* trail! ((wam wam) (address store-index))
   (:returns :void)
   "Push the given address onto the trail (but only if necessary)."
   (when (< address (wam-heap-backtrack-pointer wam))
     (wam-trail-push! wam address))
   (values))
 
-(defun* unbind! ((wam wam) (address heap-index))
+(defun* unbind! ((wam wam) (address store-index))
   (:returns :void)
   "Unbind the reference cell at `address`.
 
@@ -91,7 +91,7 @@
   a reference cell.
 
   "
-  (setf (wam-heap-cell wam address)
+  (setf (wam-store-cell wam address)
         (make-cell-reference address))
   (values))
 
@@ -105,9 +105,9 @@
         (unbind! wam (wam-trail-value wam i)))
   (values))
 
-(defun* deref ((wam wam) (address heap-index))
-  (:returns heap-index)
-  "Dereference the address in the WAM to its eventual destination.
+(defun* deref ((wam wam) (address store-index))
+  (:returns store-index)
+  "Dereference the address in the WAM store to its eventual destination.
 
   If the address is a variable that's bound to something, that something will be
   looked up (recursively) and the address of whatever it's ultimately bound to
@@ -115,10 +115,10 @@
 
   "
   (if (bound-reference-p wam address)
-    (deref wam (cell-value (wam-heap-cell wam address)))
+    (deref wam (cell-value (wam-store-cell wam address)))
     address))
 
-(defun* bind! ((wam wam) (address-1 heap-index) (address-2 heap-index))
+(defun* bind! ((wam wam) (address-1 store-index) (address-2 store-index))
   (:returns :void)
   "Bind the unbound reference cell to the other.
 
@@ -133,19 +133,19 @@
   (cond
     ;; a1 <- a2
     ((unbound-reference-p wam address-1)
-     (setf (wam-heap-cell wam address-1)
+     (setf (wam-store-cell wam address-1)
            (make-cell-reference address-2))
      (trail! wam address-1))
     ;; a2 <- 1a
     ((unbound-reference-p wam address-2)
-     (setf (wam-heap-cell wam address-2)
+     (setf (wam-store-cell wam address-2)
            (make-cell-reference address-1))
      (trail! wam address-2))
     ;; wut
     (t (error "At least one cell must be an unbound reference when binding.")))
   (values))
 
-(defun* unify! ((wam wam) (a1 heap-index) (a2 heap-index))
+(defun* unify! ((wam wam) (a1 store-index) (a2 store-index))
   (wam-unification-stack-push! wam a1)
   (wam-unification-stack-push! wam a2)
   (setf (wam-fail wam) nil)
@@ -155,8 +155,8 @@
     (let ((d1 (deref wam (wam-unification-stack-pop! wam)))
           (d2 (deref wam (wam-unification-stack-pop! wam))))
       (when (not (= d1 d2))
-        (let ((cell-1 (wam-heap-cell wam d1))
-              (cell-2 (wam-heap-cell wam d2)))
+        (let ((cell-1 (wam-store-cell wam d1))
+              (cell-2 (wam-store-cell wam d2)))
           (if (or (cell-reference-p cell-1)
                   (cell-reference-p cell-2))
             ;; If at least one is a reference, bind them.
@@ -167,8 +167,8 @@
             ;; Otherwise we're looking at two structures (hopefully, lol).
             (let* ((structure-1-addr (cell-value cell-1)) ; find where they
                    (structure-2-addr (cell-value cell-2)) ; start on the heap
-                   (functor-1 (wam-heap-cell wam structure-1-addr)) ; grab the
-                   (functor-2 (wam-heap-cell wam structure-2-addr))) ; functors
+                   (functor-1 (wam-store-cell wam structure-1-addr)) ; grab the
+                   (functor-2 (wam-store-cell wam structure-2-addr))) ; functors
               (if (functors-match-p functor-1 functor-2)
                 ;; If the functors match, push their pairs of arguments onto
                 ;; the stack to be unified.
@@ -247,33 +247,28 @@
     ((wam wam)
      (functor functor-index)
      (register register-index))
-  (->> (push-new-structure! wam)
-    (nth-value 1)
-    (setf (wam-local-register wam register)))
+  (setf (wam-local-register wam register)
+        (push-new-structure! wam))
   (push-new-functor! wam functor))
 
 (define-instructions (%set-variable-local %set-variable-stack)
     ((wam wam)
      (register register-index))
-  (->> (push-unbound-reference! wam)
-    (nth-value 1)
-    (setf (%wam-register% wam register))))
+  (setf (%wam-register% wam register)
+        (push-unbound-reference! wam)))
 
 (define-instructions (%set-value-local %set-value-stack)
     ((wam wam)
      (register register-index))
-  (wam-heap-push! wam (->> register
-                        (%wam-register% wam)
-                        (wam-heap-cell wam))))
+  (wam-heap-push! wam (%wam-register% wam register)))
 
 (define-instructions (%put-variable-local %put-variable-stack)
     ((wam wam)
      (register register-index)
      (argument register-index))
-  (->> (push-unbound-reference! wam)
-    (nth-value 1)
-    (setf (%wam-register% wam register))
-    (setf (wam-local-register wam argument))))
+  (let ((new-reference (push-unbound-reference! wam)))
+    (setf (%wam-register% wam register) new-reference
+          (wam-local-register wam argument) new-reference)))
 
 (define-instructions (%put-value-local %put-value-stack)
     ((wam wam)
@@ -288,8 +283,8 @@
                                           (functor functor-index)
                                           (register register-index))
   (with-accessors ((mode wam-mode) (s wam-subterm)) wam
-    (let* ((addr (deref wam (wam-local-register wam register)))
-           (cell (wam-heap-cell wam addr)))
+    (let* ((addr (deref wam register))
+           (cell (wam-store-cell wam addr)))
       (cond
         ;; If the register points at a reference cell, we push two new cells onto
         ;; the heap:
@@ -329,11 +324,11 @@
         ;; stream of instructions will be another get-structure and we'll just
         ;; blow away the S register there.
         ((cell-structure-p cell)
-         (let* ((functor-addr (cell-value cell))
-                (functor-cell (wam-heap-cell wam functor-addr)))
+         (let* ((functor-address (cell-value cell))
+                (functor-cell (wam-heap-cell wam functor-address)))
            (if (matching-functor-p functor-cell functor)
              (setf mode :read
-                   s (1+ functor-addr))
+                   s (1+ functor-address))
              (backtrack! wam "Functors don't match in get-struct"))))
         (t (backtrack! wam (format nil "get-struct on a non-ref/struct cell ~A"
                                    (cell-aesthetic cell))))))))
@@ -341,25 +336,18 @@
 (define-instructions (%unify-variable-local %unify-variable-stack)
     ((wam wam)
      (register register-index))
-  (ecase (wam-mode wam)
-    (:read (setf (%wam-register% wam register)
-                 (wam-subterm wam)))
-    (:write (->> (push-unbound-reference! wam)
-              (nth-value 1)
-              (setf (%wam-register% wam register)))))
+  (setf (%wam-register% wam register)
+        (ecase (wam-mode wam)
+          (:read (wam-heap-cell wam (wam-subterm wam)))
+          (:write (push-unbound-reference! wam))))
   (incf (wam-subterm wam)))
 
 (define-instructions (%unify-value-local %unify-value-stack)
     ((wam wam)
      (register register-index))
   (ecase (wam-mode wam)
-    (:read (unify! wam
-                   (%wam-register% wam register)
-                   (wam-subterm wam)))
-    (:write (wam-heap-push! wam
-                            (->> register
-                              (%wam-register% wam)
-                              (wam-heap-cell wam)))))
+    (:read (unify! wam register (wam-subterm wam)))
+    (:write (wam-heap-push! wam (%wam-register% wam register))))
   (incf (wam-subterm wam)))
 
 (define-instructions (%get-variable-local %get-variable-stack)
@@ -373,9 +361,7 @@
     ((wam wam)
      (register register-index)
      (argument register-index))
-  (unify! wam
-          (%wam-register% wam register)
-          (wam-local-register wam argument)))
+  (unify! wam register argument))
 
 
 ;;;; Control Instructions
@@ -491,7 +477,7 @@
 
 
 (defun extract-things (wam addresses)
-  "Extract the things at the given heap addresses.
+  "Extract the things at the given store addresses.
 
   The things will be returned in the same order as the addresses were given.
 
@@ -511,7 +497,7 @@
            (cdr (or (assoc address unbound-vars)
                     (mark-unbound-var address))))
          (recur (address)
-           (let ((cell (wam-heap-cell wam (deref wam address))))
+           (let ((cell (wam-store-cell wam (deref wam address))))
              (cond
                ((cell-null-p cell) "NULL?!")
                ((cell-reference-p cell) (extract-var (cell-value cell)))
@@ -530,8 +516,9 @@
 
 (defun extract-query-results (wam vars)
   (let* ((addresses (loop :for var :in vars
-                          :for i :from 0
-                          :collect (wam-stack-frame-arg wam i)))
+                          ;; TODO: make this suck less
+                          :for i :from (+ (wam-environment-pointer wam) 3)
+                          :collect i))
          (results (extract-things wam addresses)))
     (weave vars results)))
 

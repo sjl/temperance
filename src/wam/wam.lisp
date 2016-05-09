@@ -71,16 +71,16 @@
     (make-array 16
       :fill-pointer 0
       :adjustable t
-      :element-type 'heap-index)
-    :type (vector heap-index)
+      :element-type 'store-index)
+    :type (vector store-index)
     :read-only t)
   (trail
     (make-array 64
       :fill-pointer 0
       :adjustable t
       :initial-element 0
-      :element-type 'heap-index)
-    :type (vector heap-index)
+      :element-type 'store-index)
+    :type (vector store-index)
     :read-only t)
 
   ;; Unique registers
@@ -97,6 +97,21 @@
   (fail        nil :type boolean)
   (backtracked nil :type boolean)
   (mode        nil :type (or null (member :read :write))))
+
+
+;;;; Store
+(defun* wam-store-cell ((wam wam) (address store-index))
+  (:returns cell)
+  "Return the cell at the given address.
+
+  Please don't use this unless you absolutely have to.  Prefer something more
+  specific like `wam-heap-cell` else so you've got some extra sanity checking...
+
+  "
+  (aref (wam-store wam) address))
+
+(defun (setf wam-store-cell) (new-value wam address)
+  (setf (aref (wam-store wam) address) new-value))
 
 
 ;;;; Heap
@@ -157,8 +172,8 @@
   (setf (fill-pointer (wam-trail wam)) new-value))
 
 
-(defun* wam-trail-push! ((wam wam) (address heap-index))
-  (:returns (values heap-index trail-index))
+(defun* wam-trail-push! ((wam wam) (address store-index))
+  (:returns (values store-index trail-index))
   "Push `address` onto the trail.
 
   Returns the address and the trail address it was pushed to.
@@ -170,14 +185,14 @@
       (values address (vector-push-extend address trail)))))
 
 (defun* wam-trail-pop! ((wam wam))
-  (:returns heap-index)
+  (:returns store-index)
   "Pop the top address off the trail and return it."
   (vector-pop (wam-trail wam)))
 
 (defun* wam-trail-value ((wam wam) (address trail-index))
   ;; TODO: can we really not just pop, or is something else gonna do something
   ;; fucky with the trail?
-  (:returns heap-index)
+  (:returns store-index)
   "Return the element (a heap index) in the WAM trail at `address`."
   (aref (wam-trail wam) address))
 
@@ -275,22 +290,13 @@
      &optional
      ((e environment-pointer)
       (wam-environment-pointer wam)))
-  (:returns heap-index)
+  (:returns cell)
   (wam-stack-word wam (+ 3 n e)))
 
 (defun (setf wam-stack-frame-arg)
     (new-value wam n &optional (e (wam-environment-pointer wam)))
   (setf (wam-stack-word wam (+ e 3 n))
         new-value))
-
-(defun* wam-stack-frame-arg-cell
-    ((wam wam)
-     (n register-index)
-     &optional
-     ((e environment-pointer)
-      (wam-environment-pointer wam)))
-  (:returns cell)
-  (wam-heap-cell wam (wam-stack-frame-arg wam n e)))
 
 
 (defun* wam-stack-frame-size
@@ -381,22 +387,13 @@
      &optional
      ((b backtrack-pointer)
       (wam-backtrack-pointer wam)))
-  (:returns heap-index)
+  (:returns cell)
   (wam-stack-word wam (+ b 7 n)))
 
 (defun (setf wam-stack-choice-arg)
     (new-value wam n &optional (b (wam-backtrack-pointer wam)))
   (setf (wam-stack-word wam (+ b 7 n))
         new-value))
-
-(defun* wam-stack-choice-arg-cell
-    ((wam wam)
-     (n arity)
-     &optional
-     ((b backtrack-pointer)
-      (wam-backtrack-pointer wam)))
-  (:returns cell)
-  (wam-heap-cell wam (wam-stack-choice-arg wam n b)))
 
 
 (defun* wam-stack-choice-size
@@ -541,24 +538,70 @@
 
 
 ;;;; Registers
-;;; The WAM has two types of registers.  A register (regardless of type) always
-;;; contains an index into the heap (basically a pointer to a heap cell).
+;;; The WAM has two types of registers:
 ;;;
-;;; Local/temporary/arguments registers live at the beginning of the WAM memory
-;;; store.
+;;; * Local/temporary/arguments registers live at the beginning of the WAM
+;;;   memory store.
 ;;;
-;;; Stack/permanent registers live on the stack, and need some extra math to
-;;; find their location.
+;;; * Stack/permanent registers live on the stack, and need some extra math to
+;;;   find their location.
 ;;;
 ;;; Registers are typically denoted by their "register index", which is just
 ;;; their number.  Hoever, the bytecode needs to be able to distinguish between
 ;;; local and stack registers.  To do this we just make separate opcodes for
 ;;; each kind.  This is ugly, but it lets us figure things out at compile time
 ;;; instead of runtime, and register references happen A LOT at runtime.
+;;;
+;;; As for the CONTENTS of register: a register (regardless of type) always
+;;; contains a cell.  The book is maddeningly unclear on this in a bunch of
+;;; ways.  I will list them here so maybe you can feel a bit of my suffering
+;;; through these bytes of text.
+;;;
+;;; The first thing the book says about registers is "registers have the same
+;;; format as heap cells".  Okay, fine.  The *very next diagram* shows "register
+;;; assignments" that appear to put things that are very much *not* heap cells
+;;; into registers!
+;;;
+;;; After a bit of puttering you realize that the diagram is referring only to
+;;; the compilation, not what's *actually* stored in these registers at runtime.
+;;; You move on and see some pseudocode that contains `X_i <- HEAP[H]` which
+;;; confirms that his original claim was accurate, and registers are actually
+;;; (copies of) heap cells.  Cool.
+;;;
+;;; Then you move on and see the definition of `deref(a : address)` and note
+;;; that it takes an *address* as an argument.  On the next page you see
+;;; `deref(X_i)` and wait what the fuck, a register is an *address* now?  You
+;;; scan down the page and see `HEAP[H] <- X_i` which means no wait it's a cell
+;;; again.
+;;;
+;;; After considering depositing your laptop into the nearest toilet and
+;;; becoming a sheep farmer, you conclude a few things:
+;;;
+;;; 1. The book's code won't typecheck.
+;;; 2. The author is playing fast and loose with `X_i` -- sometimes it seems to
+;;;    be used as an address, sometimes as a cell.
+;;; 3. The author never bothers to nail down exactly what is inside the fucking
+;;;    things, which is a problem because of #2.
+;;;
+;;; If you're like me (painfully unlucky), you took a wild guess and decided to
+;;; implement registers as containing *addresses*, i.e., indexes into the
+;;; heap, figuring that if you were wrong it would soon become apparent.
+;;;
+;;; WELL it turns out that you can get all the way to CHAPTER FIVE with
+;;; registers implemented as addresses, at which point you hit a wall and need
+;;; to spend a few hours refactoring a giant chunk of your code and writing
+;;; angry comments in your source code.
+;;;
+;;; Hopefully I can save someone else this misery by leaving you with this:
+;;;     ____  _____________________________________  _____    ___    ____  ______   ______________    __   _____
+;;;    / __ \/ ____/ ____/  _/ ___/_  __/ ____/ __ \/ ___/   /   |  / __ \/ ____/  / ____/ ____/ /   / /  / ___/
+;;;   / /_/ / __/ / / __ / / \__ \ / / / __/ / /_/ /\__ \   / /| | / /_/ / __/    / /   / __/ / /   / /   \__ \
+;;;  / _, _/ /___/ /_/ // / ___/ // / / /___/ _, _/___/ /  / ___ |/ _, _/ /___   / /___/ /___/ /___/ /______/ /
+;;; /_/ |_/_____/\____/___//____//_/ /_____/_/ |_|/____/  /_/  |_/_/ |_/_____/   \____/_____/_____/_____/____/
 
 (defun* wam-local-register ((wam wam) (register register-index))
-  (:returns (or (eql 0) heap-index))
-  "Return the value of the WAM local register with the given index."
+  (:returns cell)
+  "Return the value stored in the WAM local register with the given index."
   (aref (wam-store wam) register))
 
 (defun (setf wam-local-register) (new-value wam register)
@@ -566,8 +609,8 @@
 
 
 (defun* wam-stack-register ((wam wam) (register register-index))
-  (:returns (or (eql 0) heap-index))
-  "Return the value of the WAM stack register with the given index."
+  (:returns cell)
+  "Return the value stored in the WAM stack register with the given index."
   (wam-stack-frame-arg wam register))
 
 (defun (setf wam-stack-register) (new-value wam register)
@@ -618,13 +661,13 @@
 
 
 ;;;; Unification Stack
-(defun* wam-unification-stack-push! ((wam wam) (address heap-index))
+(defun* wam-unification-stack-push! ((wam wam) (address store-index))
   (:returns :void)
   (vector-push-extend address (wam-unification-stack wam))
   (values))
 
 (defun* wam-unification-stack-pop! ((wam wam))
-  (:returns heap-index)
+  (:returns store-index)
   (vector-pop (wam-unification-stack wam)))
 
 (defun* wam-unification-stack-empty-p ((wam wam))

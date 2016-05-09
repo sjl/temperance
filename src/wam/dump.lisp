@@ -101,7 +101,8 @@
                           (format nil "N: ~D" cell))))
                      ((< arg nargs)
                       (prog1
-                          (format nil " Y~D: ~8,'0X" arg cell)
+                          (format nil " Y~D: ~8,'0X ~A"
+                                  arg cell (cell-aesthetic cell))
                         (when (= nargs (incf arg))
                           (setf currently-in nil))))))
                   (:choice ; sweet lord make it stop
@@ -123,7 +124,8 @@
                      ((= offset 6) "H  saved heap pointer")
                      ((< arg nargs)
                       (prog1
-                          (format nil " Y~D: ~8,'0X" arg cell)
+                          (format nil " A~D: ~8,'0X ~A"
+                                  arg cell (cell-aesthetic cell))
                         (when (= nargs (incf arg))
                           (setf currently-in nil))))))
                   (t ""))
@@ -276,17 +278,16 @@
 
 (defun dump-wam-registers (wam)
   (format t "REGISTERS:~%")
-  (format t  "~5@A -> ~8@A~%" "S" (wam-subterm wam))
-  (loop :for i :from 0 :to +register-count+
-        :for reg :across (wam-store wam)
-        :for contents = (when (not (zerop reg))
-                          (wam-heap-cell wam reg))
-        :when contents
-        :do (format t "~5@A -> ~8,'0X ~10A ~A~%"
-                    (format nil "X~D" i)
-                    reg
-                    (cell-aesthetic contents)
-                    (format nil "; ~A" (first (extract-things wam (list reg)))))))
+  (format t  "~5@A -> ~8X~%" "S" (wam-subterm wam))
+  (loop :for register :from 0 :to +register-count+
+        :for contents :across (wam-store wam)
+        :when (not (cell-null-p contents))
+        :do
+        (format t "~5@A -> ~8,'0X ~10A ~A~%"
+                (format nil "X~D" register)
+                contents
+                (cell-aesthetic contents)
+                (format nil "; ~A" (first (extract-things wam (list register)))))))
 
 (defun dump-wam-functors (wam)
   (format t "        FUNCTORS: ~S~%" (wam-functors wam)))
@@ -296,7 +297,7 @@
   (loop :for addr :across (wam-trail wam) :do
         (format t "~4,'0X ~A //"
                 addr
-                (cell-aesthetic (wam-heap-cell wam addr))))
+                (cell-aesthetic (wam-store-cell wam addr))))
   (format t "~%"))
 
 (defun dump-labels (wam)
