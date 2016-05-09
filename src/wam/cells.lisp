@@ -27,16 +27,16 @@
 ;;; symbol lives.  Arity is the arity of the functor.
 
 
-(defun* cell-type ((cell heap-cell))
-  (:returns heap-cell-tag)
+(defun* cell-type ((cell cell))
+  (:returns cell-tag)
   (logand cell +cell-tag-bitmask+))
 
-(defun* cell-value ((cell heap-cell))
-  (:returns heap-cell-value)
+(defun* cell-value ((cell cell))
+  (:returns cell-value)
   (ash cell (- +cell-tag-width+)))
 
 
-(defun* cell-type-name ((cell heap-cell))
+(defun* cell-type-name ((cell cell))
   (:returns string)
   (eswitch ((cell-type cell) :test #'=)
     (+tag-null+ "NULL")
@@ -44,7 +44,7 @@
     (+tag-reference+ "REFERENCE")
     (+tag-functor+ "FUNCTOR")))
 
-(defun* cell-type-short-name ((cell heap-cell))
+(defun* cell-type-short-name ((cell cell))
   (:returns string)
   (eswitch ((cell-type cell) :test #'=)
     (+tag-null+ "NUL")
@@ -53,12 +53,12 @@
     (+tag-functor+ "FUN")))
 
 
-(defun* cell-functor-index ((cell heap-cell))
+(defun* cell-functor-index ((cell cell))
   (:returns functor-index)
   (cell-value cell))
 
 
-(defun* cell-aesthetic ((cell heap-cell))
+(defun* cell-aesthetic ((cell cell))
   "Return a compact, human-friendly string representation of the cell."
   (format nil "[~A~A]"
           (cell-type-short-name cell)
@@ -73,43 +73,43 @@
               (format nil " ~X" (cell-value cell))))))
 
 
-(defun* cell-null-p ((cell heap-cell))
+(defun* cell-null-p ((cell cell))
   (:returns boolean)
   (= (cell-type cell) +tag-null+))
 
-(defun* cell-reference-p ((cell heap-cell))
+(defun* cell-reference-p ((cell cell))
   (:returns boolean)
   (= (cell-type cell) +tag-reference+))
 
-(defun* cell-functor-p ((cell heap-cell))
+(defun* cell-functor-p ((cell cell))
   (:returns boolean)
   (= (cell-type cell) +tag-functor+))
 
-(defun* cell-structure-p ((cell heap-cell))
+(defun* cell-structure-p ((cell cell))
   (:returns boolean)
   (= (cell-type cell) +tag-structure+))
 
 
-(defun* make-cell ((tag heap-cell-tag) (value heap-cell-value))
-  (:returns heap-cell)
+(defun* make-cell ((tag cell-tag) (value cell-value))
+  (:returns cell)
   (values
     (logior (ash value +cell-tag-width+)
             tag)))
 
 (defun* make-cell-null ()
-  (:returns heap-cell)
+  (:returns cell)
   (make-cell +tag-null+ 0))
 
-(defun* make-cell-structure ((value heap-cell-value))
-  (:returns heap-cell)
+(defun* make-cell-structure ((value cell-value))
+  (:returns cell)
   (make-cell +tag-structure+ value))
 
-(defun* make-cell-reference ((value heap-cell-value))
-  (:returns heap-cell)
+(defun* make-cell-reference ((value cell-value))
+  (:returns cell)
   (make-cell +tag-reference+ value))
 
 (defun* make-cell-functor ((functor-index functor-index))
-  (:returns heap-cell)
+  (:returns cell)
   (make-cell +tag-functor+ functor-index))
 
 

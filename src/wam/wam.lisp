@@ -42,8 +42,8 @@
       :fill-pointer +stack-end+
       :adjustable t
       :initial-element (make-cell-null)
-      :element-type 'heap-cell)
-    :type (vector heap-cell)
+      :element-type 'cell)
+    :type (vector cell)
     :read-only t)
   (code
     ;; The WAM bytecode is all stored in this array.  The first
@@ -103,8 +103,8 @@
 ;;; TODO: Should we privilege heap address 0 to mean "unset" so we have a good
 ;;; sentinal value for HB, S, etc?
 
-(defun* wam-heap-push! ((wam wam) (cell heap-cell))
-  (:returns (values heap-cell heap-index))
+(defun* wam-heap-push! ((wam wam) (cell cell))
+  (:returns (values cell heap-index))
   "Push the cell onto the WAM heap and increment the heap pointer.
 
   Returns the cell and the address it was pushed to.
@@ -125,7 +125,7 @@
 
 
 (defun* wam-heap-cell ((wam wam) (address heap-index))
-  (:returns heap-cell)
+  (:returns cell)
   "Return the heap cell at the given address."
   (aref (wam-store wam) address))
 
@@ -275,7 +275,7 @@
      &optional
      ((e environment-pointer)
       (wam-environment-pointer wam)))
-  (:returns heap-cell)
+  (:returns cell)
   (wam-heap-cell wam (wam-stack-frame-arg wam n e)))
 
 
@@ -381,7 +381,7 @@
      &optional
      ((b backtrack-pointer)
       (wam-backtrack-pointer wam)))
-  (:returns heap-cell)
+  (:returns cell)
   (wam-heap-cell wam (wam-stack-choice-arg wam n b)))
 
 

@@ -1,12 +1,12 @@
 (in-package #:bones.wam)
 
-(deftype heap-cell ()
+(deftype cell ()
   `(unsigned-byte ,+cell-width+))
 
-(deftype heap-cell-tag ()
+(deftype cell-tag ()
   `(unsigned-byte ,+cell-tag-width+))
 
-(deftype heap-cell-value ()
+(deftype cell-value ()
   `(unsigned-byte ,+cell-value-width+))
 
 

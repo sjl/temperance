@@ -1,7 +1,7 @@
 (in-package #:bones.wam)
 
 (define-constant +cell-width+ 16
-  :documentation "Number of bits in each heap cell.")
+  :documentation "Number of bits in each cell.")
 
 (define-constant +cell-tag-width+ 2
   :documentation "Number of bits reserved for cell type tags.")

@@ -8,12 +8,12 @@
 
 ;;;; Utilities
 (defun* push-unbound-reference! ((wam wam))
-  (:returns (values heap-cell heap-index))
+  (:returns (values cell heap-index))
   "Push a new unbound reference cell onto the heap."
   (wam-heap-push! wam (make-cell-reference (wam-heap-pointer wam))))
 
 (defun* push-new-structure! ((wam wam))
-  (:returns (values heap-cell heap-index))
+  (:returns (values cell heap-index))
   "Push a new structure cell onto the heap.
 
   The structure cell's value will point at the next address, so make sure you
@@ -23,7 +23,7 @@
   (wam-heap-push! wam (make-cell-structure (1+ (wam-heap-pointer wam)))))
 
 (defun* push-new-functor! ((wam wam) (functor functor-index))
-  (:returns (values heap-cell heap-index))
+  (:returns (values cell heap-index))
   "Push a new functor cell onto the heap."
   (wam-heap-push! wam (make-cell-functor functor)))
 
@@ -44,7 +44,7 @@
       (and (cell-reference-p cell)
            (= (cell-value cell) address)))))
 
-(defun* matching-functor-p ((cell heap-cell)
+(defun* matching-functor-p ((cell cell)
                             (functor functor-index))
   (:returns boolean)
   "Return whether `cell` is a functor cell containing `functor`."
@@ -52,8 +52,8 @@
     (and (cell-functor-p cell)
          (= (cell-functor-index cell) functor))))
 
-(defun* functors-match-p ((functor-cell-1 heap-cell)
-                          (functor-cell-2 heap-cell))
+(defun* functors-match-p ((functor-cell-1 cell)
+                          (functor-cell-2 cell))
   (:returns boolean)
   "Return whether the two functor cells represent the same functor."
   (= (cell-value functor-cell-1)
