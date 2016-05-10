@@ -248,8 +248,8 @@
      (functor functor-index)
      (register register-index))
   (setf (wam-local-register wam register)
-        (push-new-structure! wam))
-  (push-new-functor! wam functor))
+        (make-cell-structure
+          (nth-value 1 (push-new-functor! wam functor)))))
 
 (define-instructions (%set-variable-local %set-variable-stack)
     ((wam wam)
