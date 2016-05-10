@@ -40,7 +40,7 @@
   `(unsigned-byte ,+code-word-size+))
 
 (deftype code-index ()
-  ;; either an address or the sentinal
+  ;; either an address or the sentinel
   `(integer 0 ,(1- +code-limit+)))
 
 

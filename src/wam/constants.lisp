@@ -19,9 +19,9 @@
 (define-constant +code-limit+ (expt 2 +code-word-size+)
   :documentation "Maximum size of the WAM code store.")
 
-(define-constant +code-sentinal+ (1- +code-limit+)
-  ; TODO: Should this sentinal value be 0 like everything else?
-  :documentation "Sentinal value used in the PC and CP.")
+(define-constant +code-sentinel+ (1- +code-limit+)
+  ; TODO: Should this sentinel value be 0 like everything else?
+  :documentation "Sentinel value used in the PC and CP.")
 
 
 (define-constant +tag-null+      #b00

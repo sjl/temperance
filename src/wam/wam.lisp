@@ -119,7 +119,7 @@
 ;;; and stack have been accounted for.  Because the store is adjustable and the
 ;;; heap lives at the end of it, the heap can grow if necessary.
 ;;;
-;;; We reserve the first address in the heap as a sentinal, as an "unset" value
+;;; We reserve the first address in the heap as a sentinel, as an "unset" value
 ;;; for various pointers into the heap.
 
 (defun* wam-heap-pointer-unset-p ((wam wam) (address heap-index))
@@ -201,7 +201,7 @@
 ;;; The stack is stored as a fixed-length hunk of the main WAM store array,
 ;;; between the local register and the heap, with small glitch: we reserve the
 ;;; first word of the stack (address `+stack-start`) to mean "uninitialized", so
-;;; we have a nice sentinal value for the various pointers into the stack.
+;;; we have a nice sentinel value for the various pointers into the stack.
 
 (declaim (inline wam-stack-word))
 

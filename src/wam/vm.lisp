@@ -530,7 +530,7 @@
                    `(instruction-call wam ,inst code pc ,args)))
         (loop
           :while (and (not (wam-fail wam)) ; failure
-                      (not (= pc +code-sentinal+))) ; finished
+                      (not (= pc +code-sentinel+))) ; finished
           :for opcode = (aref code pc)
           :do
           (block op
@@ -604,7 +604,7 @@
     (wam-reset! wam)
     (wam-load-query-code! wam code)
     (setf (wam-program-counter wam) 0
-          (wam-continuation-pointer wam) +code-sentinal+)
+          (wam-continuation-pointer wam) +code-sentinel+)
     (when *step*
       (format *debug-io* "Built query code:~%")
       (dump-code-store wam code))
