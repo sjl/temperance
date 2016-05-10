@@ -3,13 +3,13 @@
 (define-constant +cell-width+ 16
   :documentation "Number of bits in each cell.")
 
-(define-constant +cell-tag-width+ 2
+(define-constant +cell-tag-width+ 3
   :documentation "Number of bits reserved for cell type tags.")
 
 (define-constant +cell-value-width+ (- +cell-width+ +cell-tag-width+)
   :documentation "Number of bits reserved for cell values.")
 
-(define-constant +cell-tag-bitmask+ #b11
+(define-constant +cell-tag-bitmask+ #b111
   :documentation "Bitmask for masking the cell type tags.")
 
 
@@ -24,17 +24,20 @@
   :documentation "Sentinel value used in the PC and CP.")
 
 
-(define-constant +tag-null+      #b00
+(define-constant +tag-null+      #b000
   :documentation "An empty cell.")
 
-(define-constant +tag-structure+ #b01
+(define-constant +tag-structure+ #b001
   :documentation "A structure cell.")
 
-(define-constant +tag-reference+ #b10
+(define-constant +tag-reference+ #b010
   :documentation "A pointer to a cell.")
 
-(define-constant +tag-functor+   #b11
+(define-constant +tag-functor+   #b011
   :documentation "A functor.")
+
+(define-constant +tag-constant+  #b100
+  :documentation "A constant (i.e. a 0-arity functor).")
 
 
 (define-constant +register-count+ 2048
