@@ -552,7 +552,7 @@
 ;;; each kind.  This is ugly, but it lets us figure things out at compile time
 ;;; instead of runtime, and register references happen A LOT at runtime.
 ;;;
-;;; As for the CONTENTS of register: a register (regardless of type) always
+;;; As for the CONTENTS of registers: a register (regardless of type) always
 ;;; contains a cell.  The book is maddeningly unclear on this in a bunch of
 ;;; ways.  I will list them here so maybe you can feel a bit of my suffering
 ;;; through these bytes of text.
