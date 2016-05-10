@@ -50,7 +50,7 @@
   "Return whether `cell` is a functor cell containing `functor`."
   (ensure-boolean
     (and (cell-functor-p cell)
-         (= (cell-functor-index cell) functor))))
+         (= (cell-value cell) functor))))
 
 (defun* functors-match-p ((functor-cell-1 cell)
                           (functor-cell-2 cell))
@@ -504,7 +504,7 @@
                ((cell-structure-p cell) (recur (cell-value cell)))
                ((cell-functor-p cell)
                 (destructuring-bind (functor . arity)
-                    (wam-functor-lookup wam (cell-functor-index cell))
+                    (wam-functor-lookup wam (cell-value cell))
                   (if (zerop arity)
                     functor
                     (list* functor

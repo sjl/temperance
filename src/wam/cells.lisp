@@ -5,26 +5,25 @@
 ;;; low-order bits and their value in the higher-order bits:
 ;;;
 ;;;   value         type
-;;;   vvvvvvvvvvvvvvTT
+;;;   vvvvvvvvvvvvvTTT
 ;;;
 ;;; The contents of the value depend on the type of cell.
 ;;;
 ;;; NULL cells always have a value of zero.
 ;;;
-;;; STRUCTURE cell values are an index into the heap, describing where the
+;;; STRUCTURE cell values are an index into the store, describing where the
 ;;; structure starts.
 ;;;
-;;; REFERENCE cell values are an index into the heap, pointing at whatever the
-;;; value is bound to.  Unbound variables contain their own heap index as
+;;; REFERENCE cell values are an index into the store, pointing at whatever the
+;;; value is bound to.  Unbound variables contain their own store index as
 ;;; a value.
 ;;;
-;;; FUNCTOR cell values are again split into two chunks of bits:
+;;; FUNCTOR cell values are an index into the WAM's functor array where the
+;;; `(symbol . arity)` cons lives.
 ;;;
-;;;   index     arity
-;;;   iiiiiiiiiiAAAA
+;;; CONSTANT cells are the same as functor cells, except that they always refer
+;;; to functors with an arity of zero.
 ;;;
-;;; The index is the index into the WAM's functor table where this functor's
-;;; symbol lives.  Arity is the arity of the functor.
 
 
 (defun* cell-type ((cell cell))
@@ -42,7 +41,8 @@
     (+tag-null+ "NULL")
     (+tag-structure+ "STRUCTURE")
     (+tag-reference+ "REFERENCE")
-    (+tag-functor+ "FUNCTOR")))
+    (+tag-functor+ "FUNCTOR")
+    (+tag-constant+ "CONSTANT")))
 
 (defun* cell-type-short-name ((cell cell))
   (:returns string)
@@ -50,27 +50,15 @@
     (+tag-null+ "NUL")
     (+tag-structure+ "STR")
     (+tag-reference+ "REF")
-    (+tag-functor+ "FUN")))
-
-
-(defun* cell-functor-index ((cell cell))
-  (:returns functor-index)
-  (cell-value cell))
+    (+tag-functor+ "FUN")
+    (+tag-constant+ "CON")))
 
 
 (defun* cell-aesthetic ((cell cell))
   "Return a compact, human-friendly string representation of the cell."
-  (format nil "[~A~A]"
+  (format nil "[~A ~X]"
           (cell-type-short-name cell)
-          (eswitch ((cell-type cell))
-            (+tag-null+ "")
-            (+tag-structure+
-              (format nil " ~X" (cell-value cell)))
-            (+tag-functor+
-              (format nil " ~X"
-                      (cell-functor-index cell)))
-            (+tag-reference+
-              (format nil " ~X" (cell-value cell))))))
+          (cell-value cell)))
 
 
 (defun* cell-null-p ((cell cell))
@@ -88,6 +76,10 @@
 (defun* cell-structure-p ((cell cell))
   (:returns boolean)
   (= (cell-type cell) +tag-structure+))
+
+(defun* cell-constant-p ((cell cell))
+  (:returns boolean)
+  (= (cell-type cell) +tag-constant+))
 
 
 (defun* make-cell ((tag cell-tag) (value cell-value))
@@ -112,4 +104,7 @@
   (:returns cell)
   (make-cell +tag-functor+ functor-index))
 
+(defun* make-cell-constant ((functor-index functor-index))
+  (:returns cell)
+  (make-cell +tag-constant+ functor-index))
 

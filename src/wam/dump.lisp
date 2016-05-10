@@ -22,7 +22,7 @@
         (format nil "structure pointer to ~4,'0X " (cell-value cell)))
       (+tag-functor+
         (destructuring-bind (functor . arity)
-            (wam-functor-lookup wam (cell-functor-index cell))
+            (wam-functor-lookup wam (cell-value cell))
           (format nil "~A/~D " functor arity)))
       (t ""))
     (registers-pointing-to wam addr)))
@@ -52,7 +52,7 @@
             (progn
               (print-cell i cell indent)
               (if (cell-functor-p cell)
-                (setf indent (wam-functor-arity wam (cell-functor-index cell)))
+                (setf indent (wam-functor-arity wam (cell-value cell)))
                 (when (not (zerop indent))
                   (decf indent))))))
     (when (< to (wam-heap-pointer wam))
