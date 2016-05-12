@@ -491,11 +491,13 @@
 
 (defun* code-push-instruction! ((store (array code-word))
                                 (opcode opcode)
-                                &rest (arguments code-word))
+                                (arguments list))
   "Push the given instruction into the code store and return its new address.
 
   The address will be the address of the start of the instruction (i.e. the
   address of the opcode).
+
+  `arguments` should be a list of `code-word`s.
 
   "
   (:returns code-index)

@@ -1,4 +1,4 @@
 (2 code-push-instruction!)
 (1 repeat)
 (2 define-instruction define-instructions)
-(1 with-database with-fresh-database)
+(1 with-database)

@@ -494,22 +494,29 @@
     (append tokens `((:call ,functor ,arity)))))
 
 
-;;;; Bytecode
+;;;; Precompilation
 ;;; Once we have a tokenized stream we can generate the machine instructions
 ;;; from it.
 ;;;
-;;; We turn:
+;;; We don't generate the ACTUAL bytecode immediately, because we want to run
+;;; a few optimization passes on it first, and it's easier to work with if we
+;;; have a friendlier format.
+;;;
+;;; So we turn a stream of tokens:
 ;;;
 ;;;   (X2 = q/2), X1, X3, (X0 = p/2), X1, X2
 ;;;
-;;; into something like:
+;;; into a list of instructions, each of which is a list:
 ;;;
-;;;   (#'%put-structure 2 q 2)
-;;;   (#'%set-variable 1)
-;;;   (#'%set-variable 3)
-;;;   (#'%put-structure 0 p 2)
-;;;   (#'%set-value 1)
-;;;   (#'%set-value 2)
+;;;   (:put-structure X2 q 2)
+;;;   (:set-variable X1)
+;;;   (:set-variable X3)
+;;;   (:put-structure X0 p 2)
+;;;   (:set-value X1)
+;;;   (:set-value X2)
+;;;
+;;; The opcodes are keywords and the register arguments remain register objects.
+;;; They get converted down to the raw bytes in the final "rendering" step.
 
 (defun find-opcode (opcode newp mode &optional register)
   (flet ((find-variant (register)
@@ -518,27 +525,27 @@
                :local
                :stack))))
     (eswitch ((list opcode newp mode (find-variant register)) :test #'equal)
-      ('(:argument t   :program :local) +opcode-get-variable-local+)
-      ('(:argument t   :program :stack) +opcode-get-variable-stack+)
-      ('(:argument t   :query   :local) +opcode-put-variable-local+)
-      ('(:argument t   :query   :stack) +opcode-put-variable-stack+)
-      ('(:argument nil :program :local) +opcode-get-value-local+)
-      ('(:argument nil :program :stack) +opcode-get-value-stack+)
-      ('(:argument nil :query   :local) +opcode-put-value-local+)
-      ('(:argument nil :query   :stack) +opcode-put-value-stack+)
+      ('(:argument t   :program :local) :get-variable-local)
+      ('(:argument t   :program :stack) :get-variable-stack)
+      ('(:argument t   :query   :local) :put-variable-local)
+      ('(:argument t   :query   :stack) :put-variable-stack)
+      ('(:argument nil :program :local) :get-value-local)
+      ('(:argument nil :program :stack) :get-value-stack)
+      ('(:argument nil :query   :local) :put-value-local)
+      ('(:argument nil :query   :stack) :put-value-stack)
       ;; Structures can only live locally, they never go on the stack
-      ('(:structure nil :program :local) +opcode-get-structure-local+)
-      ('(:structure nil :query   :local) +opcode-put-structure-local+)
-      ('(:register t   :program :local) +opcode-unify-variable-local+)
-      ('(:register t   :program :stack) +opcode-unify-variable-stack+)
-      ('(:register t   :query   :local) +opcode-set-variable-local+)
-      ('(:register t   :query   :stack) +opcode-set-variable-stack+)
-      ('(:register nil :program :local) +opcode-unify-value-local+)
-      ('(:register nil :program :stack) +opcode-unify-value-stack+)
-      ('(:register nil :query   :local) +opcode-set-value-local+)
-      ('(:register nil :query   :stack) +opcode-set-value-stack+))))
+      ('(:structure nil :program :local) :get-structure-local)
+      ('(:structure nil :query   :local) :put-structure-local)
+      ('(:register t   :program :local) :unify-variable-local)
+      ('(:register t   :program :stack) :unify-variable-stack)
+      ('(:register t   :query   :local) :set-variable-local)
+      ('(:register t   :query   :stack) :set-variable-stack)
+      ('(:register nil :program :local) :unify-value-local)
+      ('(:register nil :program :stack) :unify-value-stack)
+      ('(:register nil :query   :local) :set-value-local)
+      ('(:register nil :query   :stack) :set-value-stack))))
 
-(defun compile-tokens (wam head-tokens body-tokens store)
+(defun precompile-tokens (wam head-tokens body-tokens)
   "Generate a series of machine instructions from a stream of head and body
   tokens.
 
@@ -548,38 +555,36 @@
 
   Actual queries are a special case where the `head-tokens` stream is `nil`
 
-  The compiled instructions will be appended to `store` using
-  `code-push-instructions!`.
+  The compiled instructions will be returned as a list.
 
   "
   (let ((seen (list))
-        (mode nil))
+        (mode nil)
+        (instructions nil))
     (labels
-        ((handle-argument (argument-register source-register)
+        ((push-instruction (&rest instruction)
+           (push instruction instructions))
+         (handle-argument (argument-register source-register)
            ;; OP X_n A_i
            (let ((newp (push-if-new source-register seen :test #'register=)))
-             (code-push-instruction! store
-                 (find-opcode :argument newp mode source-register)
-               (register-number source-register)
-               (register-number argument-register))))
+             (push-instruction (find-opcode :argument newp mode source-register)
+                               source-register
+                               argument-register)))
          (handle-structure (destination-register functor arity)
            ;; OP functor reg
            (push destination-register seen)
-           (code-push-instruction! store
-               (find-opcode :structure nil mode destination-register)
-             (wam-ensure-functor-index wam (cons functor arity))
-             (register-number destination-register)))
+           (push-instruction (find-opcode :structure nil mode destination-register)
+                             (wam-ensure-functor-index wam (cons functor arity))
+                             destination-register))
          (handle-call (functor arity)
            ;; CALL functor
-           (code-push-instruction! store
-               +opcode-call+
-             (wam-ensure-functor-index wam (cons functor arity))))
+           (push-instruction :call
+                             (wam-ensure-functor-index wam (cons functor arity))))
          (handle-register (register)
            ;; OP reg
            (let ((newp (push-if-new register seen :test #'register=)))
-             (code-push-instruction! store
-                 (find-opcode :register newp mode register)
-               (register-number register))))
+             (push-instruction (find-opcode :register newp mode register)
+                               register)))
          (handle-stream (tokens)
            (loop :for token :in tokens :collect
                  (ematch token
@@ -601,10 +606,11 @@
         (setf mode :program)
         (handle-stream head-tokens))
       (setf mode :query)
-      (handle-stream body-tokens))))
+      (handle-stream body-tokens)
+      ;; TODO: this could suck less
+      (reverse instructions))))
 
 
-;;;; Compilation
 (defun find-variables (terms)
   "Return the set of variables in `terms`."
   (remove-duplicates (tree-collect #'variable-p terms)))
@@ -640,8 +646,8 @@
       (find-shared-variables (list head body-first)))))
 
 
-(defun compile-clause (wam store head body)
-  "Compile the clause directly into `store` and return the permanent variables.
+(defun precompile-clause (wam head body)
+  "Compile the clause, returning a list of instructions the permanent variables.
 
   `head` should be the head of the clause for program clauses, or `nil` for
   query clauses.
@@ -677,54 +683,39 @@
                (loop :for term :in (rest body) :append
                      (tokenize-query-term term
                                           permanent-variables))))))
-    (flet ((compile% () (compile-tokens wam head-tokens body-tokens store)))
+    (flet ((compile% () (precompile-tokens wam head-tokens body-tokens)))
       ;; We need to compile facts and rules differently.  Facts end with
       ;; a PROCEED and rules are wrapped in ALOC/DEAL.
-      (cond
-        ((and head body) ; a full-ass rule
-         (code-push-instruction! store +opcode-allocate+ (length permanent-variables))
-         (compile%)
-         (code-push-instruction! store +opcode-deallocate+))
-        ((and head (null body)) ; a bare fact
-         (compile%)
-         (code-push-instruction! store +opcode-proceed+))
-        (t ; a query
-         ;; The book doesn't have this ALOC here, but we do it to aid in result
-         ;; extraction.  Basically, to make extracting th results of a query
-         ;; easier we allocate all of its variables on the stack, so we need
-         ;; push a stack frame for them before we get started.  We don't DEAL
-         ;; because we want the frame to be left on the stack at the end so we
-         ;; can poke at it.
-         (code-push-instruction! store +opcode-allocate+ (length permanent-variables))
-         (compile%)
-         (code-push-instruction! store +opcode-done+))))
-    permanent-variables))
+      (values
+        (cond
+          ((and head body) ; a full-ass rule
+           `((:allocate ,(length permanent-variables))
+             ,@(compile%)
+             (:deallocate)))
+          ((and head (null body)) ; a bare fact
+           `(,@(compile%)
+             (:proceed)))
+          (t ; a query
+           ;; The book doesn't have this ALOC here, but we do it to aid in result
+           ;; extraction.  Basically, to make extracting th results of a query
+           ;; easier we allocate all of its variables on the stack, so we need
+           ;; push a stack frame for them before we get started.  We don't DEAL
+           ;; because we want the frame to be left on the stack at the end so we
+           ;; can poke at it.
+           `((:allocate ,(length permanent-variables))
+             ,@(compile%)
+             (:done))))
+        permanent-variables))))
 
 
-;;; Queries
-(defun make-query-code-store ()
-  (make-array 64
-    :fill-pointer 0
-    :adjustable t
-    :element-type 'code-word))
-
-(defun compile-query (wam query)
-  "Compile `query` into a fresh array of bytecode.
+(defun precompile-query (wam query)
+  "Compile `query`, returning the instructions and permanent variables.
 
   `query` should be a list of goal terms.
 
-  Returns the fresh code array and the permanent variables.
-
   "
-  (let* ((store (make-query-code-store))
-         (permanent-variables (compile-clause wam store nil query)))
-    (values store permanent-variables)))
+  (precompile-clause wam nil query))
 
-
-;;; Rules
-(defun mark-label (wam functor arity address)
-  "Set the code label `functor`/`arity` to point at `address`."
-  (setf (wam-code-label wam functor arity) address))
 
 (defun find-arity (rule)
   (let ((head (first rule)))
@@ -742,6 +733,138 @@
       functors)
     (values (first predicates) (first arities))))
 
+(defun precompile-rules (wam rules)
+  "Compile `rules` into a list of instructions.
+
+  Each rule in `rules` should be a clause consisting of a head term and zero or
+  more body terms.  A rule with no body is called a fact.
+
+  Returns the list of compiled instructions, as well as the functor and arity of
+  the rules being compiled.
+
+  "
+  (assert rules () "Cannot compile an empty program.")
+  (multiple-value-bind (functor arity) (check-rules rules)
+    (values
+      (if (= 1 (length rules))
+        ;; Single-clause rules don't need to bother setting up a choice point.
+        (destructuring-bind ((head . body)) rules
+          (precompile-clause wam head body))
+        ;; Otherwise we need to loop through each of the clauses, pushing their
+        ;; choice point instruction first, then their actual code.
+        ;;
+        ;; The `nil` clause addresses will get filled in later, during rendering.
+        (loop :for ((head . body) . remaining) :on rules
+              :for first-p = t :then nil
+              :for last-p = (null remaining)
+              :append
+              (cons (cond (first-p '(:try nil))
+                          (last-p '(:trust))
+                          (t '(:retry nil)))
+                    (precompile-clause wam head body))))
+      functor
+      arity)))
+
+
+;;;; Rendering
+;;; Rendering is the act of taking the friendly list-of-instructions format and
+;;; actually converting it to raw-ass bytes and storing it in an array.
+
+(defun render-opcode (opcode)
+  (ecase opcode
+    (:get-structure-local  +opcode-get-structure-local+)
+    (:unify-variable-local +opcode-unify-variable-local+)
+    (:unify-variable-stack +opcode-unify-variable-stack+)
+    (:unify-value-local    +opcode-unify-value-local+)
+    (:unify-value-stack    +opcode-unify-value-stack+)
+    (:get-variable-local   +opcode-get-variable-local+)
+    (:get-variable-stack   +opcode-get-variable-stack+)
+    (:get-value-local      +opcode-get-value-local+)
+    (:get-value-stack      +opcode-get-value-stack+)
+    (:put-structure-local  +opcode-put-structure-local+)
+    (:set-variable-local   +opcode-set-variable-local+)
+    (:set-variable-stack   +opcode-set-variable-stack+)
+    (:set-value-local      +opcode-set-value-local+)
+    (:set-value-stack      +opcode-set-value-stack+)
+    (:put-variable-local   +opcode-put-variable-local+)
+    (:put-variable-stack   +opcode-put-variable-stack+)
+    (:put-value-local      +opcode-put-value-local+)
+    (:put-value-stack      +opcode-put-value-stack+)
+    (:call                 +opcode-call+)
+    (:proceed              +opcode-proceed+)
+    (:allocate             +opcode-allocate+)
+    (:deallocate           +opcode-deallocate+)
+    (:done                 +opcode-done+)
+    (:try                  +opcode-try+)
+    (:retry                +opcode-retry+)
+    (:trust                +opcode-trust+)))
+
+(defun render-argument (argument)
+  (etypecase argument
+    (null 0) ; ugly choice point args that'll be filled later...
+    (register (register-number argument)) ; bytecode just needs register numbers
+    (number argument))) ; just a numeric argument, e.g. alloc 0
+
+(defun render-bytecode (code instructions)
+  (let ((previous-jump nil))
+    (flet
+        ((fill-previous-jump (address)
+           (when previous-jump
+             (setf (aref code (1+ previous-jump)) address))
+           (setf previous-jump address)))
+      (loop
+        :for (opcode . arguments) :in instructions
+        :for address = (code-push-instruction! code
+                           (render-opcode opcode)
+                         (mapcar #'render-argument arguments))
+        ;; We need to fill in the addresses for the choice point jumping
+        ;; instructions.  For example, when we have TRY ... TRUST, the TRUST
+        ;; needs to patch its address into the TRY instruction.
+        ;;
+        ;; I know, this is ugly, sorry.
+        :when (member opcode '(:try :retry :trust))
+        :do (fill-previous-jump address)))))
+
+
+(defun make-query-code-store ()
+  (make-array 512
+    :fill-pointer 0
+    :adjustable t
+    :element-type 'code-word))
+
+(defun render-query (instructions)
+  (let ((code (make-query-code-store)))
+    (render-bytecode code instructions)
+    code))
+
+
+(defun mark-label (wam functor arity address)
+  "Set the code label `functor`/`arity` to point at `address`."
+  (setf (wam-code-label wam functor arity) address))
+
+(defun render-rules (wam functor arity instructions)
+  ;; Before we render the instructions, make the label point at where they're
+  ;; about to go.
+  (mark-label wam functor arity (fill-pointer (wam-code wam)))
+  (render-bytecode (wam-code wam) instructions))
+
+
+;;;; Compilation
+;;; The compilation phase wraps everything else up into a sane UI.
+(defun compile-query (wam query)
+  "Compile `query` into a fresh array of bytecode.
+
+  `query` should be a list of goal terms.
+
+  Returns the fresh code array and the permanent variables.
+
+  "
+  (multiple-value-bind (instructions permanent-variables)
+      (precompile-query wam query)
+    (values
+      (render-query instructions)
+      permanent-variables)))
+
 (defun compile-rules (wam rules)
   "Compile `rules` into the WAM's code store.
 
@@ -749,36 +872,6 @@
   more body terms.  A rule with no body is called a fact.
 
   "
-  (assert rules () "Cannot compile an empty program.")
-  (*let ((code (wam-code wam))
-         (previous-jump nil)
-         ((:values functor arity) (check-rules rules)))
-    (labels
-        ((fill-jump (address)
-           (when previous-jump
-             (setf (aref code (1+ previous-jump)) address))
-           (setf previous-jump address))
-         (push-branch-instruction (first-p last-p)
-           (cond
-             (first-p
-              (fill-jump (code-push-instruction! code +opcode-try+ 999)))
-             (last-p
-              (fill-jump (code-push-instruction! code +opcode-trust+)))
-             (t
-              (fill-jump (code-push-instruction! code +opcode-retry+ 999))))))
-      ;; Mark the label to point at where we're about to stick the code.
-      ;; TODO: this is ugly
-      (mark-label wam functor arity (fill-pointer code))
-      (if (= 1 (length rules))
-        ;; Single-clause rules don't need to bother setting up a choice point.
-        (destructuring-bind ((head . body)) rules
-          (compile-clause wam code head body))
-        ;; Otherwise we need to loop through each of the clauses, pushing their
-        ;; choice point instruction first, then their actual code.
-        (loop :for ((head . body) . remaining) :on rules
-              :for first-p = t :then nil
-              :do
-              (push-branch-instruction first-p (null remaining))
-              (compile-clause wam code head body)))))
-  (values))
-
+  (multiple-value-bind (instructions functor arity)
+      (precompile-rules wam rules)
+    (render-rules wam functor arity instructions)))
