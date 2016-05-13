@@ -27,3 +27,6 @@
     #:facts
     #:return-one
     #:return-all))
+
+(defpackage #:bones-test.circle
+  (:use :cl :5am :bones.circle))

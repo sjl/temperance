@@ -22,6 +22,7 @@
                 :serial t
                 :components ((:file "paip")
                              (:file "utils")
+                             (:file "circle")
                              (:module "wam"
                               :serial t
                               :components ((:file "constants")

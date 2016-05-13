@@ -83,3 +83,5 @@
                     (remove minimal-element remaining-elements :test test)
                     (cons minimal-element result))))))
     (reverse (recur constraints elements (list)))))
+
+

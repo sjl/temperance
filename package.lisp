@@ -13,12 +13,44 @@
     #:topological-sort
     #:push-if-new))
 
+(defpackage #:bones.circle
+  (:use #:cl #:defstar)
+  (:export
+    #:make-circle-with
+    #:make-empty-circle
+    #:circle-to-list
+    #:circle-prepend
+    #:circle-append
+    #:circle-forward
+    #:circle-backward
+    #:circle-value
+    #:circle-rotate
+    #:circle-nth
+    #:circle-insert-before
+    #:circle-insert-after
+    #:circle-sentinel-p
+    #:circle-empty-p
+    #:circle-remove
+    #:circle-backward-remove
+    #:circle-forward-remove
+    #:circle-replace
+    #:circle-backward-replace
+    #:circle-forward-replace
+    #:circle-splice
+    #:circle-backward-splice
+    #:circle-forward-splice
+    #:circle-insert-beginning
+    #:circle-insert-end
+    )
+  )
+
 (defpackage #:bones.wam
   (:use
     #:cl
     #:defstar
     #:optima
     #:cl-arrows
+    #:bones.circle
     #:bones.quickutils
     #:bones.utils)
   (:import-from #:optima
