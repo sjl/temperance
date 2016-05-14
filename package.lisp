@@ -20,7 +20,9 @@
     #:make-empty-circle
     #:circle-to-list
     #:circle-prepend
+    #:circle-prepend-circle
     #:circle-append
+    #:circle-append-circle
     #:circle-forward
     #:circle-backward
     #:circle-value

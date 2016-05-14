@@ -10,9 +10,9 @@
     (when (not (5am:results-status result))
       (setf *passed* nil))))
 
-; (test :bones)
-; (test :bones.paip)
-; (test :bones.wam)
+(test :bones)
+(test :bones.paip)
+(test :bones.wam)
 (test :bones.circle)
 
 (sb-ext:exit :code (if *passed* 0 1))

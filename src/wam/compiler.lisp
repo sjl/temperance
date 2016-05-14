@@ -555,15 +555,15 @@
 
   Actual queries are a special case where the `head-tokens` stream is `nil`
 
-  The compiled instructions will be returned as a list.
+  The compiled instructions will be returned as a circle.
 
   "
   (let ((seen (list))
         (mode nil)
-        (instructions nil))
+        (instructions (make-empty-circle)))
     (labels
         ((push-instruction (&rest instruction)
-           (push instruction instructions))
+           (circle-insert-end instructions instruction))
          (handle-argument (argument-register source-register)
            ;; OP X_n A_i
            (let ((newp (push-if-new source-register seen :test #'register=)))
@@ -607,8 +607,7 @@
         (handle-stream head-tokens))
       (setf mode :query)
       (handle-stream body-tokens)
-      ;; TODO: this could suck less
-      (reverse instructions))))
+      instructions)))
 
 
 (defun find-variables (terms)
@@ -647,12 +646,14 @@
 
 
 (defun precompile-clause (wam head body)
-  "Compile the clause, returning a list of instructions the permanent variables.
+  "Precompile the clause.
 
   `head` should be the head of the clause for program clauses, or `nil` for
   query clauses.
 
   `body` is the body of the clause, or `nil` for facts.
+
+  Returns a circle of instructions and the permanent variables.
 
   "
   (let* ((permanent-variables
@@ -683,29 +684,28 @@
                (loop :for term :in (rest body) :append
                      (tokenize-query-term term
                                           permanent-variables))))))
-    (flet ((compile% () (precompile-tokens wam head-tokens body-tokens)))
+    (let ((instructions (precompile-tokens wam head-tokens body-tokens))
+          (variable-count (length permanent-variables)))
       ;; We need to compile facts and rules differently.  Facts end with
       ;; a PROCEED and rules are wrapped in ALOC/DEAL.
-      (values
-        (cond
-          ((and head body) ; a full-ass rule
-           `((:allocate ,(length permanent-variables))
-             ,@(compile%)
-             (:deallocate)))
-          ((and head (null body)) ; a bare fact
-           `(,@(compile%)
-             (:proceed)))
-          (t ; a query
-           ;; The book doesn't have this ALOC here, but we do it to aid in result
-           ;; extraction.  Basically, to make extracting th results of a query
-           ;; easier we allocate all of its variables on the stack, so we need
-           ;; push a stack frame for them before we get started.  We don't DEAL
-           ;; because we want the frame to be left on the stack at the end so we
-           ;; can poke at it.
-           `((:allocate ,(length permanent-variables))
-             ,@(compile%)
-             (:done))))
-        permanent-variables))))
+      (cond
+        ((and head body) ; a full-ass rule
+         (circle-insert-beginning instructions `(:allocate ,variable-count))
+         (circle-insert-end instructions `(:deallocate)))
+
+        ((and head (null body)) ; a bare fact
+         (circle-insert-end instructions `(:proceed)))
+
+        (t ; a query
+         ;; The book doesn't have this ALOC here, but we do it to aid in result
+         ;; extraction.  Basically, to make extracting th results of a query
+         ;; easier we allocate all of its variables on the stack, so we need
+         ;; push a stack frame for them before we get started.  We don't DEAL
+         ;; because we want the frame to be left on the stack at the end so we
+         ;; can poke at it.
+         (circle-insert-beginning instructions `(:allocate ,variable-count))
+         (circle-insert-end instructions `(:done))))
+      (values instructions permanent-variables))))
 
 
 (defun precompile-query (wam query)
@@ -739,8 +739,8 @@
   Each rule in `rules` should be a clause consisting of a head term and zero or
   more body terms.  A rule with no body is called a fact.
 
-  Returns the list of compiled instructions, as well as the functor and arity of
-  the rules being compiled.
+  Returns the circle of compiled instructions, as well as the functor and arity
+  of the rules being compiled.
 
   "
   (assert rules () "Cannot compile an empty program.")
@@ -754,14 +754,18 @@
         ;; choice point instruction first, then their actual code.
         ;;
         ;; The `nil` clause addresses will get filled in later, during rendering.
-        (loop :for ((head . body) . remaining) :on rules
+        (loop :with instructions = (make-empty-circle)
+              :for ((head . body) . remaining) :on rules
               :for first-p = t :then nil
               :for last-p = (null remaining)
-              :append
-              (cons (cond (first-p '(:try nil))
-                          (last-p '(:trust))
-                          (t '(:retry nil)))
-                    (precompile-clause wam head body))))
+              :for clause-instructions = (precompile-clause wam head body)
+              :do
+              (circle-insert-end instructions
+                                 (cond (first-p '(:try nil))
+                                       (last-p '(:trust))
+                                       (t '(:retry nil))))
+              (circle-append-circle instructions clause-instructions)
+              :finally (return instructions)))
       functor
       arity)))
 
@@ -806,6 +810,7 @@
     (number argument))) ; just a numeric argument, e.g. alloc 0
 
 (defun render-bytecode (code instructions)
+  "Render `instructions` (a circle) into `code` (a bytecode array)."
   (let ((previous-jump nil))
     (flet
         ((fill-previous-jump (address)
@@ -813,7 +818,7 @@
              (setf (aref code (1+ previous-jump)) address))
            (setf previous-jump address)))
       (loop
-        :for (opcode . arguments) :in instructions
+        :for (opcode . arguments) :in (circle-to-list instructions)
         :for address = (code-push-instruction! code
                            (render-opcode opcode)
                          (mapcar #'render-argument arguments))

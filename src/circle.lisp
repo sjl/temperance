@@ -100,9 +100,9 @@
 (defun* circle-rotate ((circle circle) (n integer))
   (:returns circle)
   (cond
-    ((zerop n) circle)
     ((> n 0) (circle-rotate (circle-next circle) (1- n)))
-    ((< n 0) (circle-rotate (circle-prev circle) (1+ n)))))
+    ((< n 0) (circle-rotate (circle-prev circle) (1+ n)))
+    (t circle)))
 
 (defun* circle-nth ((circle circle) (n integer))
   (:returns circle)
@@ -151,32 +151,43 @@
   (circle-insert-before circle value))
 
 
-(defun* circle-prepend ((circle circle) values)
+(defun* circle-prepend-circle ((circle circle) (other circle))
   (:returns :void)
   (assert (circle-sentinel-p circle) ()
     "Can only prepend to the sentinel.")
+  (assert (circle-sentinel-p other) ()
+    "Can only prepend from the sentinel.")
   ;; S new-first ... new-last R
-  (if (null values)
-    circle
-    (let ((s circle)
-          (r (circle-next circle))
-          (new (make-circle-with values)))
-      (circle-tie s (circle-next new))
-      (circle-tie (circle-prev new) r)))
+  (let ((s circle)
+        (r (circle-next circle)))
+    (circle-tie s (circle-next other))
+    (circle-tie (circle-prev other) r))
+  (values))
+
+(defun* circle-prepend ((circle circle) values)
+  (:returns :void)
+  (unless (null values)
+    (circle-prepend-circle circle (make-circle-with values)))
+  (values))
+
+
+(defun* circle-append-circle ((circle circle) (other circle))
+  (:returns :void)
+  (assert (circle-sentinel-p circle) ()
+    "Can only append to the sentinel.")
+  (assert (circle-sentinel-p other) ()
+    "Can only append from the sentinel.")
+  ;; L new-first ... new-last S
+  (let ((s circle)
+        (l (circle-prev circle)))
+    (circle-tie l (circle-next other))
+    (circle-tie (circle-prev other) s))
   (values))
 
 (defun* circle-append ((circle circle) values)
   (:returns :void)
-  (assert (circle-sentinel-p circle) ()
-    "Can only prepend to the sentinel.")
-  ;; L new-first ... new-last S
-  (if (null values)
-    circle
-    (let ((s circle)
-          (l (circle-prev circle))
-          (new (make-circle-with values)))
-      (circle-tie l (circle-next new))
-      (circle-tie (circle-prev new) s)))
+  (unless (null values)
+    (circle-append-circle circle (make-circle-with values)))
   (values))
 
 
