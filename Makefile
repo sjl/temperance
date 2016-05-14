@@ -1,4 +1,4 @@
-.PHONY: test pubdocs bench
+.PHONY: test pubdocs bench profile
 
 sourcefiles = $(shell ffind --full-path --dir src --literal .lisp)
 docfiles = $(shell ls docs/*.markdown)
@@ -26,3 +26,6 @@ pubdocs: docs
 
 bench:
 	sbcl-rlwrap --noinform --load examples/bench.lisp  --eval '(quit)'
+
+profile:
+	sbcl-rlwrap --noinform --load examples/profile.lisp  --eval '(quit)'

@@ -227,7 +227,7 @@
 
 
 (defun* circle-replace ((circle circle) value)
-  (:returns :void)
+  (:returns circle)
   (assert (not (circle-sentinel-p circle)) ()
     "Cannot replace sentinel.")
   ;; L new R
@@ -235,8 +235,8 @@
         (r (circle-next circle))
         (new (make-circle :value value)))
     (circle-tie l new)
-    (circle-tie new r))
-  (values))
+    (circle-tie new r)
+    new))
 
 (defun* circle-backward-replace ((circle circle) value)
   (:returns (or circle null))

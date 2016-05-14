@@ -237,6 +237,28 @@
           (pretty-arguments arguments)
           (pretty-functor (first arguments) functor-list)))
 
+(defmethod instruction-details ((opcode (eql +opcode-get-constant+)) arguments functor-list)
+  (format nil "GCON~A ; X~A = CONSTANT ~A"
+          (pretty-arguments arguments)
+          (second arguments)
+          (pretty-functor (first arguments) functor-list)))
+
+(defmethod instruction-details ((opcode (eql +opcode-put-constant+)) arguments functor-list)
+  (format nil "PCON~A ; X~A <- CONSTANT ~A"
+          (pretty-arguments arguments)
+          (second arguments)
+          (pretty-functor (first arguments) functor-list)))
+
+(defmethod instruction-details ((opcode (eql +opcode-set-constant+)) arguments functor-list)
+  (format nil "SCON~A      ; SET CONSTANT ~A"
+          (pretty-arguments arguments)
+          (pretty-functor (first arguments) functor-list)))
+
+(defmethod instruction-details ((opcode (eql +opcode-unify-constant+)) arguments functor-list)
+  (format nil "UCON~A      ; UNIFY CONSTANT ~A"
+          (pretty-arguments arguments)
+          (pretty-functor (first arguments) functor-list)))
+
 
 (defun dump-code-store (wam code-store
                         &optional
@@ -330,9 +352,9 @@
   (dump-labels wam)
   (dump-code wam))
 
-(defun dump-wam-query-code (wam)
+(defun dump-wam-query-code (wam &optional (max +maximum-query-size+))
   (with-slots (code) wam
-    (dump-code-store wam code 0 +maximum-query-size+)))
+    (dump-code-store wam code 0 max)))
 
 (defun dump-wam-code (wam)
   (with-slots (code) wam

@@ -38,7 +38,12 @@
     (+opcode-done+ 1)
     (+opcode-try+ 2)
     (+opcode-retry+ 2)
-    (+opcode-trust+ 1)))
+    (+opcode-trust+ 1)
+
+    (+opcode-get-constant+ 3)
+    (+opcode-set-constant+ 2)
+    (+opcode-put-constant+ 3)
+    (+opcode-unify-constant+ 2)))
 
 
 (defun* opcode-name ((opcode opcode))
@@ -72,7 +77,12 @@
     (+opcode-done+ "DONE")
     (+opcode-try+ "TRY")
     (+opcode-retry+ "RETRY")
-    (+opcode-trust+ "TRUST")))
+    (+opcode-trust+ "TRUST")
+
+    (+opcode-get-constant+ "GET-CONSTANT")
+    (+opcode-set-constant+ "SET-CONSTANT")
+    (+opcode-put-constant+ "PUT-CONSTANT")
+    (+opcode-unify-constant+ "UNIFY-CONSTANT")))
 
 (defun* opcode-short-name ((opcode opcode))
   (:returns string)
@@ -106,5 +116,10 @@
     (+opcode-done+ "DONE")
     (+opcode-try+ "TRYM")
     (+opcode-retry+ "RTRY")
-    (+opcode-trust+ "TRST")))
+    (+opcode-trust+ "TRST")
+
+    (+opcode-get-constant+ "GCON")
+    (+opcode-set-constant+ "SCON")
+    (+opcode-put-constant+ "PCON")
+    (+opcode-unify-constant+ "UCON")))
 

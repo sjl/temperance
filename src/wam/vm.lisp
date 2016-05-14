@@ -59,9 +59,16 @@
   (= (cell-value functor-cell-1)
      (cell-value functor-cell-2)))
 
+(defun* constants-match-p ((constant-cell-1 cell)
+                           (constant-cell-2 cell))
+  (:returns boolean)
+  "Return whether the two constant cells represent the same functor."
+  (= (cell-value constant-cell-1)
+     (cell-value constant-cell-2)))
+
 
 ;;;; "Ancillary" Functions
-(defun* backtrack! ((wam wam) (reason string))
+(defun* backtrack! ((wam wam))
   (:returns :void)
   "Backtrack after a failure.
 
@@ -69,7 +76,7 @@
 
   "
   (when *break-on-fail*
-    (break "FAIL: ~A" reason))
+    (break "Backtracked."))
   (if (wam-backtrack-pointer-unset-p wam)
     (setf (wam-fail wam) t)
     (setf (wam-program-counter wam) (wam-stack-choice-bp wam)
@@ -157,27 +164,39 @@
       (when (not (= d1 d2))
         (let ((cell-1 (wam-store-cell wam d1))
               (cell-2 (wam-store-cell wam d2)))
-          (if (or (cell-reference-p cell-1)
-                  (cell-reference-p cell-2))
+          (cond
             ;; If at least one is a reference, bind them.
             ;;
-            ;; We know that any references we see here will be unbound,
-            ;; because we deref'ed them above.
-            (bind! wam d1 d2)
-            ;; Otherwise we're looking at two structures (hopefully, lol).
-            (let* ((structure-1-addr (cell-value cell-1)) ; find where they
-                   (structure-2-addr (cell-value cell-2)) ; start on the heap
-                   (functor-1 (wam-store-cell wam structure-1-addr)) ; grab the
-                   (functor-2 (wam-store-cell wam structure-2-addr))) ; functors
-              (if (functors-match-p functor-1 functor-2)
-                ;; If the functors match, push their pairs of arguments onto
-                ;; the stack to be unified.
-                (loop :with arity = (cdr (wam-functor-lookup wam (cell-value functor-1)))
-                      :for i :from 1 :to arity :do
-                      (wam-unification-stack-push! wam (+ structure-1-addr i))
-                      (wam-unification-stack-push! wam (+ structure-2-addr i)))
-                ;; Otherwise we're hosed.
-                (backtrack! wam "Functors don't match in unify!")))))))))
+            ;; We know that any references we see here will be unbound, because
+            ;; we deref'ed them above.
+            ((or (cell-reference-p cell-1) (cell-reference-p cell-2))
+             (bind! wam d1 d2))
+
+            ;; Otherwise if they're both constants, make sure they match.
+            ((and (cell-constant-p cell-1) (cell-constant-p cell-2))
+             (when (not (constants-match-p cell-1 cell-2))
+               (backtrack! wam)))
+
+            ;; Otherwise if they're both structure cells, make sure they match
+            ;; and then schedule their subterms to be unified.
+            ((and (cell-structure-p cell-1) (cell-structure-p cell-2))
+             (let* ((structure-1-addr (cell-value cell-1)) ; find where they
+                    (structure-2-addr (cell-value cell-2)) ; start on the heap
+                    (functor-1 (wam-store-cell wam structure-1-addr)) ; grab the
+                    (functor-2 (wam-store-cell wam structure-2-addr))) ; functors
+               (if (functors-match-p functor-1 functor-2)
+                 ;; If the functors match, push their pairs of arguments onto
+                 ;; the stack to be unified.
+                 (loop :with arity = (wam-functor-arity wam (cell-value functor-1))
+                       :for i :from 1 :to arity :do
+                       (wam-unification-stack-push! wam (+ structure-1-addr i))
+                       (wam-unification-stack-push! wam (+ structure-2-addr i)))
+                 ;; Otherwise we're hosed.
+                 (backtrack! wam))))
+
+            ;; Otherwise we're looking at two different kinds of cells, and are
+            ;; just totally hosed.  Backtrack.
+            (t (backtrack! wam))))))))
 
 
 ;;;; Instruction Definition
@@ -329,9 +348,8 @@
            (if (matching-functor-p functor-cell functor)
              (setf mode :read
                    s (1+ functor-address))
-             (backtrack! wam "Functors don't match in get-struct"))))
-        (t (backtrack! wam (format nil "get-struct on a non-ref/struct cell ~A"
-                                   (cell-aesthetic cell))))))))
+             (backtrack! wam))))
+        (t (backtrack! wam))))))
 
 (define-instructions (%unify-variable-local %unify-variable-stack)
     ((wam wam)
@@ -377,7 +395,8 @@
 
             (wam-program-counter wam) ; jump
             target)
-      (backtrack! wam "Tried to call unknown procedure."))))
+      ;; Trying to call an unknown procedure.
+      (backtrack! wam))))
 
 (define-instruction %proceed ((wam wam))
   (setf (wam-program-counter wam) ; P <- CP
@@ -462,6 +481,47 @@
             (wam-stack-choice-h wam old-b)))))
 
 
+;;;; Constant Instructions
+(defun* %%match-constant ((wam wam)
+                          (constant functor-index)
+                          (address store-index))
+  (let* ((addr (deref wam address))
+         (cell (wam-store-cell wam addr)))
+    (cond
+      ((cell-reference-p cell)
+       (setf (wam-store-cell wam addr)
+             (make-cell-constant constant))
+       (trail! wam addr))
+
+      ((cell-constant-p cell)
+       (when (not (= constant (cell-value cell)))
+         (backtrack! wam)))
+
+      (t
+       (backtrack! wam)))))
+
+(define-instruction %put-constant ((wam wam)
+                                   (constant functor-index)
+                                   (register register-index))
+  (setf (wam-local-register wam register)
+        (make-cell-constant constant)))
+
+(define-instruction %get-constant ((wam wam)
+                                   (constant functor-index)
+                                   (register register-index))
+  (%%match-constant wam constant register))
+
+(define-instruction %set-constant ((wam wam)
+                                   (constant functor-index))
+  (wam-heap-push! wam (make-cell-constant constant)))
+
+(define-instruction %unify-constant ((wam wam)
+                                     (constant functor-index))
+  (ecase (wam-mode wam)
+    (:read (%%match-constant wam constant (wam-subterm wam)))
+    (:write (wam-heap-push! wam (make-cell-constant constant)))))
+
+
 ;;;; Running
 (defmacro instruction-call (wam instruction code-store pc number-of-arguments)
   "Expand into a call of the appropriate machine instruction.
@@ -502,15 +562,15 @@
                ((cell-null-p cell) "NULL?!")
                ((cell-reference-p cell) (extract-var (cell-value cell)))
                ((cell-structure-p cell) (recur (cell-value cell)))
+               ((cell-constant-p cell)
+                (wam-functor-symbol wam (cell-value cell)))
                ((cell-functor-p cell)
                 (destructuring-bind (functor . arity)
                     (wam-functor-lookup wam (cell-value cell))
-                  (if (zerop arity)
-                    functor
-                    (list* functor
-                           (mapcar #'recur
-                                   (range (+ address 1)
-                                          (+ address arity 1)))))))
+                  (list* functor
+                         (mapcar #'recur
+                                 (range (+ address 1)
+                                        (+ address arity 1))))))
                (t (error "What to heck is this?"))))))
       (mapcar #'recur addresses))))
 
@@ -558,6 +618,11 @@
               (+opcode-get-variable-stack+   (instruction %get-variable-stack 2))
               (+opcode-get-value-local+      (instruction %get-value-local 2))
               (+opcode-get-value-stack+      (instruction %get-value-stack 2))
+              ;; Constant
+              (+opcode-put-constant+         (instruction %put-constant 2))
+              (+opcode-get-constant+         (instruction %get-constant 2))
+              (+opcode-set-constant+         (instruction %set-constant 1))
+              (+opcode-unify-constant+       (instruction %unify-constant 1))
               ;; Choice
               (+opcode-try+                  (instruction %try 1))
               (+opcode-retry+                (instruction %retry 1))
@@ -578,7 +643,7 @@
               (+opcode-done+
                 (if (funcall done-thunk)
                   (return-from run)
-                  (backtrack! wam "done-function returned false"))))
+                  (backtrack! wam))))
             ;; Only increment the PC when we didn't backtrack
             (if (wam-backtracked wam)
               (setf (wam-backtracked wam) nil)

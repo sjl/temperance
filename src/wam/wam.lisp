@@ -447,7 +447,9 @@
   (wam-truncate-heap! wam)
   (wam-truncate-trail! wam)
   (wam-truncate-unification-stack! wam)
-  (wam-reset-local-registers! wam)
+  (policy-cond:policy-if (>= debug 2)
+    (wam-reset-local-registers! wam)
+    nil) ; fuck it
   (setf (wam-program-counter wam) 0
         (wam-continuation-pointer wam) 0
         (wam-environment-pointer wam) +stack-start+

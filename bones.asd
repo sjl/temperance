@@ -12,6 +12,7 @@
                #:optima
                #:trivial-types
                #:cl-arrows
+               #:policy-cond
                #:fare-quasiquote-optima
                #:fare-quasiquote-readtable)
 

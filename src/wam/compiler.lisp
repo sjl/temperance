@@ -49,6 +49,9 @@
     (format stream (register-to-string object))))
 
 
+(defun* register-argument-p ((register register))
+  (eql (register-type register) :argument))
+
 (defun* register-temporary-p ((register register))
   (member (register-type register) '(:argument :local)))
 
@@ -770,6 +773,81 @@
       arity)))
 
 
+;;;; Optimization
+;;; Optimization of the WAM instructions happens between the precompilation
+;;; phase and the rendering phase.  We perform a number of passes over the
+;;; circle of instructions, doing one optimization each time.
+
+(defun optimize-get-constant (node constant register)
+  ;; 1. get_structure c/0, Ai -> get_constant c, Ai
+  (circle-replace node `(:get-constant ,constant ,register)))
+
+(defun optimize-put-constant (node constant register)
+  ;; 2. put_structure c/0, Ai -> put_constant c, Ai
+  (circle-replace node `(:put-constant ,constant ,register)))
+
+(defun optimize-set-constant (node constant register)
+  ;; 3. put_structure c/0, Xi                     *** WE ARE HERE
+  ;;    ...
+  ;;    set_value Xi          -> set_constant c
+  (loop
+    :with previous = (circle-prev node)
+    ;; Search forward for the corresponding set-value instruction
+    :for n = (circle-forward-remove node) :then (circle-forward n)
+    :while n
+    :for (opcode . arguments) = (circle-value n)
+    :when (and (eql opcode :set-value-local)
+               (register= register (first arguments)))
+    :do
+    (circle-replace n `(:set-constant ,constant))
+    (return previous)))
+
+(defun optimize-unify-constant (node constant register)
+  ;; 4. unify_variable Xi     -> unify_constant c
+  ;;    ...
+  ;;    get_structure c/0, Xi                     *** WE ARE HERE
+  (loop
+    ;; Search backward for the corresponding unify-variable instruction
+    :for n = (circle-backward node) :then (circle-backward n)
+    :while n
+    :for (opcode . arguments) = (circle-value n)
+    :when (and (eql opcode :unify-variable-local)
+               (register= register (first arguments)))
+    :do
+    (circle-replace n `(:unify-constant ,constant))
+    (return (circle-backward-remove node))))
+
+(defun optimize-constants (wam instructions)
+  ;; From the book and the erratum, there are four optimizations we can do for
+  ;; constants (0-arity structures).
+  (flet ((constant-p (functor)
+           (zerop (wam-functor-arity wam functor))))
+    (loop :for node = (circle-forward instructions) :then (circle-forward node)
+          :while node
+          :for (opcode . arguments) = (circle-value node)
+          :do
+          (match (circle-value node)
+
+            ((guard `(:put-structure-local ,functor ,register)
+                    (constant-p functor))
+             (setf node
+                   (if (register-argument-p register)
+                     (optimize-put-constant node functor register)
+                     (optimize-set-constant node functor register))))
+
+            ((guard `(:get-structure-local ,functor ,register)
+                    (constant-p functor))
+             (setf node
+                   (if (register-argument-p register)
+                     (optimize-get-constant node functor register)
+                     (optimize-unify-constant node functor register))))))
+    instructions))
+
+
+(defun optimize-instructions (wam instructions)
+  (optimize-constants wam instructions))
+
+
 ;;;; Rendering
 ;;; Rendering is the act of taking the friendly list-of-instructions format and
 ;;; actually converting it to raw-ass bytes and storing it in an array.
@@ -794,6 +872,10 @@
     (:put-variable-stack   +opcode-put-variable-stack+)
     (:put-value-local      +opcode-put-value-local+)
     (:put-value-stack      +opcode-put-value-stack+)
+    (:put-constant         +opcode-put-constant+)
+    (:get-constant         +opcode-get-constant+)
+    (:set-constant         +opcode-set-constant+)
+    (:unify-constant       +opcode-unify-constant+)
     (:call                 +opcode-call+)
     (:proceed              +opcode-proceed+)
     (:allocate             +opcode-allocate+)
@@ -866,6 +948,7 @@
   "
   (multiple-value-bind (instructions permanent-variables)
       (precompile-query wam query)
+    (optimize-instructions wam instructions)
     (values
       (render-query instructions)
       permanent-variables)))
@@ -879,4 +962,5 @@
   "
   (multiple-value-bind (instructions functor arity)
       (precompile-rules wam rules)
+    (optimize-instructions wam instructions)
     (render-rules wam functor arity instructions)))

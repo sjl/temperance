@@ -23,6 +23,8 @@
     #:circle-prepend-circle
     #:circle-append
     #:circle-append-circle
+    #:circle-next
+    #:circle-prev
     #:circle-forward
     #:circle-backward
     #:circle-value

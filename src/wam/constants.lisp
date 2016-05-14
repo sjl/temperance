@@ -97,8 +97,10 @@
 
 
 ;;;; Opcodes
-;;; Program
 (define-constant +opcode-noop+ 0)
+
+
+;;; Program
 (define-constant +opcode-get-structure-local+ 1)
 (define-constant +opcode-unify-variable-local+ 2)
 (define-constant +opcode-unify-variable-stack+ 3)
@@ -132,6 +134,11 @@
 (define-constant +opcode-retry+ 25)
 (define-constant +opcode-trust+ 26)
 
+;;; Constants
+(define-constant +opcode-get-constant+ 27)
+(define-constant +opcode-set-constant+ 28)
+(define-constant +opcode-put-constant+ 29)
+(define-constant +opcode-unify-constant+ 30)
 
 ;;;; Debug Config
 (defparameter *off-by-one* nil)
