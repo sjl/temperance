@@ -28,29 +28,28 @@
   (wam-heap-push! wam (make-cell-functor functor)))
 
 
+(declaim (inline bound-reference-p
+                 unbound-reference-p
+                 matching-functor-p
+                 functors-match-p
+                 constants-match-p))
 (defun* bound-reference-p ((wam wam) (address store-index))
-  (:returns boolean)
   "Return whether the cell at `address` is a bound reference."
-  (ensure-boolean
-    (let ((cell (wam-store-cell wam address)))
-      (and (cell-reference-p cell)
-           (not (= (cell-value cell) address))))))
+  (let ((cell (wam-store-cell wam address)))
+    (and (cell-reference-p cell)
+         (not (= (cell-value cell) address)))))
 
 (defun* unbound-reference-p ((wam wam) (address store-index))
-  (:returns boolean)
   "Return whether the cell at `address` is an unbound reference."
-  (ensure-boolean
-    (let ((cell (wam-store-cell wam address)))
-      (and (cell-reference-p cell)
-           (= (cell-value cell) address)))))
+  (let ((cell (wam-store-cell wam address)))
+    (and (cell-reference-p cell)
+         (= (cell-value cell) address))))
 
 (defun* matching-functor-p ((cell cell)
                             (functor functor-index))
-  (:returns boolean)
   "Return whether `cell` is a functor cell containing `functor`."
-  (ensure-boolean
-    (and (cell-functor-p cell)
-         (= (cell-value cell) functor))))
+  (and (cell-functor-p cell)
+       (= (cell-value cell) functor)))
 
 (defun* functors-match-p ((functor-cell-1 cell)
                           (functor-cell-2 cell))

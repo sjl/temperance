@@ -23,9 +23,11 @@
 
   (sb-sprof:with-profiling (:max-samples 5000
                             :sample-interval 0.001
-                            :report :flat
                             :loop nil)
-    (bones.wam::dfs-exhaust)))
+    (bones.wam::dfs-exhaust))
+
+  (sb-sprof:report :type :flat)
+  )
 
 ; (format t "~%~%====================================~%")
 ; (format t "(speed 3) (safety 1) (debug 1)~%")

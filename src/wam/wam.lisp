@@ -100,6 +100,7 @@
 
 
 ;;;; Store
+(declaim (inline wam-store-cell (setf wam-store-cell)))
 (defun* wam-store-cell ((wam wam) (address store-index))
   (:returns cell)
   "Return the cell at the given address.
@@ -121,6 +122,12 @@
 ;;;
 ;;; We reserve the first address in the heap as a sentinel, as an "unset" value
 ;;; for various pointers into the heap.
+
+(declaim (inline wam-heap-pointer-unset-p
+                 wam-heap-cell
+                 (setf wam-heap-cell)
+                 wam-heap-pointer
+                 (setf wam-heap-pointer)))
 
 (defun* wam-heap-pointer-unset-p ((wam wam) (address heap-index))
   (:returns boolean)
@@ -152,13 +159,13 @@
 (defun* wam-heap-cell ((wam wam) (address heap-index))
   (:returns cell)
   "Return the heap cell at the given address."
-  (assert (not (wam-heap-pointer-unset-p wam address)) ()
-    "Cannot read from heap address zero.")
+  (when (wam-heap-pointer-unset-p wam address)
+    (error "Cannot read from heap address zero."))
   (aref (wam-store wam) address))
 
 (defun (setf wam-heap-cell) (new-value wam address)
-  (assert (not (wam-heap-pointer-unset-p wam address)) ()
-    "Cannot write to heap address zero.")
+  (when (wam-heap-pointer-unset-p wam address)
+    (error "Cannot write to heap address zero."))
   (setf (aref (wam-store wam) address) new-value))
 
 
@@ -203,32 +210,46 @@
 ;;; first word of the stack (address `+stack-start`) to mean "uninitialized", so
 ;;; we have a nice sentinel value for the various pointers into the stack.
 
-(declaim (inline wam-stack-word))
+(declaim (inline assert-inside-stack
+                 wam-stack-ensure-size
+                 wam-stack-word
+                 (setf wam-stack-word)
+                 wam-backtrack-pointer-unset-p
+                 wam-environment-pointer-unset-p))
 
-(defun assert-inside-stack (wam address action)
-  (declare (ignore wam))
-  (assert (<= +stack-start+ address (1- +stack-end+)) ()
-    "Cannot ~A stack cell at address ~X (outside the stack range ~X to ~X)"
-    action address +stack-start+ +stack-end+)
-  (assert (not (= +stack-start+ address)) ()
-    "Cannot ~A stack address zero."
-    action))
+
+(defun* assert-inside-stack ((wam wam) (address store-index))
+  (:returns :void)
+  (declare (ignore wam address))
+  (policy-cond:policy-cond
+    ((>= debug 2)
+     (progn
+       (assert (<= +stack-start+ address (1- +stack-end+)) ()
+         "Cannot access stack cell at address ~X (outside the stack range ~X to ~X)"
+         address +stack-start+ +stack-end+)
+       (assert (not (= +stack-start+ address)) ()
+         "Cannot access stack address zero.")))
+    ((>= safety 1)
+     (when (not (< +stack-start+ address +stack-end+))
+       (error "Stack bounds crossed.  Game over.")))
+    (t nil)) ; wew lads
+  (values))
 
 (defun* wam-stack-ensure-size ((wam wam) (address stack-index))
   (:returns :void)
   "Ensure the WAM stack is large enough to be able to write to `address`."
-  (assert-inside-stack wam address "write")
+  (assert-inside-stack wam address)
   (values))
 
 
 (defun* wam-stack-word ((wam wam) (address stack-index))
   (:returns stack-word)
   "Return the stack word at the given address."
-  (assert-inside-stack wam address "read")
+  (assert-inside-stack wam address)
   (aref (wam-store wam) address))
 
 (defun (setf wam-stack-word) (new-value wam address)
-  (assert-inside-stack wam address "write")
+  (assert-inside-stack wam address)
   (setf (aref (wam-store wam) address) new-value))
 
 
@@ -259,6 +280,14 @@
 ;;;     | .. |
 ;;;     | Yn |
 ;;;     |NEXT| <-- fill-pointer
+
+(declaim (inline wam-stack-frame-ce
+                 wam-stack-frame-cp
+                 wam-stack-frame-n
+                 wam-stack-frame-arg
+                 (setf wam-stack-frame-arg)
+                 wam-stack-frame-size))
+
 (defun* wam-stack-frame-ce
     ((wam wam)
      &optional
@@ -293,8 +322,11 @@
   (:returns cell)
   (wam-stack-word wam (+ 3 n e)))
 
-(defun (setf wam-stack-frame-arg)
-    (new-value wam n &optional (e (wam-environment-pointer wam)))
+(defun* (setf wam-stack-frame-arg)
+    ((new-value cell)
+     (wam wam)
+     (n register-index)
+     &optional ((e environment-pointer) (wam-environment-pointer wam)))
   (setf (wam-stack-word wam (+ e 3 n))
         new-value))
 
@@ -323,6 +355,17 @@
 ;;;         | .. |
 ;;;     7+n | An |
 ;;;         |NEXT| <-- fill-pointer
+
+(declaim (inline wam-stack-choice-n
+                 wam-stack-choice-ce
+                 wam-stack-choice-cp
+                 wam-stack-choice-cb
+                 wam-stack-choice-bp
+                 wam-stack-choice-tr
+                 wam-stack-choice-h
+                 wam-stack-choice-arg
+                 (setf wam-stack-choice-arg)
+                 wam-stack-choice-size))
 
 (defun* wam-stack-choice-n
     ((wam wam)
@@ -390,8 +433,11 @@
   (:returns cell)
   (wam-stack-word wam (+ b 7 n)))
 
-(defun (setf wam-stack-choice-arg)
-    (new-value wam n &optional (b (wam-backtrack-pointer wam)))
+(defun* (setf wam-stack-choice-arg)
+    ((new-value cell)
+     (wam wam)
+     (n arity)
+     &optional ((b backtrack-pointer) (wam-backtrack-pointer wam)))
   (setf (wam-stack-word wam (+ b 7 n))
         new-value))
 
@@ -603,6 +649,11 @@
 ;;;  / _, _/ /___/ /_/ // / ___/ // / / /___/ _, _/___/ /  / ___ |/ _, _/ /___   / /___/ /___/ /___/ /______/ /
 ;;; /_/ |_/_____/\____/___//____//_/ /_____/_/ |_|/____/  /_/  |_/_/ |_/_____/   \____/_____/_____/_____/____/
 
+(declaim (inline wam-local-register
+                 (setf wam-local-register)
+                 wam-stack-register
+                 (setf wam-stack-register)))
+
 (defun* wam-local-register ((wam wam) (register register-index))
   (:returns cell)
   "Return the value stored in the WAM local register with the given index."
@@ -636,6 +687,10 @@
 ;;;; Functors
 ;;; Functors are stored in an adjustable array.  Cells refer to a functor using
 ;;; the functor's address in this array.
+
+(declaim (inline wam-functor-lookup
+                 wam-functor-symbol
+                 wam-functor-arity))
 
 (defun* wam-ensure-functor-index ((wam wam) (functor functor))
   (:returns functor-index)

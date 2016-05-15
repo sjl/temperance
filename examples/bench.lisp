@@ -26,10 +26,10 @@
 ; (declaim (optimize (speed 0) (safety 3) (debug 3)))
 ; (run-test)
 
-(format t "~%~%====================================~%")
-(format t "(speed 3) (safety 1) (debug 1)~%")
-(declaim (optimize (speed 3) (safety 1) (debug 1)))
-(run-test)
+; (format t "~%~%====================================~%")
+; (format t "(speed 3) (safety 1) (debug 1)~%")
+; (declaim (optimize (speed 3) (safety 1) (debug 1)))
+; (run-test)
 
 (format t "~%~%====================================~%")
 (format t "(speed 3) (safety 1) (debug 0)~%")

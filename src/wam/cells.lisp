@@ -26,6 +26,8 @@
 ;;;
 
 
+(declaim (inline cell-type
+                 cell-value))
 (defun* cell-type ((cell cell))
   (:returns cell-tag)
   (logand cell +cell-tag-bitmask+))
@@ -61,6 +63,11 @@
           (cell-value cell)))
 
 
+(declaim (inline cell-null-p
+                 cell-reference-p
+                 cell-functor-p
+                 cell-structure-p
+                 cell-constant-p))
 (defun* cell-null-p ((cell cell))
   (:returns boolean)
   (= (cell-type cell) +tag-null+))
@@ -82,6 +89,12 @@
   (= (cell-type cell) +tag-constant+))
 
 
+(declaim (inline make-cell
+                 make-cell-null
+                 make-cell-structure
+                 make-cell-reference
+                 make-cell-functor
+                 make-cell-constant))
 (defun* make-cell ((tag cell-tag) (value cell-value))
   (:returns cell)
   (values

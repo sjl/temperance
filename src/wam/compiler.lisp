@@ -6,23 +6,14 @@
   '(member :argument :local :permanent))
 
 (deftype register-number ()
-  '(integer 0))
+  `(integer 0 ,(1- +register-count+)))
 
 
-(defclass register ()
-  ((type
-     :initarg :type
-     :reader register-type
-     :type register-type)
-   (number
-     :initarg :number
-     :reader register-number
-     :type register-number)))
+(declaim (inline register-type register-number))
+(defstruct (register (:constructor make-register (type number)))
+  (type :local :type register-type)
+   (number 0 :type register-number))
 
-
-(defun* make-register ((type register-type) (number register-number))
-  (:returns register)
-  (make-instance 'register :type type :number number))
 
 (defun* make-temporary-register ((number register-number) (arity arity))
   (:returns register)
@@ -49,6 +40,9 @@
     (format stream (register-to-string object))))
 
 
+(declaim (inline register-argument-p
+                 register-temporary-p
+                 register-permanent-p))
 (defun* register-argument-p ((register register))
   (eql (register-type register) :argument))
 
@@ -59,25 +53,12 @@
   (eql (register-type register) :permanent))
 
 
+(declaim (inline register=))
 (defun* register= ((r1 register) (r2 register))
-  (:returns boolean)
-  (ensure-boolean
-    (and (eql (register-type r1)
-              (register-type r2))
-         (= (register-number r1)
-            (register-number r2)))))
-
-(defun* register≈ ((r1 register) (r2 register))
-  (:returns boolean)
-  (ensure-boolean
-    (and (or (eql (register-type r1)
-                  (register-type r2))
-             ;; local and argument registers are actually the same register,
-             ;; just named differently
-             (and (register-temporary-p r1)
-                  (register-temporary-p r2)))
-         (= (register-number r1)
-            (register-number r2)))))
+  (and (eql (register-type r1)
+            (register-type r2))
+       (= (register-number r1)
+          (register-number r2))))
 
 
 ;;;; Register Assignments
@@ -101,9 +82,10 @@
   (assoc register assignments))
 
 
-(defun* variable-p (term)
+(declaim (inline variablep))
+(defun* variablep (term)
   (:returns boolean)
-  (ensure-boolean (keywordp term)))
+  (keywordp term))
 
 
 (defun* variable-assignment-p ((assignment register-assignment))
@@ -116,7 +98,7 @@
 
   "
   (:returns boolean)
-  (variable-p (cdr assignment)))
+  (variablep (cdr assignment)))
 
 (defun* variable-register-p ((register register)
                              (assignments register-assignment-list))
@@ -334,7 +316,7 @@
                (make-temporary-register reg arity))))
          (parse (term &optional register)
            (cond
-             ((variable-p term) (parse-variable term))
+             ((variablep term) (parse-variable term))
              ((symbolp term) (parse (list term) register)) ; f -> f/0
              ((listp term) (parse-structure term register))
              (t (error "Cannot parse term ~S." term))))
@@ -615,7 +597,7 @@
 
 (defun find-variables (terms)
   "Return the set of variables in `terms`."
-  (remove-duplicates (tree-collect #'variable-p terms)))
+  (remove-duplicates (tree-collect #'variablep terms)))
 
 (defun find-shared-variables (terms)
   "Return the set of all variables shared by two or more terms."
