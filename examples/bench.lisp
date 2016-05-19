@@ -1,4 +1,5 @@
 (ql:quickload 'bones)
+(ql:quickload 'paiprolog)
 
 (load "examples/ggp-paip.lisp")
 (load "examples/ggp.lisp")
@@ -10,13 +11,16 @@
         (*debug-io* (make-broadcast-stream))
         (*terminal-io* (make-broadcast-stream))
         (*error-output* (make-broadcast-stream)))
-    (asdf:load-system 'bones :force t)))
+    (asdf:load-system 'bones :force t)
+    (asdf:load-system 'paiprolog :force t)
+    (load "examples/ggp-paip.lisp")
+    (load "examples/ggp.lisp")))
 
 (defun run-test ()
   (reload)
 
   (format t "PAIP ------------------------------~%")
-  (time (bones.paip::dfs-exhaust))
+  (time (paiprolog-test::dfs-exhaust))
 
   (format t "WAM -------------------------------~%")
   (time (bones.wam::dfs-exhaust)))
@@ -26,15 +30,15 @@
 ; (declaim (optimize (speed 0) (safety 3) (debug 3)))
 ; (run-test)
 
-; (format t "~%~%====================================~%")
-; (format t "(speed 3) (safety 1) (debug 1)~%")
-; (declaim (optimize (speed 3) (safety 1) (debug 1)))
-; (run-test)
-
 (format t "~%~%====================================~%")
-(format t "(speed 3) (safety 1) (debug 0)~%")
-(declaim (optimize (speed 3) (safety 1) (debug 0)))
+(format t "(speed 3) (safety 1) (debug 1)~%")
+(declaim (optimize (speed 3) (safety 1) (debug 1)))
 (run-test)
+
+; (format t "~%~%====================================~%")
+; (format t "(speed 3) (safety 1) (debug 0)~%")
+; (declaim (optimize (speed 3) (safety 1) (debug 0)))
+; (run-test)
 
 (format t "~%~%====================================~%")
 (format t "(speed 3) (safety 0) (debug 0)~%")
