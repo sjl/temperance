@@ -67,7 +67,8 @@
                  cell-reference-p
                  cell-functor-p
                  cell-structure-p
-                 cell-constant-p))
+                 cell-constant-p
+                 cell-list-p))
 (defun* cell-null-p ((cell cell))
   (:returns boolean)
   (= (cell-type cell) +tag-null+))
@@ -88,13 +89,18 @@
   (:returns boolean)
   (= (cell-type cell) +tag-constant+))
 
+(defun* cell-list-p ((cell cell))
+  (:returns boolean)
+  (= (cell-type cell) +tag-list+))
+
 
 (declaim (inline make-cell
                  make-cell-null
                  make-cell-structure
                  make-cell-reference
                  make-cell-functor
-                 make-cell-constant))
+                 make-cell-constant
+                 make-cell-list))
 (defun* make-cell ((tag cell-tag) (value cell-value))
   (:returns cell)
   (values
@@ -120,4 +126,9 @@
 (defun* make-cell-constant ((functor-index functor-index))
   (:returns cell)
   (make-cell +tag-constant+ functor-index))
+
+(defun* make-cell-list ((value cell-value))
+  (:returns cell)
+  (make-cell +tag-list+ value))
+
 

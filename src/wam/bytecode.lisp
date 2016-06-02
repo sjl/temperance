@@ -1,6 +1,7 @@
 (in-package #:bones.wam)
 
 ;;;; Opcodes
+(declaim (inline instruction-size))
 (defun* instruction-size ((opcode opcode))
   (:returns (integer 1 3))
   "Return the size of an instruction for the given opcode.
@@ -11,7 +12,7 @@
   (eswitch (opcode)
     (+opcode-noop+ 1)
 
-    (+opcode-get-structure-local+ 3)
+    (+opcode-get-structure+ 3)
     (+opcode-unify-variable-local+ 2)
     (+opcode-unify-variable-stack+ 2)
     (+opcode-unify-value-local+ 2)
@@ -21,7 +22,7 @@
     (+opcode-get-value-local+ 3)
     (+opcode-get-value-stack+ 3)
 
-    (+opcode-put-structure-local+ 3)
+    (+opcode-put-structure+ 3)
     (+opcode-set-variable-local+ 2)
     (+opcode-set-variable-stack+ 2)
     (+opcode-set-value-local+ 2)
@@ -43,14 +44,17 @@
     (+opcode-get-constant+ 3)
     (+opcode-set-constant+ 2)
     (+opcode-put-constant+ 3)
-    (+opcode-unify-constant+ 2)))
+    (+opcode-unify-constant+ 2)
+
+    (+opcode-get-list+ 2)
+    (+opcode-put-list+ 2)))
 
 
 (defun* opcode-name ((opcode opcode))
   (:returns string)
   (eswitch (opcode)
     (+opcode-noop+ "NOOP")
-    (+opcode-get-structure-local+ "GET-STRUCTURE")
+    (+opcode-get-structure+ "GET-STRUCTURE")
     (+opcode-unify-variable-local+ "UNIFY-VARIABLE")
     (+opcode-unify-variable-stack+ "UNIFY-VARIABLE")
     (+opcode-unify-value-local+ "UNIFY-VALUE")
@@ -60,7 +64,7 @@
     (+opcode-get-value-local+ "GET-VALUE")
     (+opcode-get-value-stack+ "GET-VALUE")
 
-    (+opcode-put-structure-local+ "PUT-STRUCTURE")
+    (+opcode-put-structure+ "PUT-STRUCTURE")
     (+opcode-set-variable-local+ "SET-VARIABLE")
     (+opcode-set-variable-stack+ "SET-VARIABLE")
     (+opcode-set-value-local+ "SET-VALUE")
@@ -82,14 +86,17 @@
     (+opcode-get-constant+ "GET-CONSTANT")
     (+opcode-set-constant+ "SET-CONSTANT")
     (+opcode-put-constant+ "PUT-CONSTANT")
-    (+opcode-unify-constant+ "UNIFY-CONSTANT")))
+    (+opcode-unify-constant+ "UNIFY-CONSTANT")
+
+    (+opcode-get-list+ "GET-LIST")
+    (+opcode-put-list+ "PUT-LIST")))
 
 (defun* opcode-short-name ((opcode opcode))
   (:returns string)
   (eswitch (opcode)
     (+opcode-noop+ "NOOP")
 
-    (+opcode-get-structure-local+ "GETS")
+    (+opcode-get-structure+ "GETS")
     (+opcode-unify-variable-local+ "UVAR")
     (+opcode-unify-variable-stack+ "UVAR")
     (+opcode-unify-value-local+ "UVLU")
@@ -99,7 +106,7 @@
     (+opcode-get-value-local+ "GVLU")
     (+opcode-get-value-stack+ "GVLU")
 
-    (+opcode-put-structure-local+ "PUTS")
+    (+opcode-put-structure+ "PUTS")
     (+opcode-set-variable-local+ "SVAR")
     (+opcode-set-variable-stack+ "SVAR")
     (+opcode-set-value-local+ "SVLU")
@@ -121,5 +128,8 @@
     (+opcode-get-constant+ "GCON")
     (+opcode-set-constant+ "SCON")
     (+opcode-put-constant+ "PCON")
-    (+opcode-unify-constant+ "UCON")))
+    (+opcode-unify-constant+ "UCON")
+
+    (+opcode-get-list+ "GLST")
+    (+opcode-put-list+ "PLST")))
 

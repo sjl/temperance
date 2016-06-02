@@ -12,6 +12,7 @@
                :tree-member-p
                :tree-collect
                :with-gensyms
+               :once-only
                :zip
                :alist-to-hash-table
                :map-tree

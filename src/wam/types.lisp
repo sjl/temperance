@@ -45,7 +45,7 @@
 
 
 (deftype opcode ()
-  '(integer 0 30))
+  '(integer 0 32))
 
 
 (deftype stack-frame-size ()

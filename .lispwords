@@ -2,3 +2,4 @@
 (1 repeat)
 (2 define-instruction define-instructions)
 (1 with-database)
+(3 with-cell)

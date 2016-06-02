@@ -127,7 +127,8 @@
                  wam-heap-cell
                  (setf wam-heap-cell)
                  wam-heap-pointer
-                 (setf wam-heap-pointer)))
+                 (setf wam-heap-pointer)
+                 wam-heap-push!))
 
 (defun* wam-heap-pointer-unset-p ((wam wam) (address heap-index))
   (:returns boolean)
@@ -220,7 +221,7 @@
 
 (defun* assert-inside-stack ((wam wam) (address store-index))
   (:returns :void)
-  (declare (ignore wam address))
+  (declare (ignorable wam address))
   (policy-cond:policy-cond
     ((>= debug 2)
      (progn

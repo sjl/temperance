@@ -39,6 +39,9 @@
 (define-constant +tag-constant+  #b100
   :documentation "A constant (i.e. a 0-arity functor).")
 
+(define-constant +tag-list+  #b101
+  :documentation "A Prolog list.")
+
 
 (define-constant +register-count+ 2048
   :documentation "The number of local registers the WAM has available.")
@@ -101,7 +104,7 @@
 
 
 ;;; Program
-(define-constant +opcode-get-structure-local+ 1)
+(define-constant +opcode-get-structure+ 1)
 (define-constant +opcode-unify-variable-local+ 2)
 (define-constant +opcode-unify-variable-stack+ 3)
 (define-constant +opcode-unify-value-local+ 4)
@@ -113,7 +116,7 @@
 
 
 ;;; Query
-(define-constant +opcode-put-structure-local+ 10)
+(define-constant +opcode-put-structure+ 10)
 (define-constant +opcode-set-variable-local+ 11)
 (define-constant +opcode-set-variable-stack+ 12)
 (define-constant +opcode-set-value-local+ 13)
@@ -134,11 +137,17 @@
 (define-constant +opcode-retry+ 25)
 (define-constant +opcode-trust+ 26)
 
+
 ;;; Constants
 (define-constant +opcode-get-constant+ 27)
 (define-constant +opcode-set-constant+ 28)
 (define-constant +opcode-put-constant+ 29)
 (define-constant +opcode-unify-constant+ 30)
+
+;;; Lists
+(define-constant +opcode-get-list+ 31)
+(define-constant +opcode-put-list+ 32)
+
 
 ;;;; Debug Config
 (defparameter *off-by-one* nil)

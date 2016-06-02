@@ -1,6 +1,9 @@
 (in-package #:bones.wam)
 (named-readtables:in-readtable :fare-quasiquote)
 
+;; TODO: Thoroughly document the data formats between each phase.
+;; TODO: actually just rewrite this hole fuckin thing.
+
 ;;;; Registers
 (deftype register-type ()
   '(member :argument :local :permanent))
@@ -87,6 +90,13 @@
   (:returns boolean)
   (keywordp term))
 
+(defun* prolog-list-p (term)
+  (:returns boolean)
+  ;; TODO: is this how we wanna do this?
+  (and (consp term)
+       (eql 'quote (car term))
+       (consp (cdr term))))
+
 
 (defun* variable-assignment-p ((assignment register-assignment))
   "Return whether the register assigment is a simple variable assignment.
@@ -122,13 +132,27 @@
 (defun* structure-assignment-p ((assignment register-assignment))
   (:returns boolean)
   "Return whether the given assignment pair is a structure assignment."
-  (listp (cdr assignment)))
+  (and (listp (cdr assignment))
+       (eql (cadr assignment) :structure)))
 
 (defun* structure-register-p ((register register)
                               (assignments register-assignment-list))
   (:returns boolean)
   "Return whether the given register contains a structure assignment."
   (structure-assignment-p (find-assignment register assignments)))
+
+
+(defun* list-assignment-p ((assignment register-assignment))
+  (:returns boolean)
+  "Return whether the given assignment pair is a (Prolog) list assignment."
+  (and (listp (cdr assignment))
+       (eql (cadr assignment) :list)))
+
+(defun* list-register-p ((register register)
+                              (assignments register-assignment-list))
+  (:returns boolean)
+  "Return whether the given register contains a (Prolog) list assignment."
+  (list-assignment-p (find-assignment register assignments)))
 
 
 ;;;; Parsing
@@ -299,25 +323,41 @@
            (make-temporary-register
              (vector-push-extend var local-registers)
              arity))
+         (store-temporary (contents preallocated-register)
+           ;; If we've been given a register to hold this thing (i.e.  we're
+           ;; parsing a top-level argument) use it.  Otherwise allocate a fresh
+           ;; one.
+           ;;
+           ;; Note that structures/lists always live in local registers, never
+           ;; permanent ones.
+           (let ((reg (or preallocated-register
+                          (vector-push-extend nil local-registers))))
+             (setf (aref local-registers reg) contents)
+             (make-temporary-register reg arity)))
          (parse-variable (var)
            ;; If we've already seen this variable just return the register it's
            ;; in, otherwise allocate a register for it and return that.
            (or (find-variable var)
                (store-variable var)))
-         (parse-structure (structure reg)
+         (parse-structure (structure register)
            (destructuring-bind (functor . arguments) structure
-             ;; If we've been given a register to hold this structure (i.e.
-             ;; we're parsing a top-level argument) use it.  Otherwise allocate
-             ;; a fresh one.  Note that structures always live in local
-             ;; registers, never permanent ones.
-             (let ((reg (or reg (vector-push-extend nil local-registers))))
-               (setf (aref local-registers reg)
-                     (cons functor (mapcar #'parse arguments)))
-               (make-temporary-register reg arity))))
+             (store-temporary
+               (list* :structure functor (mapcar #'parse arguments))
+               register)))
+         (parse-list (list &optional register)
+           (destructuring-bind (head . tail) list
+             (store-temporary
+               (list :list
+                     (parse head)
+                     (if (consp tail)
+                       (parse-list tail) ; [a, ...]
+                       (parse tail))) ; [a | END]
+               register)))
          (parse (term &optional register)
            (cond
              ((variablep term) (parse-variable term))
              ((symbolp term) (parse (list term) register)) ; f -> f/0
+             ((prolog-list-p term) (parse-list (second term) register))
              ((listp term) (parse-structure term register))
              (t (error "Cannot parse term ~S." term))))
          (make-assignment-list (registers register-maker)
@@ -360,7 +400,8 @@
 ;;;
 ;;; into something like:
 ;;;
-;;;   X2 <- q(X1, X3), X0 <- p(X1, X2)
+;;;   X2 <- q(X1, X3)
+;;;   X0 <- p(X1, X2)
 
 (defun find-dependencies (assignments)
   "Return a list of dependencies amongst the given registers.
@@ -371,20 +412,27 @@
   (mapcan
     (lambda (assignment)
       (cond
-        ; Variable assignments (X1 <- Foo) don't depend on anything else.
+        ;; Variable assignments (X1 <- Foo) don't depend on anything else.
         ((variable-assignment-p assignment)
          ())
-        ; Register assignments (A0 <- X5) have one obvious dependency.
+        ;; Register assignments (A0 <- X5) have one obvious dependency.
         ((register-assignment-p assignment)
          (destructuring-bind (argument . contents) assignment
            (list `(,contents . ,argument))))
-        ; Structure assignments depend on all the functor's arguments.
+        ;; Structure assignments depend on all the functor's arguments.
         ((structure-assignment-p assignment)
-         (destructuring-bind (target . (functor . reqs))
+         (destructuring-bind (target . (tag functor . reqs))
              assignment
-           (declare (ignore functor))
+           (declare (ignore tag functor))
            (loop :for req :in reqs
                  :collect (cons req target))))
+        ;; Prolog lists/pairs depend on their contents.
+        ((list-assignment-p assignment)
+         (destructuring-bind (target . (tag head tail))
+             assignment
+           (declare (ignore tag))
+           (list (cons head target)
+                 (cons tail target))))
         (t (error "Cannot find dependencies for assignment ~S." assignment))))
     assignments))
 
@@ -429,21 +477,29 @@
   (mapcan
     (lambda (ass)
       ;; Take a single assignment like:
-      ;;   X1 = f(X4, Y1)         (X1 . (f X4 Y1))
+      ;;   X1 = f(X4, Y1)         (X1 . (:structure f X4 Y1))
       ;;   A0 = X5                (A0 . X5)
+      ;;   X2 = [X3, Y2]          (X2 . (:list X3 Y2))
       ;;
       ;; And turn it into a stream of tokens:
       ;;   (X1 = f/2), X4, Y1      ((:structure X1 f 2) X4 Y1
-      ;;   (A0 = X5)                (:argument A0 X5))
+      ;;   (A0 = X5)                (:argument A0 X5)
+      ;;   (X2 = LIST), X3, Y2      (:list X2) X3 Y2)
       (if (register-assignment-p ass)
         ;; It might be a register assignment for an argument register.
         (destructuring-bind (argument-register . target-register) ass
           (list (list :argument argument-register target-register)))
-        ;; Otherwise it's a structure assignment.  We know the others have
-        ;; gotten flattened away by now.
-        (destructuring-bind (register . (functor . arguments)) ass
-          (cons (list :structure register functor (length arguments))
-                arguments))))
+        ;; Otherwise it's a structure or list.
+        (destructuring-bind (register . (tag . body)) ass
+          (ecase tag
+            (:structure
+             (destructuring-bind (functor . arguments) body
+               (cons (list :structure register functor (length arguments))
+                     arguments)))
+            (:list
+             (list `(:list ,register)
+                   (first body)
+                   (second body)))))))
     assignments))
 
 
@@ -518,9 +574,11 @@
       ('(:argument nil :program :stack) :get-value-stack)
       ('(:argument nil :query   :local) :put-value-local)
       ('(:argument nil :query   :stack) :put-value-stack)
-      ;; Structures can only live locally, they never go on the stack
-      ('(:structure nil :program :local) :get-structure-local)
-      ('(:structure nil :query   :local) :put-structure-local)
+      ;; Structures and lists can only live locally, they never go on the stack
+      ('(:structure nil :program :local) :get-structure)
+      ('(:structure nil :query   :local) :put-structure)
+      ('(:list      nil :program :local) :get-list)
+      ('(:list      nil :query   :local) :put-list)
       ('(:register t   :program :local) :unify-variable-local)
       ('(:register t   :program :stack) :unify-variable-stack)
       ('(:register t   :query   :local) :set-variable-local)
@@ -561,6 +619,10 @@
            (push-instruction (find-opcode :structure nil mode destination-register)
                              (wam-ensure-functor-index wam (cons functor arity))
                              destination-register))
+         (handle-list (register)
+           (push register seen)
+           (push-instruction (find-opcode :list nil mode register)
+                             register))
          (handle-call (functor arity)
            ;; CALL functor
            (push-instruction :call
@@ -582,6 +644,8 @@
                            (member (register-type destination-register)
                                    '(:local :argument)))
                     (handle-structure destination-register functor arity))
+                   (`(:list ,register)
+                    (handle-list register))
                    (`(:call ,functor ,arity)
                     (handle-call functor arity))
                    ((guard register
@@ -810,14 +874,14 @@
           :do
           (match (circle-value node)
 
-            ((guard `(:put-structure-local ,functor ,register)
+            ((guard `(:put-structure ,functor ,register)
                     (constant-p functor))
              (setf node
                    (if (register-argument-p register)
                      (optimize-put-constant node functor register)
                      (optimize-set-constant node functor register))))
 
-            ((guard `(:get-structure-local ,functor ,register)
+            ((guard `(:get-structure ,functor ,register)
                     (constant-p functor))
              (setf node
                    (if (register-argument-p register)
@@ -836,7 +900,7 @@
 
 (defun render-opcode (opcode)
   (ecase opcode
-    (:get-structure-local  +opcode-get-structure-local+)
+    (:get-structure        +opcode-get-structure+)
     (:unify-variable-local +opcode-unify-variable-local+)
     (:unify-variable-stack +opcode-unify-variable-stack+)
     (:unify-value-local    +opcode-unify-value-local+)
@@ -845,7 +909,7 @@
     (:get-variable-stack   +opcode-get-variable-stack+)
     (:get-value-local      +opcode-get-value-local+)
     (:get-value-stack      +opcode-get-value-stack+)
-    (:put-structure-local  +opcode-put-structure-local+)
+    (:put-structure        +opcode-put-structure+)
     (:set-variable-local   +opcode-set-variable-local+)
     (:set-variable-stack   +opcode-set-variable-stack+)
     (:set-value-local      +opcode-set-value-local+)
@@ -857,6 +921,8 @@
     (:put-constant         +opcode-put-constant+)
     (:get-constant         +opcode-get-constant+)
     (:set-constant         +opcode-set-constant+)
+    (:get-list             +opcode-get-list+)
+    (:put-list             +opcode-put-list+)
     (:unify-constant       +opcode-unify-constant+)
     (:call                 +opcode-call+)
     (:proceed              +opcode-proceed+)

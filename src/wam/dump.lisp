@@ -172,13 +172,13 @@
           (pretty-arguments arguments)
           (first arguments)))
 
-(defmethod instruction-details ((opcode (eql +opcode-get-structure-local+)) arguments functor-list)
+(defmethod instruction-details ((opcode (eql +opcode-get-structure+)) arguments functor-list)
   (format nil "GETS~A ; X~A = ~A"
           (pretty-arguments arguments)
           (second arguments)
           (pretty-functor (first arguments) functor-list)))
 
-(defmethod instruction-details ((opcode (eql +opcode-put-structure-local+)) arguments functor-list)
+(defmethod instruction-details ((opcode (eql +opcode-put-structure+)) arguments functor-list)
   (format nil "PUTS~A ; X~A <- new ~A"
           (pretty-arguments arguments)
           (second arguments)
@@ -258,6 +258,16 @@
   (format nil "UCON~A      ; UNIFY CONSTANT ~A"
           (pretty-arguments arguments)
           (pretty-functor (first arguments) functor-list)))
+
+(defmethod instruction-details ((opcode (eql +opcode-get-list+)) arguments functor-list)
+  (format nil "GLST~A      ; X~A = [vvv | vvv]"
+          (pretty-arguments arguments)
+          (first arguments)))
+
+(defmethod instruction-details ((opcode (eql +opcode-put-list+)) arguments functor-list)
+  (format nil "PLST~A      ; X~A = [vvv | vvv]"
+          (pretty-arguments arguments)
+          (first arguments)))
 
 
 (defun dump-code-store (wam code-store

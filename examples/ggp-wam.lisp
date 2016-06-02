@@ -3,8 +3,8 @@
 (defparameter *d* (make-database))
 
 (with-database *d*
-  (rules ((member :thing (cons :thing :rest)))
-         ((member :thing (cons :other :rest))
+  (rules ((member :thing '(:thing . :rest)))
+         ((member :thing '(:other . :rest))
           (member :thing :rest)))
 
   (rule (true :state :thing)
@@ -173,13 +173,13 @@
 (defun extract (key results)
   (mapcar (lambda (result) (getf result key)) results))
 
-(defun to-fake-list (l)
+(defun to-prolog-list (l)
   (if (null l)
-    'nil
-    `(cons ,(car l) ,(to-fake-list (cdr l)))))
+    nil
+    (list 'quote l)))
 
 (defun initial-state ()
-  (to-fake-list
+  (to-prolog-list
     (with-database *d*
       (extract :what (return-all (init :what))))))
 
@@ -205,13 +205,13 @@
     (perform-return `((goal ,state :role :goal)) :all)))
 
 (defun next-state (current-state move)
-  (let ((does (to-fake-list `((does
-                                ,(getf move :role)
-                                ,(getf move :move))))))
+  (let ((does `('(does
+                  ,(getf move :role)
+                  ,(getf move :move)))))
     (with-database *d*
-      (to-fake-list
+      (to-prolog-list
         (extract :what
-               (perform-return `((next ,current-state ,does :what)) :all))))))
+                 (perform-return `((next ,current-state ,does :what)) :all))))))
 
 
 

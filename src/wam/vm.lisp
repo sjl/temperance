@@ -1,5 +1,4 @@
 (in-package #:bones.wam)
-(named-readtables:in-readtable :fare-quasiquote)
 
 ;;;; Config
 (defparameter *break-on-fail* nil)
@@ -21,6 +20,16 @@
 
   "
   (wam-heap-push! wam (make-cell-structure (1+ (wam-heap-pointer wam)))))
+
+(defun* push-new-list! ((wam wam))
+  (:returns (values cell heap-index))
+  "Push a new list cell onto the heap.
+
+  The list cell's value will point at the next address, so make sure you push
+  something there too!
+
+  "
+  (wam-heap-push! wam (make-cell-list (1+ (wam-heap-pointer wam)))))
 
 (defun* push-new-functor! ((wam wam) (functor functor-index))
   (:returns (values cell heap-index))
@@ -64,6 +73,13 @@
   "Return whether the two constant cells represent the same functor."
   (= (cell-value constant-cell-1)
      (cell-value constant-cell-2)))
+
+
+(defmacro with-cell ((address-symbol cell-symbol) wam target &body body)
+  (once-only (wam target)
+    `(let* ((,address-symbol (deref ,wam ,target))
+            (,cell-symbol (wam-store-cell ,wam ,address-symbol)))
+      ,@body)))
 
 
 ;;;; "Ancillary" Functions
@@ -176,6 +192,13 @@
              (when (not (constants-match-p cell-1 cell-2))
                (backtrack! wam)))
 
+            ;; Otherwise if they're both lists, make sure their contents match.
+            ((and (cell-list-p cell-1) (cell-list-p cell-2))
+             (wam-unification-stack-push! wam (cell-value cell-1))
+             (wam-unification-stack-push! wam (cell-value cell-2))
+             (wam-unification-stack-push! wam (1+ (cell-value cell-1)))
+             (wam-unification-stack-push! wam (1+ (cell-value cell-2))))
+
             ;; Otherwise if they're both structure cells, make sure they match
             ;; and then schedule their subterms to be unified.
             ((and (cell-structure-p cell-1) (cell-structure-p cell-2))
@@ -261,13 +284,19 @@
 
 
 ;;;; Query Instructions
-(define-instruction %put-structure-local
+(define-instruction %put-structure
     ((wam wam)
      (functor functor-index)
      (register register-index))
   (setf (wam-local-register wam register)
         (make-cell-structure
           (nth-value 1 (push-new-functor! wam functor)))))
+
+(define-instruction %put-list
+    ((wam wam)
+     (register register-index))
+  (setf (wam-local-register wam register)
+        (make-cell-list (wam-heap-pointer wam))))
 
 (define-instructions (%set-variable-local %set-variable-stack)
     ((wam wam)
@@ -297,26 +326,26 @@
 
 
 ;;;; Program Instructions
-(define-instruction %get-structure-local ((wam wam)
-                                          (functor functor-index)
-                                          (register register-index))
+(define-instruction %get-structure ((wam wam)
+                                    (functor functor-index)
+                                    (register register-index))
   (with-accessors ((mode wam-mode) (s wam-subterm)) wam
-    (let* ((addr (deref wam register))
-           (cell (wam-store-cell wam addr)))
+    (with-cell (addr cell) wam register
       (cond
-        ;; If the register points at a reference cell, we push two new cells onto
-        ;; the heap:
+        ;; If the register points at a reference cell, we push two new cells
+        ;; onto the heap:
         ;;
         ;;     |   N | STR | N+1 |
         ;;     | N+1 | FUN | f/n |
         ;;     |     |     |     | <- S
         ;;
-        ;; Then we bind this reference cell to point at the new structure, set the
-        ;; S register to point beneath it and flip over to write mode.
+        ;; Then we bind this reference cell to point at the new structure, set
+        ;; the S register to point beneath it and flip over to write mode.
         ;;
         ;; It seems a bit confusing that we don't push the rest of the structure
-        ;; stuff on the heap after it too.  But that's going to happen in the next
-        ;; few instructions (which will be unify-*'s, executed in write mode).
+        ;; stuff on the heap after it too.  But that's going to happen in the
+        ;; next few instructions (which will be unify-*'s, executed in write
+        ;; mode).
         ((cell-reference-p cell)
          (let ((structure-address (nth-value 1 (push-new-structure! wam)))
                (functor-address (nth-value 1 (push-new-functor! wam functor))))
@@ -348,7 +377,26 @@
              (setf mode :read
                    s (1+ functor-address))
              (backtrack! wam))))
+
         (t (backtrack! wam))))))
+
+(define-instruction %get-list ((wam wam)
+                               (register register-index))
+  (with-cell (addr cell) wam register
+    (cond
+      ;; If the register points at a reference (unbound, because we deref'ed) we
+      ;; bind it to a list and flip into write mode to write the upcoming two
+      ;; things as its contents.
+      ((cell-reference-p cell)
+       (bind! wam addr (push-new-list! wam))
+       (setf (wam-mode wam) :write))
+
+      ;; If this is a list, we need to unify its subterms.
+      ((cell-list-p cell)
+       (setf (wam-mode wam) :read
+             (wam-subterm wam) (cell-value cell)))
+
+      (t (backtrack! wam)))))
 
 (define-instructions (%unify-variable-local %unify-variable-stack)
     ((wam wam)
@@ -484,8 +532,7 @@
 (defun* %%match-constant ((wam wam)
                           (constant functor-index)
                           (address store-index))
-  (let* ((addr (deref wam address))
-         (cell (wam-store-cell wam addr)))
+  (with-cell (addr cell) wam address
     (cond
       ((cell-reference-p cell)
        (setf (wam-store-cell wam addr)
@@ -561,6 +608,8 @@
                ((cell-null-p cell) "NULL?!")
                ((cell-reference-p cell) (extract-var (cell-value cell)))
                ((cell-structure-p cell) (recur (cell-value cell)))
+               ((cell-list-p cell) (cons (recur (cell-value cell))
+                                         (recur (1+ (cell-value cell)))))
                ((cell-constant-p cell)
                 (wam-functor-symbol wam (cell-value cell)))
                ((cell-functor-p cell)
@@ -598,7 +647,7 @@
               (break "About to execute instruction at ~4,'0X" pc))
             (eswitch (opcode)
               ;; Query
-              (+opcode-put-structure-local+  (instruction %put-structure-local 2))
+              (+opcode-put-structure+        (instruction %put-structure 2))
               (+opcode-set-variable-local+   (instruction %set-variable-local 1))
               (+opcode-set-variable-stack+   (instruction %set-variable-stack 1))
               (+opcode-set-value-local+      (instruction %set-value-local 1))
@@ -608,7 +657,7 @@
               (+opcode-put-value-local+      (instruction %put-value-local 2))
               (+opcode-put-value-stack+      (instruction %put-value-stack 2))
               ;; Program
-              (+opcode-get-structure-local+  (instruction %get-structure-local 2))
+              (+opcode-get-structure+        (instruction %get-structure 2))
               (+opcode-unify-variable-local+ (instruction %unify-variable-local 1))
               (+opcode-unify-variable-stack+ (instruction %unify-variable-stack 1))
               (+opcode-unify-value-local+    (instruction %unify-value-local 1))
@@ -622,6 +671,9 @@
               (+opcode-get-constant+         (instruction %get-constant 2))
               (+opcode-set-constant+         (instruction %set-constant 1))
               (+opcode-unify-constant+       (instruction %unify-constant 1))
+              ;; List
+              (+opcode-put-list+             (instruction %put-list 1))
+              (+opcode-get-list+             (instruction %get-list 1))
               ;; Choice
               (+opcode-try+                  (instruction %try 1))
               (+opcode-retry+                (instruction %retry 1))

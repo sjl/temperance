@@ -2,7 +2,7 @@
 ;;;; See http://quickutil.org for details.
 
 ;;;; To regenerate:
-;;;; (qtlc:save-utils-as "quickutils.lisp" :utilities '(:DEFINE-CONSTANT :SET-EQUAL :CURRY :SWITCH :ENSURE-BOOLEAN :WHILE :UNTIL :TREE-MEMBER-P :TREE-COLLECT :WITH-GENSYMS :ZIP :ALIST-TO-HASH-TABLE :MAP-TREE :WEAVE :RANGE :ALIST-PLIST) :ensure-package T :package "BONES.QUICKUTILS")
+;;;; (qtlc:save-utils-as "quickutils.lisp" :utilities '(:DEFINE-CONSTANT :SET-EQUAL :CURRY :SWITCH :ENSURE-BOOLEAN :WHILE :UNTIL :TREE-MEMBER-P :TREE-COLLECT :WITH-GENSYMS :ONCE-ONLY :ZIP :ALIST-TO-HASH-TABLE :MAP-TREE :WEAVE :RANGE :ALIST-PLIST) :ensure-package T :package "BONES.QUICKUTILS")
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (unless (find-package "BONES.QUICKUTILS")
@@ -19,9 +19,9 @@
                                          :WITH-GENSYMS :EXTRACT-FUNCTION-NAME
                                          :SWITCH :ENSURE-BOOLEAN :UNTIL :WHILE
                                          :TREE-MEMBER-P :TREE-COLLECT
-                                         :TRANSPOSE :ZIP :ALIST-TO-HASH-TABLE
-                                         :MAP-TREE :WEAVE :RANGE :SAFE-ENDP
-                                         :ALIST-PLIST))))
+                                         :ONCE-ONLY :TRANSPOSE :ZIP
+                                         :ALIST-TO-HASH-TABLE :MAP-TREE :WEAVE
+                                         :RANGE :SAFE-ENDP :ALIST-PLIST))))
 
   (defun %reevaluate-constant (name value test)
     (if (not (boundp name))
@@ -257,6 +257,45 @@ returns the values of `default` if no keys match."
                     :append (tree-collect predicate item)))))
   
 
+  (defmacro once-only (specs &body forms)
+    "Evaluates `forms` with symbols specified in `specs` rebound to temporary
+variables, ensuring that each initform is evaluated only once.
+
+Each of `specs` must either be a symbol naming the variable to be rebound, or of
+the form:
+
+    (symbol initform)
+
+Bare symbols in `specs` are equivalent to
+
+    (symbol symbol)
+
+Example:
+
+    (defmacro cons1 (x) (once-only (x) `(cons ,x ,x)))
+      (let ((y 0)) (cons1 (incf y))) => (1 . 1)"
+    (let ((gensyms (make-gensym-list (length specs) "ONCE-ONLY"))
+          (names-and-forms (mapcar (lambda (spec)
+                                     (etypecase spec
+                                       (list
+                                        (destructuring-bind (name form) spec
+                                          (cons name form)))
+                                       (symbol
+                                        (cons spec spec))))
+                                   specs)))
+      ;; bind in user-macro
+      `(let ,(mapcar (lambda (g n) (list g `(gensym ,(string (car n)))))
+              gensyms names-and-forms)
+         ;; bind in final expansion
+         `(let (,,@(mapcar (lambda (g n)
+                             ``(,,g ,,(cdr n)))
+                           gensyms names-and-forms))
+            ;; bind in user-macro
+            ,(let ,(mapcar (lambda (n g) (list (car n) g))
+                    names-and-forms gensyms)
+               ,@forms)))))
+  
+
   (defun transpose (lists)
     "Analog to matrix transpose for a list of lists given by `lists`."
     (apply #'mapcar #'list lists))
@@ -330,7 +369,7 @@ property list PLIST in the same order."
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (export '(define-constant set-equal curry switch eswitch cswitch
             ensure-boolean while until tree-member-p tree-collect with-gensyms
-            with-unique-names zip alist-to-hash-table map-tree weave range
-            alist-plist plist-alist)))
+            with-unique-names once-only zip alist-to-hash-table map-tree weave
+            range alist-plist plist-alist)))
 
 ;;;; END OF quickutils.lisp ;;;;

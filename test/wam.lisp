@@ -50,7 +50,11 @@
               (likes :who cats)))
 
       (rules ((narcissist :person)
-              (likes :person :person))))
+              (likes :person :person)))
+
+      (rules ((member :x '(:x . :rest)))
+             ((member :x '(:y . :rest))
+              (member :x :rest))))
     db))
 
 (defparameter *test-database* (make-test-database))
@@ -69,9 +73,16 @@
   `(with-database *test-database*
     (return-all ,@query)))
 
-(defmacro check (query)
-  `(with-database *test-database*
-    (nth-value 1 (return-one ,query))))
+
+(defmacro should-fail (&body queries)
+  `(progn
+     ,@(loop :for query :in queries :collect
+             `(is (results= nil (q ,query))))))
+
+(defmacro should-return (&body queries)
+  `(progn
+     ,@(loop :for (query results) :in queries :collect
+             `(is (results= ',results (q ,query))))))
 
 
 ;;;; Tests
@@ -107,27 +118,46 @@
                    (drinks :who :what)))))
 
 (test basic-rules
-  (is (results= '((:what snakes)
-                  (:what cats))
-                (q (pets alice :what))))
+  (should-fail
+    (pets candace :what))
 
-  (is (results= '((:what cats))
-                (q (pets bob :what))))
+  (should-return
+    ((pets alice :what)
+     ((:what snakes) (:what cats)))
 
-  (is (results= '()
-                (q (pets candace :what))))
+    ((pets bob :what)
+     ((:what cats)))
 
-  (is (results= '((:who alice))
-                (q (pets :who snakes))))
+    ((pets :who snakes)
+     ((:who alice)))
 
-  (is (results= '((:who tom)
-                  (:who alice)
-                  (:who kim)
-                  (:who cats))
-                (q (likes kim :who))))
+    ((likes kim :who)
+     ((:who tom)
+      (:who alice)
+      (:who kim)
+      (:who cats)))
 
-  (is (results= '((:who tom))
-                (q (likes sally :who))))
+    ((likes sally :who)
+     ((:who tom)))
 
-  (is (results= '((:person kim))
-                (q (narcissist :person)))))
+    ((narcissist :person)
+     ((:person kim)))))
+
+(test lists
+  (should-fail
+    (member :anything nil)
+    (member a nil)
+    (member b '(a))
+    (member '(a) '(a))
+    (member a '('(a))))
+  (should-return
+    ((member :m '(a))
+     ((:m a)))
+    ((member :m '(a b))
+     ((:m a) (:m b)))
+    ((member :m '(a b a))
+     ((:m a) (:m b)))
+    ((member a '(a))
+     (nil))
+    ((member '(foo) '(a '(foo) b))
+     (nil))))
