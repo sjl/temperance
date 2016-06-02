@@ -2,7 +2,7 @@
 
 (require :sb-sprof)
 
-(load "examples/ggp.lisp")
+(load "examples/ggp-wam.lisp")
 
 (in-package :bones)
 

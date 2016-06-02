@@ -1,8 +1,9 @@
 (ql:quickload 'bones)
 (ql:quickload 'paiprolog)
 
-(load "examples/ggp-paip.lisp")
-(load "examples/ggp.lisp")
+(load "examples/ggp-paip-compiled.lisp")
+(load "examples/ggp-paip-interpreted.lisp")
+(load "examples/ggp-wam.lisp")
 
 (in-package :bones)
 
@@ -13,34 +14,28 @@
         (*error-output* (make-broadcast-stream)))
     (asdf:load-system 'bones :force t)
     (asdf:load-system 'paiprolog :force t)
-    (load "examples/ggp-paip.lisp")
-    (load "examples/ggp.lisp")))
+    (load "examples/ggp-paip-compiled.lisp")
+    (load "examples/ggp-paip-interpreted.lisp")
+    (load "examples/ggp-wam.lisp")))
 
-(defun run-test ()
-  (reload)
-
-  (format t "PAIP ------------------------------~%")
+(defun run-test% ()
+  (format t "PAIP (Compiled) --------------------~%")
   (time (paiprolog-test::dfs-exhaust))
 
-  (format t "WAM -------------------------------~%")
+  (format t "PAIP (Interpreted) -----------------~%")
+  (time (bones.paip::dfs-exhaust))
+
+  (format t "WAM --------------------------------~%")
   (time (bones.wam::dfs-exhaust)))
 
-; (format t "~%~%====================================~%")
-; (format t "(speed 0) (safety 3) (debug 3)~%")
-; (declaim (optimize (speed 0) (safety 3) (debug 3)))
-; (run-test)
+(defmacro run-test (&rest settings)
+  `(progn
+    (declaim (optimize ,@settings))
+    (format t "~%~%========================================================~%")
+    (format t "~S~%" ',settings)
+    (format t "--------------------------------------------------------~%")
+    (reload)
+    (run-test%)))
 
-(format t "~%~%====================================~%")
-(format t "(speed 3) (safety 1) (debug 1)~%")
-(declaim (optimize (speed 3) (safety 1) (debug 1)))
-(run-test)
-
-; (format t "~%~%====================================~%")
-; (format t "(speed 3) (safety 1) (debug 0)~%")
-; (declaim (optimize (speed 3) (safety 1) (debug 0)))
-; (run-test)
-
-(format t "~%~%====================================~%")
-(format t "(speed 3) (safety 0) (debug 0)~%")
-(declaim (optimize (speed 3) (safety 0) (debug 0)))
-(run-test)
+(run-test (speed 3) (safety 1) (debug 1))
+(run-test (speed 3) (safety 0) (debug 0))
