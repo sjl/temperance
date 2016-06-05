@@ -24,6 +24,8 @@
         (destructuring-bind (functor . arity)
             (wam-functor-lookup wam (cell-value cell))
           (format nil "~A/~D " functor arity)))
+      (+tag-constant+
+        (format nil "~A/0 " (wam-functor-symbol wam (cell-value cell))))
       (t ""))
     (registers-pointing-to wam addr)))
 
