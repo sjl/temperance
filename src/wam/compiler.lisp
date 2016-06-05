@@ -406,7 +406,7 @@
 (defun find-dependencies (assignments)
   "Return a list of dependencies amongst the given registers.
 
-  Each entry will be a cons of `(a . b)` if register `a` depends on `b`.
+  Each entry will be a cons of `(a . b)` if register `a` must precede `b`.
 
   "
   (mapcan
