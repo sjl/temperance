@@ -136,7 +136,7 @@
     (loop
       ;; The book is, yet again, fucked.  It just sets `i` to be the trail
       ;; pointer from the choice point frame.  But what if we just popped off
-      ;; the last choice point?  If that's the case We need to look over the
+      ;; the last choice point?  If that's the case we need to look over the
       ;; entire trail.
       :with i = (if (wam-backtrack-pointer-unset-p wam b)
                   0

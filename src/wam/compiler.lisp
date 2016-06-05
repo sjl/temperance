@@ -562,7 +562,7 @@
 ;;; A quick note on cut (!): the book and original WAM do some nutty things to
 ;;; save one stack word per frame.  They store the cut register for non-neck
 ;;; cuts in a "pseudovariable" on the stack, so they only have to allocate that
-;;; extra stack word for things that actually *use* non-neck cuts
+;;; extra stack word for things that actually *use* non-neck cuts.
 ;;;
 ;;; We're going to just eat the extra stack word and store the cut register in
 ;;; every frame instead.  This massively simplifies the implementation and lets
