@@ -127,6 +127,31 @@
         (unbind! wam (wam-trail-value wam i)))
   (values))
 
+(defun* tidy-trail! ((wam wam))
+  (with-accessors ((tr wam-trail-pointer)
+                   (h wam-heap-pointer)
+                   (hb wam-heap-backtrack-pointer)
+                   (b wam-backtrack-pointer))
+      wam
+    (loop
+      ;; The book is, yet again, fucked.  It just sets `i` to be the trail
+      ;; pointer from the choice point frame.  But what if we just popped off
+      ;; the last choice point?  If that's the case We need to look over the
+      ;; entire trail.
+      :with i = (if (wam-backtrack-pointer-unset-p wam b)
+                  0
+                  (wam-stack-choice-tr wam))
+      :for target = (wam-trail-value wam i)
+      :while (< i tr) :do
+      (if (or (< target hb)
+              (and (< h target)
+                   (< target b)))
+        (incf i)
+        (progn
+          (setf (wam-trail-value wam i)
+                (wam-trail-value wam (1- tr)))
+          (decf tr))))))
+
 (defun* deref ((wam wam) (address store-index))
   (:returns store-index)
   "Dereference the address in the WAM store to its eventual destination.
@@ -440,6 +465,9 @@
             (wam-number-of-arguments wam) ; set NARGS
             (wam-functor-arity wam functor)
 
+            (wam-cut-pointer wam) ; set B0 in case we have a cut
+            (wam-backtrack-pointer wam)
+
             (wam-program-counter wam) ; jump
             target)
       ;; Trying to call an unknown procedure.
@@ -452,20 +480,39 @@
 (define-instruction %allocate ((wam wam) (n stack-frame-argcount))
   (let ((old-e (wam-environment-pointer wam))
         (new-e (wam-stack-top wam)))
-    (wam-stack-ensure-size wam (+ new-e 3 n))
+    (wam-stack-ensure-size wam (+ new-e 4 n))
     (setf (wam-stack-word wam new-e) old-e ; CE
           (wam-stack-word wam (+ new-e 1)) (wam-continuation-pointer wam) ; CP
-          (wam-stack-word wam (+ new-e 2)) n ; N
+          (wam-stack-word wam (+ new-e 2)) (wam-cut-pointer wam) ; B0
+          (wam-stack-word wam (+ new-e 3)) n ; N
           (wam-environment-pointer wam) new-e))) ; E <- new-e
 
 (define-instruction %deallocate ((wam wam))
-  (setf (wam-program-counter wam)
-        (wam-stack-frame-cp wam)
-        (wam-environment-pointer wam)
-        (wam-stack-frame-ce wam)))
+  (setf (wam-program-counter wam) (wam-stack-frame-cp wam)
+        (wam-environment-pointer wam) (wam-stack-frame-ce wam)
+        (wam-cut-pointer wam) (wam-stack-frame-cut wam)))
 
 
 ;;;; Choice Instructions
+(defun* reset-choice-point! ((wam wam)
+                             (b backtrack-pointer))
+  (setf (wam-backtrack-pointer wam) b
+
+        ;; The book is wrong here: when resetting HB we use the NEW value of B,
+        ;; so the heap backtrack pointer gets set to the heap pointer saved in
+        ;; the PREVIOUS choice point.  Thanks to the errata at
+        ;; https://github.com/a-yiorgos/wambook/blob/master/wamerratum.txt for
+        ;; pointing this out.
+        ;;
+        ;; ... well, almost.  The errata is also wrong here.  If we're popping
+        ;; the FIRST choice point, then just using the HB from the "previous
+        ;; choice point" is going to give us garbage, so we should check for
+        ;; that edge case too.  Please kill me.
+        (wam-heap-backtrack-pointer wam)
+        (if (wam-backtrack-pointer-unset-p wam b)
+          +heap-start+
+          (wam-stack-choice-h wam b))))
+
 (define-instruction %try ((wam wam) (next-clause code-index))
   (let ((new-b (wam-stack-top wam))
         (nargs (wam-number-of-arguments wam)))
@@ -509,23 +556,15 @@
     (setf (wam-environment-pointer wam) (wam-stack-choice-ce wam b)
           (wam-continuation-pointer wam) (wam-stack-choice-cp wam b)
           (wam-trail-pointer wam) (wam-stack-choice-tr wam b)
-          (wam-heap-pointer wam) (wam-stack-choice-h wam b)
-          (wam-backtrack-pointer wam) old-b
+          (wam-heap-pointer wam) (wam-stack-choice-h wam b))
+    (reset-choice-point! wam old-b)))
 
-          ;; The book is wrong here: this last one uses the NEW value of b, so
-          ;; the heap backtrack pointer gets set to the heap pointer saved in
-          ;; the PREVIOUS choice point.  Thanks to the errata at
-          ;; https://github.com/a-yiorgos/wambook/blob/master/wamerratum.txt for
-          ;; pointing this out.
-          ;;
-          ;; ... well, almost.  The errata is also wrong here.  If we're popping
-          ;; the FIRST choice point, then just using the HB from the "previous
-          ;; choice point" is going to give us garbage, so we should check for
-          ;; that edge case too.  Please kill me.
-          (wam-heap-backtrack-pointer wam)
-          (if (wam-backtrack-pointer-unset-p wam old-b)
-            +heap-start+
-            (wam-stack-choice-h wam old-b)))))
+(define-instruction %cut ((wam wam))
+  (let ((current-choice-point (wam-backtrack-pointer wam))
+        (previous-choice-point (wam-stack-frame-cut wam)))
+    (when (< previous-choice-point current-choice-point)
+      (reset-choice-point! wam previous-choice-point)
+      (tidy-trail! wam))))
 
 
 ;;;; Constant Instructions
@@ -625,7 +664,7 @@
 (defun extract-query-results (wam vars)
   (let* ((addresses (loop :for var :in vars
                           ;; TODO: make this suck less
-                          :for i :from (+ (wam-environment-pointer wam) 3)
+                          :for i :from (+ (wam-environment-pointer wam) 4)
                           :collect i))
          (results (extract-things wam addresses)))
     (weave vars results)))
@@ -637,6 +676,7 @@
       (macrolet ((instruction (inst args)
                    `(instruction-call wam ,inst code pc ,args)))
         (loop
+          :with increment-pc = t
           :while (and (not (wam-fail wam)) ; failure
                       (not (= pc +code-sentinel+))) ; finished
           :for opcode = (aref code pc)
@@ -678,27 +718,32 @@
               (+opcode-try+                  (instruction %try 1))
               (+opcode-retry+                (instruction %retry 1))
               (+opcode-trust+                (instruction %trust 0))
+              (+opcode-cut+                  (instruction %cut 0))
               ;; Control
               (+opcode-allocate+             (instruction %allocate 1))
               ;; need to skip the PC increment for PROC/CALL/DEAL/DONE
-              ;; TODO: this is ugly
+              ;; TODO: this is still ugly
               (+opcode-deallocate+
                 (instruction %deallocate 0)
-                (return-from op))
+                (setf increment-pc nil))
               (+opcode-proceed+
                 (instruction %proceed 0)
-                (return-from op))
+                (setf increment-pc nil))
               (+opcode-call+
                 (instruction %call 1)
-                (return-from op))
+                (setf increment-pc nil))
               (+opcode-done+
                 (if (funcall done-thunk)
                   (return-from run)
                   (backtrack! wam))))
-            ;; Only increment the PC when we didn't backtrack
-            (if (wam-backtracked wam)
-              (setf (wam-backtracked wam) nil)
+            ;; Only increment the PC when we didn't backtrack.
+            ;;
+            ;; If we backtracked, the PC will have been filled in from the
+            ;; choice point.
+            (when (and increment-pc (not (wam-backtracked wam)))
               (incf pc (instruction-size opcode)))
+            (setf (wam-backtracked wam) nil
+                  increment-pc t)
             (when (>= pc (fill-pointer code))
               (error "Fell off the end of the program code store!"))))))
     (values)))

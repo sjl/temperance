@@ -17,6 +17,7 @@
           wam-continuation-pointer
           wam-environment-pointer
           wam-backtrack-pointer
+          wam-cut-pointer
           wam-heap-backtrack-pointer
           wam-mode))
 
@@ -91,6 +92,7 @@
   (continuation-pointer   0             :type code-index)           ; CP
   (environment-pointer    +stack-start+ :type environment-pointer)  ; E
   (backtrack-pointer      +stack-start+ :type backtrack-pointer)    ; B
+  (cut-pointer            +stack-start+ :type backtrack-pointer)    ; B0
   (heap-backtrack-pointer +heap-start+  :type heap-index)           ; HB
 
   ;; Other global "registers"
@@ -204,6 +206,9 @@
   "Return the element (a heap index) in the WAM trail at `address`."
   (aref (wam-trail wam) address))
 
+(defun (setf wam-trail-value) (new-value wam address)
+  (setf (aref (wam-trail wam) address) new-value))
+
 
 ;;;; Stack
 ;;; The stack is stored as a fixed-length hunk of the main WAM store array,
@@ -276,6 +281,7 @@
 ;;;     |PREV|
 ;;;     | CE | <-- environment-pointer
 ;;;     | CP |
+;;;     | B0 |
 ;;;     | N  |
 ;;;     | Y0 |
 ;;;     | .. |
@@ -284,6 +290,7 @@
 
 (declaim (inline wam-stack-frame-ce
                  wam-stack-frame-cp
+                 wam-stack-frame-cut
                  wam-stack-frame-n
                  wam-stack-frame-arg
                  (setf wam-stack-frame-arg)
@@ -305,13 +312,21 @@
   (:returns continuation-pointer)
   (wam-stack-word wam (1+ e)))
 
+(defun* wam-stack-frame-cut
+    ((wam wam)
+     &optional
+     ((e environment-pointer)
+      (wam-environment-pointer wam)))
+  (:returns backtrack-pointer)
+  (wam-stack-word wam (+ 2 e)))
+
 (defun* wam-stack-frame-n
     ((wam wam)
      &optional
      ((e environment-pointer)
       (wam-environment-pointer wam)))
   (:returns stack-frame-argcount)
-  (wam-stack-word wam (+ 2 e)))
+  (wam-stack-word wam (+ 3 e)))
 
 
 (defun* wam-stack-frame-arg
@@ -321,14 +336,14 @@
      ((e environment-pointer)
       (wam-environment-pointer wam)))
   (:returns cell)
-  (wam-stack-word wam (+ 3 n e)))
+  (wam-stack-word wam (+ 4 n e)))
 
 (defun* (setf wam-stack-frame-arg)
     ((new-value cell)
      (wam wam)
      (n register-index)
      &optional ((e environment-pointer) (wam-environment-pointer wam)))
-  (setf (wam-stack-word wam (+ e 3 n))
+  (setf (wam-stack-word wam (+ e 4 n))
         new-value))
 
 
@@ -339,7 +354,7 @@
       (wam-environment-pointer wam)))
   (:returns stack-frame-size)
   "Return the size of the stack frame starting at environment pointer `e`."
-  (+ (wam-stack-frame-n wam e) 3))
+  (+ (wam-stack-frame-n wam e) 4))
 
 
 ;;; Choice point frames are laid out like so:
@@ -501,6 +516,7 @@
         (wam-continuation-pointer wam) 0
         (wam-environment-pointer wam) +stack-start+
         (wam-backtrack-pointer wam) +stack-start+
+        (wam-cut-pointer wam) +stack-start+
         (wam-heap-backtrack-pointer wam) +heap-start+
         (wam-backtracked wam) nil
         (wam-fail wam) nil

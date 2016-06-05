@@ -45,11 +45,11 @@
 
 
 (deftype opcode ()
-  '(integer 0 32))
+  '(integer 0 33))
 
 
 (deftype stack-frame-size ()
-  `(integer 3 ,+stack-frame-size-limit+))
+  `(integer 4 ,+stack-frame-size-limit+))
 
 (deftype stack-choice-size ()
   ;; TODO: is this actually right?  check on frame size limit vs choice point

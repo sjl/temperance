@@ -558,6 +558,18 @@
 ;;;
 ;;; The opcodes are keywords and the register arguments remain register objects.
 ;;; They get converted down to the raw bytes in the final "rendering" step.
+;;;
+;;; A quick note on cut (!): the book and original WAM do some nutty things to
+;;; save one stack word per frame.  They store the cut register for non-neck
+;;; cuts in a "pseudovariable" on the stack, so they only have to allocate that
+;;; extra stack word for things that actually *use* non-neck cuts
+;;;
+;;; We're going to just eat the extra stack word and store the cut register in
+;;; every frame instead.  This massively simplifies the implementation and lets
+;;; me keep my sanity, and it *might* even end up being faster because there's
+;;; one fewer opcode, less fucking around in the compiler, etc.  But regardless:
+;;; I don't want to go insane, and my laptop has sixteen gigabytes of RAM, so
+;;; let's just store the damn word.
 
 (defun find-opcode (opcode newp mode &optional register)
   (flet ((find-variant (register)
@@ -623,6 +635,8 @@
            (push register seen)
            (push-instruction (find-opcode :list nil mode register)
                              register))
+         (handle-cut ()
+           (push-instruction :cut))
          (handle-call (functor arity)
            ;; CALL functor
            (push-instruction :call
@@ -646,6 +660,8 @@
                     (handle-structure destination-register functor arity))
                    (`(:list ,register)
                     (handle-list register))
+                   (`(:cut)
+                    (handle-cut))
                    (`(:call ,functor ,arity)
                     (handle-call functor arity))
                    ((guard register
@@ -705,18 +721,20 @@
   Returns a circle of instructions and the permanent variables.
 
   "
-  (let* ((permanent-variables
+  (let* ((basic-clause
+           (remove '! (cons head body)))
+         (permanent-variables
            (if (null head)
              ;; For query clauses we cheat a bit and make ALL variables
              ;; permanent, so we can extract their bindings as results later.
              (find-variables body)
-             (find-permanent-variables (cons head body))))
+             (find-permanent-variables basic-clause)))
          (head-variables
-           (set-difference (find-head-variables (cons head body))
+           (set-difference (find-head-variables basic-clause)
                            permanent-variables))
          (head-arity
            (max (1- (length head))
-                (1- (length (car body)))))
+                (1- (length (second basic-clause)))))
          (head-tokens
            (when head
              (tokenize-program-term head
@@ -725,14 +743,21 @@
                                     head-arity)))
          (body-tokens
            (when body
-             (append
-               (tokenize-query-term (first body)
-                                    permanent-variables
-                                    head-variables
-                                    head-arity)
-               (loop :for term :in (rest body) :append
-                     (tokenize-query-term term
-                                          permanent-variables))))))
+             (loop
+               :with first = t
+               :for goal :in body :append
+               (cond
+                 ;; cut just gets emitted straight, but DOESN'T flip `first`...
+                 ((eql goal '!) ; gross
+                  (list (list :cut)))
+                 (first
+                  (setf first nil)
+                  (tokenize-query-term goal
+                                       permanent-variables
+                                       head-variables
+                                       head-arity))
+                 (t
+                  (tokenize-query-term goal permanent-variables)))))))
     (let ((instructions (precompile-tokens wam head-tokens body-tokens))
           (variable-count (length permanent-variables)))
       ;; We need to compile facts and rules differently.  Facts end with
@@ -931,7 +956,8 @@
     (:done                 +opcode-done+)
     (:try                  +opcode-try+)
     (:retry                +opcode-retry+)
-    (:trust                +opcode-trust+)))
+    (:trust                +opcode-trust+)
+    (:cut                  +opcode-cut+)))
 
 (defun render-argument (argument)
   (etypecase argument

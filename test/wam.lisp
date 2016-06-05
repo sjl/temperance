@@ -70,8 +70,7 @@
   (set-equal r1 r2 :test #'result=))
 
 (defmacro q (&body query)
-  `(with-database *test-database*
-    (return-all ,@query)))
+  `(return-all ,@query))
 
 
 (defmacro should-fail (&body queries)
@@ -87,77 +86,213 @@
 
 ;;;; Tests
 (test facts-literal
-  (is (results= '(nil) (q (always))))
-  (is (results= '(nil) (q (fuzzy cats))))
-  (is (results= nil (q (fuzzy snakes)))))
+  (with-database *test-database*
+    (is (results= '(nil) (q (always))))
+    (is (results= '(nil) (q (fuzzy cats))))
+    (is (results= nil (q (fuzzy snakes))))))
 
 (test facts-variables
-  (is (results= '((:what cats))
-                (q (fuzzy :what))))
-  (is (results= '((:what blues)
-                  (:what rock))
-                (q (listens bob :what))))
-  (is (results= '((:who alice)
-                  (:who bob)
-                  (:who candace))
-                (q (listens :who blues))))
-  (is (results= '()
-                (q (listens :who metal)))))
+  (with-database *test-database*
+    (is (results= '((:what cats))
+                  (q (fuzzy :what))))
+    (is (results= '((:what blues)
+                    (:what rock))
+                  (q (listens bob :what))))
+    (is (results= '((:who alice)
+                    (:who bob)
+                    (:who candace))
+                  (q (listens :who blues))))
+    (is (results= '()
+                  (q (listens :who metal))))))
 
 (test facts-conjunctions
-  (is (results= '((:who alice))
-                (q (listens :who blues)
-                   (listens :who jazz))))
-  (is (results= '((:who alice))
-                (q (listens :who blues)
-                   (drinks :who bourbon))))
-  (is (results= '((:what bourbon :who alice)
-                  (:what genny-cream :who bob)
-                  (:what birch-beer :who candace))
-                (q (listens :who blues)
-                   (drinks :who :what)))))
+  (with-database *test-database*
+    (is (results= '((:who alice))
+                  (q (listens :who blues)
+                     (listens :who jazz))))
+    (is (results= '((:who alice))
+                  (q (listens :who blues)
+                     (drinks :who bourbon))))
+    (is (results= '((:what bourbon :who alice)
+                    (:what genny-cream :who bob)
+                    (:what birch-beer :who candace))
+                  (q (listens :who blues)
+                     (drinks :who :what))))))
+
+(test backtracking
+  (with-fresh-database
+    (facts (a))
+    (facts (b))
+    (facts (c))
+    (facts (d))
+    (rules ((f :x) (a))
+           ((f :x) (b) (c))
+           ((f :x) (d)))
+    (should-return
+      ((f foo)
+       (nil))))
+  (with-fresh-database
+    ; (facts (a))
+    (facts (b))
+    (facts (c))
+    (facts (d))
+    (rules ((f :x) (a))
+           ((f :x) (b) (c))
+           ((f :x) (d)))
+    (should-return
+      ((f foo)
+       (nil))))
+  (with-fresh-database
+    ; (facts (a))
+    (facts (b))
+    (facts (c))
+    ; (facts (d))
+    (rules ((f :x) (a))
+           ((f :x) (b) (c))
+           ((f :x) (d)))
+    (should-return
+      ((f foo)
+       (nil))))
+  (with-fresh-database
+    ; (facts (a))
+    ; (facts (b))
+    (facts (c))
+    ; (facts (d))
+    (rules ((f :x) (a))
+           ((f :x) (b) (c))
+           ((f :x) (d)))
+    (should-return
+      ((f foo)
+       nil)))
+  (with-fresh-database
+    ; (facts (a))
+    (facts (b))
+    ; (facts (c))
+    ; (facts (d))
+    (rules ((f :x) (a))
+           ((f :x) (b) (c))
+           ((f :x) (d)))
+    (should-return
+      ((f foo)
+       nil))))
 
 (test basic-rules
-  (should-fail
-    (pets candace :what))
+  (with-database *test-database*
+    (should-fail
+      (pets candace :what))
 
-  (should-return
-    ((pets alice :what)
-     ((:what snakes) (:what cats)))
+    (should-return
+      ((pets alice :what)
+       ((:what snakes) (:what cats)))
 
-    ((pets bob :what)
-     ((:what cats)))
+      ((pets bob :what)
+       ((:what cats)))
 
-    ((pets :who snakes)
-     ((:who alice)))
+      ((pets :who snakes)
+       ((:who alice)))
 
-    ((likes kim :who)
-     ((:who tom)
-      (:who alice)
-      (:who kim)
-      (:who cats)))
+      ((likes kim :who)
+       ((:who tom)
+        (:who alice)
+        (:who kim)
+        (:who cats)))
 
-    ((likes sally :who)
-     ((:who tom)))
+      ((likes sally :who)
+       ((:who tom)))
 
-    ((narcissist :person)
-     ((:person kim)))))
+      ((narcissist :person)
+       ((:person kim))))))
 
 (test lists
-  (should-fail
-    (member :anything nil)
-    (member a nil)
-    (member b '(a))
-    (member '(a) '(a))
-    (member a '('(a))))
-  (should-return
-    ((member :m '(a))
-     ((:m a)))
-    ((member :m '(a b))
-     ((:m a) (:m b)))
-    ((member :m '(a b a))
-     ((:m a) (:m b)))
-    ((member a '(a))
-     (nil))
-    ((member '(foo) '(a '(foo) b))
-     (nil))))
+  (with-database *test-database*
+    (should-fail
+      (member :anything nil)
+      (member a nil)
+      (member b '(a))
+      (member '(a) '(a))
+      (member a '('(a))))
+    (should-return
+      ((member :m '(a))
+       ((:m a)))
+      ((member :m '(a b))
+       ((:m a) (:m b)))
+      ((member :m '(a b a))
+       ((:m a) (:m b)))
+      ((member a '(a))
+       (nil))
+      ((member '(foo) '(a '(foo) b))
+       (nil)))))
+
+
+(test cut
+  (with-fresh-database
+    (facts (a))
+    (facts (b))
+    (facts (c))
+    (facts (d))
+    (rules ((f a) (a))
+           ((f bc) (b) ! (c))
+           ((f d) (d)))
+    (rules ((g :what) (never))
+           ((g :what) (f :what)))
+    (should-return
+      ((f :what) ((:what a)
+                  (:what bc)))
+      ((g :what) ((:what a)
+                  (:what bc)))))
+
+  (with-fresh-database
+    ; (facts (a))
+    (facts (b))
+    (facts (c))
+    (facts (d))
+    (rules ((f a) (a))
+           ((f bc) (b) ! (c))
+           ((f d) (d)))
+    (rules ((g :what) (never))
+           ((g :what) (f :what)))
+    (should-return
+      ((f :what) ((:what bc)))
+      ((g :what) ((:what bc)))))
+
+  (with-fresh-database
+    ; (facts (a))
+    ; (facts (b))
+    (facts (c))
+    (facts (d))
+    (rules ((f a) (a))
+           ((f bc) (b) ! (c))
+           ((f d) (d)))
+    (rules ((g :what) (never))
+           ((g :what) (f :what)))
+    (should-return
+      ((f :what) ((:what d)))
+      ((g :what) ((:what d)))))
+
+  (with-fresh-database
+    ; (facts (a))
+    (facts (b))
+    ; (facts (c))
+    (facts (d))
+    (rules ((f a) (a))
+           ((f bc) (b) ! (c))
+           ((f d) (d)))
+    (rules ((g :what) (never))
+           ((g :what) (f :what)))
+    (should-fail
+      (f :what)
+      (g :what)))
+
+  (with-fresh-database
+    ; (facts (a))
+    ; (facts (b))
+    (facts (c))
+    ; (facts (d))
+    (rules ((f a) (a))
+           ((f bc) (b) ! (c))
+           ((f d) (d)))
+    (rules ((g :what) (never))
+           ((g :what) (f :what)))
+    (should-fail
+      (f :what)
+      (g :what))))

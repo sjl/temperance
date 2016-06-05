@@ -44,7 +44,8 @@
     (+tag-structure+ "STRUCTURE")
     (+tag-reference+ "REFERENCE")
     (+tag-functor+ "FUNCTOR")
-    (+tag-constant+ "CONSTANT")))
+    (+tag-constant+ "CONSTANT")
+    (+tag-list+ "LIST")))
 
 (defun* cell-type-short-name ((cell cell))
   (:returns string)
@@ -53,7 +54,8 @@
     (+tag-structure+ "STR")
     (+tag-reference+ "REF")
     (+tag-functor+ "FUN")
-    (+tag-constant+ "CON")))
+    (+tag-constant+ "CON")
+    (+tag-list+ "LST")))
 
 
 (defun* cell-aesthetic ((cell cell))

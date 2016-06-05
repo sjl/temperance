@@ -136,17 +136,18 @@
 (define-constant +opcode-try+ 24)
 (define-constant +opcode-retry+ 25)
 (define-constant +opcode-trust+ 26)
+(define-constant +opcode-cut+ 27)
 
 
 ;;; Constants
-(define-constant +opcode-get-constant+ 27)
-(define-constant +opcode-set-constant+ 28)
-(define-constant +opcode-put-constant+ 29)
-(define-constant +opcode-unify-constant+ 30)
+(define-constant +opcode-get-constant+ 28)
+(define-constant +opcode-set-constant+ 29)
+(define-constant +opcode-put-constant+ 30)
+(define-constant +opcode-unify-constant+ 31)
 
 ;;; Lists
-(define-constant +opcode-get-list+ 31)
-(define-constant +opcode-put-list+ 32)
+(define-constant +opcode-get-list+ 32)
+(define-constant +opcode-put-list+ 33)
 
 
 ;;;; Debug Config

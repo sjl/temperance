@@ -23,10 +23,13 @@
   (:import-from #:bones.wam
     #:with-database
     #:make-database
+    #:with-fresh-database
     #:rules
     #:facts
     #:return-one
-    #:return-all))
+    #:return-all)
+  (:shadowing-import-from #:bones.wam
+    #:!))
 
 (defpackage #:bones-test.circle
   (:use :cl :5am :bones.circle))

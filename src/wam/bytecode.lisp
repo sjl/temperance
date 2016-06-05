@@ -40,6 +40,7 @@
     (+opcode-try+ 2)
     (+opcode-retry+ 2)
     (+opcode-trust+ 1)
+    (+opcode-cut+ 1)
 
     (+opcode-get-constant+ 3)
     (+opcode-set-constant+ 2)
@@ -82,6 +83,7 @@
     (+opcode-try+ "TRY")
     (+opcode-retry+ "RETRY")
     (+opcode-trust+ "TRUST")
+    (+opcode-cut+ "CUT")
 
     (+opcode-get-constant+ "GET-CONSTANT")
     (+opcode-set-constant+ "SET-CONSTANT")
@@ -124,6 +126,7 @@
     (+opcode-try+ "TRYM")
     (+opcode-retry+ "RTRY")
     (+opcode-trust+ "TRST")
+    (+opcode-cut+ "CUTT")
 
     (+opcode-get-constant+ "GCON")
     (+opcode-set-constant+ "SCON")

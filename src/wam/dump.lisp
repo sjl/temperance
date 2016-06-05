@@ -91,7 +91,8 @@
                      ((= addr +stack-start+) "")
                      ((= offset 0) "CE ===========================")
                      ((= offset 1) "CP")
-                     ((= offset 2)
+                     ((= offset 2) "CUT")
+                     ((= offset 3)
                       (if (zerop cell)
                         (progn
                           (setf currently-in nil)
@@ -344,6 +345,7 @@
 
 (defun dump-wam (wam from to highlight)
   (format t "            FAIL: ~A~%" (wam-fail wam))
+  (format t "    BACKTRACKED?: ~A~%" (wam-backtracked wam))
   (format t "            MODE: ~S~%" (wam-mode wam))
   (dump-wam-functors wam)
   (format t "       HEAP SIZE: ~A~%" (- (wam-heap-pointer wam) +heap-start+))
@@ -351,6 +353,7 @@
   (format t "CONTINUATION PTR: ~4,'0X~%" (wam-continuation-pointer wam))
   (format t " ENVIRONMENT PTR: ~4,'0X~%" (wam-environment-pointer wam))
   (format t "   BACKTRACK PTR: ~4,'0X~%" (wam-backtrack-pointer wam))
+  (format t "         CUT PTR: ~4,'0X~%" (wam-cut-pointer wam))
   (format t "HEAP BCKTRCK PTR: ~4,'0X~%" (wam-heap-backtrack-pointer wam))
   (dump-wam-trail wam)
   (dump-wam-registers wam)
