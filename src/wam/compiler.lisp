@@ -1,8 +1,12 @@
 (in-package #:bones.wam)
 (named-readtables:in-readtable :fare-quasiquote)
 
-;; TODO: Thoroughly document the data formats between each phase.
-;; TODO: actually just rewrite this hole fuckin thing.
+;;;; Utils
+(declaim (inline variablep))
+(defun* variablep (term)
+  (:returns boolean)
+  (keywordp term))
+
 
 ;;;; Registers
 (deftype register-type ()
@@ -64,98 +68,207 @@
           (register-number r2))))
 
 
-;;;; Register Assignments
-(deftype register-assignment ()
-  ;; A register assignment represented as a cons of (register . contents).
-  '(cons register t))
+;;;; Parse Trees
+(defclass node () ())
 
-(deftype register-assignment-list ()
-  '(trivial-types:association-list register t))
+(defclass top-level-node (node)
+  ((functor :accessor node-functor
+            :type symbol
+            :initarg :functor)
+   (arity :accessor node-arity
+          :type arity
+          :initarg :arity)
+   (arguments :accessor node-arguments
+              :type list
+              :initarg :arguments)))
 
-
-(defun* pprint-assignments ((assignments register-assignment-list))
-  (format t "~{~A~%~}"
-          (loop :for (register . contents) :in assignments :collect
-                (format nil "~A <- ~S" (register-to-string register) contents))))
-
-(defun* find-assignment ((register register)
-                         (assignments register-assignment-list))
-  (:returns register-assignment)
-  "Find the assignment for the given register number in the assignment list."
-  (assoc register assignments))
-
-
-(declaim (inline variablep))
-(defun* variablep (term)
-  (:returns boolean)
-  (keywordp term))
-
-(defun* prolog-list-p (term)
-  (:returns boolean)
-  ;; TODO: is this how we wanna do this?
-  (and (consp term)
-       (eql 'quote (car term))
-       (consp (cdr term))))
+(defclass vanilla-node (node)
+  ((register :accessor node-register
+             :type register
+             :documentation "The register allocated to store this node.")))
 
 
-(defun* variable-assignment-p ((assignment register-assignment))
-  "Return whether the register assigment is a simple variable assignment.
+(defclass structure-node (vanilla-node)
+  ((functor :accessor node-functor
+            :type symbol
+            :initarg :functor)
+   (arity :accessor node-arity
+          :type arity
+          :initarg :arity)
+   (arguments :accessor node-arguments
+              :type list
+              :initarg :arguments)))
 
-  E.g. `X1 = Foo` is simple, but `X2 = f(...)` is not.
+(defclass variable-node (vanilla-node)
+  ((variable :accessor node-variable
+             :type keyword
+             :initarg :variable)))
 
-  Note that register assignments actually look like `(1 . contents)`, so
-  a simple variable assignment would be `(1 . :foo)`.
+(defclass argument-variable-node (variable-node)
+  ((secondary-register
+     :accessor node-secondary-register
+     :type register
+     :documentation
+     "The register that actually holds the variable (NOT the argument register).")))
 
-  "
-  (:returns boolean)
-  (variablep (cdr assignment)))
-
-(defun* variable-register-p ((register register)
-                             (assignments register-assignment-list))
-  (:returns boolean)
-  "Return whether the given register contains a variable assignment."
-  (variable-assignment-p (find-assignment register assignments)))
-
-
-(defun* register-assignment-p ((assignment register-assignment))
-  (:returns boolean)
-  "Return whether the register assigment is a register-to-register assignment.
-
-  E.g. `A1 = X2`.
-
-  Note that this should only ever happen for argument registers.
-
-  "
-  (typep (cdr assignment) 'register))
+(defclass list-node (vanilla-node)
+  ((head :accessor node-head :type node :initarg :head)
+   (tail :accessor node-tail :type node :initarg :tail)))
 
 
-(defun* structure-assignment-p ((assignment register-assignment))
-  (:returns boolean)
-  "Return whether the given assignment pair is a structure assignment."
-  (and (listp (cdr assignment))
-       (eql (cadr assignment) :structure)))
+(defun make-top-level-node (functor arity arguments)
+  (make-instance 'top-level-node
+                 :functor functor
+                 :arity arity
+                 :arguments arguments))
 
-(defun* structure-register-p ((register register)
-                              (assignments register-assignment-list))
-  (:returns boolean)
-  "Return whether the given register contains a structure assignment."
-  (structure-assignment-p (find-assignment register assignments)))
+(defun make-structure-node (functor arity arguments)
+  (make-instance 'structure-node
+                 :functor functor
+                 :arity arity
+                 :arguments arguments))
 
+(defun make-variable-node (variable)
+  (make-instance 'variable-node :variable variable))
 
-(defun* list-assignment-p ((assignment register-assignment))
-  (:returns boolean)
-  "Return whether the given assignment pair is a (Prolog) list assignment."
-  (and (listp (cdr assignment))
-       (eql (cadr assignment) :list)))
+(defun make-argument-variable-node (variable)
+  (make-instance 'argument-variable-node :variable variable))
 
-(defun* list-register-p ((register register)
-                              (assignments register-assignment-list))
-  (:returns boolean)
-  "Return whether the given register contains a (Prolog) list assignment."
-  (list-assignment-p (find-assignment register assignments)))
+(defun make-list-node (head tail)
+  (make-instance 'list-node :head head :tail tail))
 
 
-;;;; Parsing
+(defgeneric node-children (node)
+  (:documentation
+    "Return the children of the given node.
+
+    Presumably these will need to be traversed when allocating registers."))
+
+(defmethod node-children ((node vanilla-node))
+  (list))
+
+(defmethod node-children ((node top-level-node))
+  (node-arguments node))
+
+(defmethod node-children ((node structure-node))
+  (node-arguments node))
+
+(defmethod node-children ((node list-node))
+  (list (node-head node) (node-tail node)))
+
+
+(defun nil-node-p (node)
+  "Return whether the given node is the magic nil/0 constant."
+  (and (typep node 'structure-node)
+       (eql (node-functor node) nil)
+       (zerop (node-arity node))))
+
+
+(defparameter *dump-node-indent* 0)
+
+(defun print-node-register (node stream &optional space-before)
+  (when (slot-boundp node 'register)
+    (format stream (if space-before " ~A =" "~A = ") (node-register node))))
+
+(defun print-node-secondary-register (node stream &optional space-before)
+  (when (slot-boundp node 'secondary-register)
+    (format stream
+            (if space-before " ~A =" "~A = ")
+            (node-secondary-register node))))
+
+(defgeneric dump-node (node))
+
+(defmethod dump-node ((node node))
+  (format t "~VAAN NODE" *dump-node-indent* ""))
+
+(defmethod dump-node ((node variable-node))
+  (format t "~VA#<VAR" *dump-node-indent* "")
+  (print-node-register node t t)
+  (format t " ~S>" (node-variable node)))
+
+(defmethod dump-node ((node argument-variable-node))
+  (format t "~VA#<VAR" *dump-node-indent* "")
+  (print-node-register node t t)
+  (print-node-secondary-register node t t)
+  (format t " ~S>" (node-variable node)))
+
+(defmethod dump-node ((node structure-node))
+  (format t "~VA#<STRUCT " *dump-node-indent* "")
+  (print-node-register node t)
+  (format t "~A/~D" (node-functor node) (node-arity node))
+  (let ((*dump-node-indent* (+ *dump-node-indent* 4)))
+    (dolist (a (node-arguments node))
+      (terpri)
+      (dump-node a)))
+  (format t ">"))
+
+(defmethod dump-node ((node list-node))
+  (format t "~VA#<LIST" *dump-node-indent* "")
+  (print-node-register node t t)
+  (let ((*dump-node-indent* (+ *dump-node-indent* 4)))
+    (loop :for element = node :then tail
+          :while (typep element 'list-node)
+          :for head = (node-head element)
+          :for tail = (node-tail element)
+          :do (progn (terpri) (dump-node head))
+          :finally (when (not (nil-node-p element))
+                     (format t "~%~VA.~%" *dump-node-indent* "")
+                     (dump-node element))))
+  (format t ">"))
+
+(defmethod dump-node ((node top-level-node))
+  (format t "#<~A/~D" (node-functor node) (node-arity node))
+  (let ((*dump-node-indent* 4))
+    (dolist (n (node-arguments node))
+      (terpri)
+      (dump-node n)))
+  (format t ">"))
+
+(defmethod print-object ((node node) stream)
+  (let ((*standard-output* stream))
+    (dump-node node)))
+
+
+(defun parse-list (contents)
+  (if contents
+    (make-list-node (parse (car contents))
+                    (parse-list (cdr contents)))
+    (make-structure-node 'nil 0 ())))
+
+(defun parse-list* (contents)
+  (destructuring-bind (next . remaining) contents
+    (if (null remaining)
+      (parse next)
+      (make-list-node (parse next)
+                      (parse-list* remaining)))))
+
+(defun parse (term &optional top-level-argument)
+  (cond
+    ((keywordp term)
+     (if top-level-argument
+       (make-argument-variable-node term)
+       (make-variable-node term)))
+    ((symbolp term)
+     (parse (list term))) ; c/0 -> (c/0)
+    ((consp term)
+     (destructuring-bind (functor . arguments) term
+       (case functor
+         (list (parse-list arguments))
+         (list* (parse-list* arguments))
+         (t (make-structure-node functor
+                                 (length arguments)
+                                 (mapcar #'parse arguments))))))))
+
+(defun parse-top-level (term)
+  (if (symbolp term) ; c/0 -> (c/0)
+    (parse-top-level (list term))
+    (destructuring-bind (functor . arguments) term
+      (make-top-level-node functor (length arguments)
+                           (mapcar (lambda (a) (parse a t))
+                                   arguments)))))
+
+
+;;;; Register Allocation
 ;;; You might want to grab a coffee for this one.
 ;;;
 ;;; Consider this simple Prolog example: `p(A, q(A, r(B)))`.  We're going to get
@@ -277,119 +390,151 @@
 ;;; rules with just a single term in the body (which is many of them)), so we
 ;;; have this extra corner case to optimize it away.
 ;;;
+;;; In the following code these variables will be called "nead variables"
+;;; because:
+;;;
+;;; 1. They're present in the head of the clause.
+;;; 2. They're present in the first term of the body (the "neck", as referred to
+;;;    in "neck cut" and such).
+;;; 3. https://www.urbandictionary.com/define.php?term=nead&defid=1488946
+;;;
 ;;; We now return you to your regularly scheduled Lisp code.
 
-(defun parse-term (term permanent-variables
-                   ;; JESUS TAKE THE WHEEL
-                   &optional reserved-variables reserved-arity)
-  "Parse a term into a series of register assignments.
+(defstruct allocation-state
+  local-registers
+  stack-registers
+  permanent-variables
+  reserved-variables
+  reserved-arity
+  actual-arity)
 
-  Returns:
 
-    * The assignment list
-    * The root functor
-    * The root functor's arity
+(defun find-variable (state variable)
+  "Return the register that already contains this variable, or `nil` otherwise."
+  (or (when-let (r (position variable (allocation-state-local-registers state)))
+        (make-temporary-register r (allocation-state-actual-arity state)))
+      (when-let (s (position variable (allocation-state-stack-registers state)))
+        (make-permanent-register s (allocation-state-actual-arity state)))
+      nil))
+
+(defun store-variable (state variable)
+  "Assign `variable` to the next available local register.
+
+  It is assumed that `variable` is not already assigned to another register
+  (check that with `find-variable` first).
+
+  It is also assumed that this will be a non-argument register, because as
+  mentioned above variables cannot live directly inside argument registers.
 
   "
-  (let* ((predicate (first term))
-         (arguments (rest term))
-         (arity (length arguments))
-         ;; Preallocate enough registers for all of the arguments.  We'll fill
-         ;; them in later.  Note that things are more complicated in the head
-         ;; and first body term of a clause (see above).
-         (local-registers (make-array 64
-                            :fill-pointer (or reserved-arity arity)
-                            :adjustable t
-                            :initial-element nil))
-         ;; We essentially "preallocate" all the permanent variables up front
-         ;; because we need them to always be in the same stack registers across
-         ;; all the terms of our clause.
-         ;;
-         ;; The ones that won't get used in this term will end up getting
-         ;; flattened away anyway.
-         (stack-registers (make-array (length permanent-variables)
-                            :initial-contents permanent-variables)))
-    (loop :for variable :in reserved-variables :do
-          (vector-push-extend variable local-registers))
-    (labels
-        ((find-variable (var)
-           (let ((r (position var local-registers))
-                 (s (position var stack-registers)))
-             (cond
-               (r (make-temporary-register r arity))
-               (s (make-permanent-register s arity))
-               (t nil))))
-         (store-variable (var)
-           (make-temporary-register
-             (vector-push-extend var local-registers)
-             arity))
-         (store-temporary (contents preallocated-register)
-           ;; If we've been given a register to hold this thing (i.e.  we're
-           ;; parsing a top-level argument) use it.  Otherwise allocate a fresh
-           ;; one.
-           ;;
-           ;; Note that structures/lists always live in local registers, never
-           ;; permanent ones.
-           (let ((reg (or preallocated-register
-                          (vector-push-extend nil local-registers))))
-             (setf (aref local-registers reg) contents)
-             (make-temporary-register reg arity)))
-         (parse-variable (var)
-           ;; If we've already seen this variable just return the register it's
-           ;; in, otherwise allocate a register for it and return that.
-           (or (find-variable var)
-               (store-variable var)))
-         (parse-structure (structure register)
-           (destructuring-bind (functor . arguments) structure
-             (store-temporary
-               (list* :structure functor (mapcar #'parse arguments))
-               register)))
-         (parse-list (list &optional register)
-           (destructuring-bind (head . tail) list
-             (store-temporary
-               (list :list
-                     (parse head)
-                     (if (consp tail)
-                       (parse-list tail) ; [a, ...]
-                       (parse tail))) ; [a | END]
-               register)))
-         (parse (term &optional register)
-           (cond
-             ((variablep term) (parse-variable term))
-             ((symbolp term) (parse (list term) register)) ; f -> f/0
-             ((prolog-list-p term) (parse-list (second term) register))
-             ((listp term) (parse-structure term register))
-             (t (error "Cannot parse term ~S." term))))
-         (make-assignment-list (registers register-maker)
-           (loop :for i :from 0
-                 :for contents :across registers
-                 :when contents :collect ; don't include unused reserved regs
-                 (cons (funcall register-maker i arity)
-                       contents))))
-      ;; Arguments are handled specially.  We parse the children as normal,
-      ;; and then fill in the argument registers after each child.
-      (loop :for argument :in arguments
-            :for i :from 0
-            :for parsed = (parse argument i)
-            ;; If the argument didn't fill itself in (structure), do it.
-            :when (not (aref local-registers i))
-            :do (setf (aref local-registers i) parsed))
-      (values (append
-                (make-assignment-list local-registers #'make-temporary-register)
-                (make-assignment-list stack-registers #'make-permanent-register))
-              predicate
-              arity))))
+  (make-register
+    :local
+    (vector-push-extend variable (allocation-state-local-registers state))))
+
+(defun ensure-variable (state variable)
+  (or (find-variable state variable)
+      (store-variable state variable)))
+
+
+(defmacro set-when-unbound (instance slot value-form)
+  (once-only (instance slot)
+    `(when (not (slot-boundp ,instance ,slot))
+       (setf (slot-value ,instance ,slot) ,value-form))))
+
+(defun allocate-nonvariable-register (state)
+  "Allocate and return a register for something that's not a variable."
+  ;; We need to allocate registers for things like structures and lists, but we
+  ;; never need to look them up later (like we do with variables), so we'll just
+  ;; shove a nil into the local registers array as a placeholder.
+  (make-temporary-register
+    (vector-push-extend nil (allocation-state-local-registers state))
+    (allocation-state-actual-arity state)))
+
+
+(defgeneric allocate-register (node allocation-state))
+
+
+(defmethod allocate-register ((node top-level-node) state)
+  (declare (ignore node state))
+  (values))
+
+(defmethod allocate-register ((node variable-node) state)
+  (set-when-unbound node 'register
+    (ensure-variable state (node-variable node))))
+
+(defmethod allocate-register ((node argument-variable-node) state)
+  (set-when-unbound node 'secondary-register
+    (ensure-variable state (node-variable node))))
+
+(defmethod allocate-register ((node structure-node) state)
+  (set-when-unbound node 'register
+    (allocate-nonvariable-register state)))
+
+(defmethod allocate-register ((node list-node) state)
+  (set-when-unbound node 'register
+    (allocate-nonvariable-register state)))
+
+
+(defun allocate-argument-registers (node)
+  (loop :for argument :in (node-arguments node)
+        :for i :from 0
+        :do (setf (node-register argument)
+                  (make-register :argument i)))
+  (values))
+
+(defun allocate-nonargument-registers
+    (node permanent-variables reserved-variables reserved-arity)
+  ;; JESUS TAKE THE WHEEL
+  (let*
+      ((actual-arity (node-arity node))
+       ;; Preallocate enough registers for all of the arguments.  We'll fill
+       ;; them in later.  Note that things are more complicated in the head and
+       ;; first body term of a clause (see above).
+       (local-registers (make-array 64
+                          :fill-pointer (or reserved-arity actual-arity)
+                          :adjustable t
+                          :initial-element nil))
+       ;; We essentially "preallocate" all the permanent variables up front
+       ;; because we need them to always be in the same stack registers across
+       ;; all the terms of our clause.
+       ;;
+       ;; The ones that won't get used in this term will end up getting
+       ;; flattened away anyway.
+       (stack-registers (make-array (length permanent-variables)
+                          :initial-contents permanent-variables))
+       (allocation-state (make-allocation-state
+                           :local-registers local-registers
+                           :stack-registers stack-registers
+                           :permanent-variables permanent-variables
+                           :reserved-variables reserved-variables
+                           :reserved-arity reserved-arity
+                           :actual-arity actual-arity)))
+    ;; Actually reserve the reserved (but non-permanent, see above) variables.
+    ;; They need to live in consistent spots for the head and first body term.
+    (loop :for variable :in reserved-variables
+          :do (vector-push-extend variable local-registers))
+    (recursively ((remaining (list node)))
+      (when remaining
+        (destructuring-bind (node . remaining) remaining
+          (allocate-register node allocation-state)
+          (recur (append remaining (node-children node)))))))
+  (values))
+
+(defun allocate-registers
+    (node permanent-variables &optional reserved-variables reserved-arity)
+  (allocate-argument-registers node)
+  (allocate-nonargument-registers
+    node permanent-variables reserved-variables reserved-arity)
+  (values))
 
 
 ;;;; Flattening
-;;; "Flattening" is the process of turning a series of register assignments into
-;;; a sorted sequence appropriate for turning into a series of instructions.
+;;; "Flattening" is the process of turning a parse tree (with register
+;;; assignments) into a flat list of nodes, which will then be turned into
+;;; a series of instructions.
 ;;;
-;;; The order depends on whether we're compiling a query term or a program term.
-;;;
-;;; It's a stupid name because the assignments are already flattened as much as
-;;; they ever will be.  "Sorting" would be a better name.  Maybe I'll change it
-;;; once I'm done with the book.
+;;; The order of this list depends on whether we're compiling a query term or
+;;; a program term.
 ;;;
 ;;; Turns:
 ;;;
@@ -403,59 +548,91 @@
 ;;;   X2 <- q(X1, X3)
 ;;;   X0 <- p(X1, X2)
 
-(defun find-dependencies (assignments)
-  "Return a list of dependencies amongst the given registers.
-
-  Each entry will be a cons of `(a . b)` if register `a` must precede `b`.
-
-  "
-  (mapcan
-    (lambda (assignment)
-      (cond
-        ;; Variable assignments (X1 <- Foo) don't depend on anything else.
-        ((variable-assignment-p assignment)
-         ())
-        ;; Register assignments (A0 <- X5) have one obvious dependency.
-        ((register-assignment-p assignment)
-         (destructuring-bind (argument . contents) assignment
-           (list `(,contents . ,argument))))
-        ;; Structure assignments depend on all the functor's arguments.
-        ((structure-assignment-p assignment)
-         (destructuring-bind (target . (tag functor . reqs))
-             assignment
-           (declare (ignore tag functor))
-           (loop :for req :in reqs
-                 :collect (cons req target))))
-        ;; Prolog lists/pairs depend on their contents.
-        ((list-assignment-p assignment)
-         (destructuring-bind (target . (tag head tail))
-             assignment
-           (declare (ignore tag))
-           (list (cons head target)
-                 (cons tail target))))
-        (t (error "Cannot find dependencies for assignment ~S." assignment))))
-    assignments))
+(defclass register-assignment ()
+  ((register :accessor assignment-register :type register :initarg :register)))
 
 
-(defun flatten (assignments)
-  "Flatten the set of register assignments into a minimal set.
+(defclass structure-assignment (register-assignment)
+  ((functor :accessor assignment-functor :type symbol :initarg :functor)
+   (arity :accessor assignment-arity :type arity :initarg :arity)
+   (arguments :accessor assignment-arguments :type list :initarg :arguments)))
 
-  We remove the plain old variable assignments (in non-argument registers)
-  because they're not actually needed in the end.
+(defclass argument-variable-assignment (register-assignment)
+  ((target :accessor assignment-target :type register :initarg :target)))
 
-  "
-  (-<> assignments
-    (topological-sort <> (find-dependencies assignments)
-                      :key #'car
-                      :key-test #'register=
-                      :test #'eql)
-    (remove-if #'variable-assignment-p <>)))
+(defclass list-assignment (register-assignment)
+  ((head :accessor assignment-head :type register :initarg :head)
+   (tail :accessor assignment-tail :type register :initarg :tail)))
 
-(defun flatten-query (assignments)
-  (flatten assignments))
 
-(defun flatten-program (assignments)
-  (reverse (flatten assignments)))
+(defmethod print-object ((assignment structure-assignment) stream)
+  (print-unreadable-object (assignment stream :type nil :identity nil)
+    (format stream "~A = ~A/~D(~{~A~^, ~})"
+            (register-to-string (assignment-register assignment))
+            (assignment-functor assignment)
+            (assignment-arity assignment)
+            (mapcar #'register-to-string (assignment-arguments assignment)))))
+
+(defmethod print-object ((assignment argument-variable-assignment) stream)
+  (print-unreadable-object (assignment stream :type nil :identity nil)
+    (format stream "~A = ~A"
+            (register-to-string (assignment-register assignment))
+            (register-to-string (assignment-target assignment)))))
+
+(defmethod print-object ((assignment list-assignment) stream)
+  (print-unreadable-object (assignment stream :type nil :identity nil)
+    (format stream "~A = [~A | ~A]"
+            (register-to-string (assignment-register assignment))
+            (register-to-string (assignment-head assignment))
+            (register-to-string (assignment-tail assignment)))))
+
+
+(defgeneric node-flatten (node))
+
+(defmethod node-flatten (node)
+  nil)
+
+(defmethod node-flatten ((node structure-node))
+  (make-instance 'structure-assignment
+                 :register (node-register node)
+                 :functor (node-functor node)
+                 :arity (node-arity node)
+                 :arguments (mapcar #'node-register (node-arguments node))))
+
+(defmethod node-flatten ((node argument-variable-node))
+  (make-instance 'argument-variable-assignment
+                 :register (node-register node)
+                 :target (node-secondary-register node)))
+
+(defmethod node-flatten ((node list-node))
+  (make-instance 'list-assignment
+                 :register (node-register node)
+                 :head (node-register (node-head node))
+                 :tail (node-register (node-tail node))))
+
+
+(defun flatten-breadth-first (tree)
+  (let ((results nil))
+    (recursively ((node tree))
+      (when-let (assignment (node-flatten node))
+        (push assignment results))
+      (mapcar #'recur (node-children node)))
+    (nreverse results)))
+
+(defun flatten-depth-first-post-order (tree)
+  (let ((results nil))
+    (recursively ((node tree))
+      (mapcar #'recur (node-children node))
+      (when-let (assignment (node-flatten node))
+        (push assignment results)))
+    (nreverse results)))
+
+
+(defun flatten-query (tree)
+  (flatten-depth-first-post-order tree))
+
+(defun flatten-program (tree)
+  (flatten-breadth-first tree))
 
 
 ;;;; Tokenization
@@ -472,67 +649,107 @@
 ;;;
 ;;;   (X2 = q/2), X1, X3, (X0 = p/2), X1, X2, (A3 = X4)
 
+(defclass token () ())
+
+
+(defclass register-token (token)
+  ((register :accessor token-register :type register :initarg :register)))
+
+(defclass structure-token (register-token)
+  ((functor :accessor token-functor :type symbol :initarg :functor)
+   (arity :accessor token-arity :type arity :initarg :arity)))
+
+(defclass argument-variable-token (register-token)
+  ((target :accessor token-target :type register :initarg :target)))
+
+(defclass list-token (register-token) ())
+
+(defclass call-token (token)
+  ((functor :accessor token-functor :type symbol :initarg :functor)
+   (arity :accessor token-arity :type arity :initarg :arity)))
+
+(defclass cut-token (token) ())
+
+
+(defun make-register-token (register)
+  (make-instance 'register-token :register register))
+
+
+(defmethod print-object ((token register-token) stream)
+  (print-object (token-register token) stream))
+
+(defmethod print-object ((token structure-token) stream)
+  (print-unreadable-object (token stream :identity nil :type nil)
+    (format stream "~A = ~A/~D"
+            (register-to-string (token-register token))
+            (token-functor token)
+            (token-arity token))))
+
+(defmethod print-object ((token argument-variable-token) stream)
+  (print-unreadable-object (token stream :identity nil :type nil)
+    (format stream "~A = ~A"
+            (register-to-string (token-register token))
+            (register-to-string (token-target token)))))
+
+(defmethod print-object ((token list-token) stream)
+  (print-unreadable-object (token stream :identity nil :type nil)
+    (format stream "~A = LIST" (register-to-string (token-register token)))))
+
+(defmethod print-object ((token call-token) stream)
+  (print-unreadable-object (token stream :identity nil :type nil)
+    (format stream "CALL ~A/~D"
+            (token-functor token)
+            (token-arity token))))
+
+(defmethod print-object ((token cut-token) stream)
+  (print-unreadable-object (token stream :identity nil :type nil)
+    (format stream "CUT!")))
+
+
+(defgeneric tokenize-assignment (assignment))
+
+(defmethod tokenize-assignment ((assignment structure-assignment))
+  (list* (make-instance 'structure-token
+                        :register (assignment-register assignment)
+                        :functor (assignment-functor assignment)
+                        :arity (assignment-arity assignment))
+         (mapcar #'make-register-token (assignment-arguments assignment))))
+
+(defmethod tokenize-assignment ((assignment argument-variable-assignment))
+  (list (make-instance 'argument-variable-token
+                       :register (assignment-register assignment)
+                       :target (assignment-target assignment))))
+
+(defmethod tokenize-assignment ((assignment list-assignment))
+  (list (make-instance 'list-token :register (assignment-register assignment))
+        (make-register-token (assignment-head assignment))
+        (make-register-token (assignment-tail assignment))))
+
+
 (defun tokenize-assignments (assignments)
   "Tokenize a flattened set of register assignments into a stream."
-  (mapcan
-    (lambda (ass)
-      ;; Take a single assignment like:
-      ;;   X1 = f(X4, Y1)         (X1 . (:structure f X4 Y1))
-      ;;   A0 = X5                (A0 . X5)
-      ;;   X2 = [X3, Y2]          (X2 . (:list X3 Y2))
-      ;;
-      ;; And turn it into a stream of tokens:
-      ;;   (X1 = f/2), X4, Y1      ((:structure X1 f 2) X4 Y1
-      ;;   (A0 = X5)                (:argument A0 X5)
-      ;;   (X2 = LIST), X3, Y2      (:list X2) X3 Y2)
-      (if (register-assignment-p ass)
-        ;; It might be a register assignment for an argument register.
-        (destructuring-bind (argument-register . target-register) ass
-          (list (list :argument argument-register target-register)))
-        ;; Otherwise it's a structure or list.
-        (destructuring-bind (register . (tag . body)) ass
-          (ecase tag
-            (:structure
-             (destructuring-bind (functor . arguments) body
-               (cons (list :structure register functor (length arguments))
-                     arguments)))
-            (:list
-             (list `(:list ,register)
-                   (first body)
-                   (second body)))))))
-    assignments))
+  (mapcan #'tokenize-assignment assignments))
 
-
-(defun tokenize-term
-    (term permanent-variables reserved-variables reserved-arity flattener)
-  (multiple-value-bind (assignments functor arity)
-      (parse-term term permanent-variables reserved-variables reserved-arity)
-    (values (->> assignments
-              (funcall flattener)
-              tokenize-assignments)
-            functor
-            arity)))
 
 (defun tokenize-program-term
-    (term permanent-variables reserved-variables reserved-arity)
+    (term permanent-variables nead-variables nead-arity)
   "Tokenize `term` as a program term, returning its tokens."
-  (values (tokenize-term term
-                         permanent-variables
-                         reserved-variables
-                         reserved-arity
-                         #'flatten-program)))
+  (let ((tree (parse-top-level term)))
+    (allocate-registers tree permanent-variables nead-variables nead-arity)
+    (-> tree flatten-program tokenize-assignments)))
 
 (defun tokenize-query-term
-    (term permanent-variables &optional reserved-variables reserved-arity)
-  "Tokenize `term` as a query term, returning its stream of tokens."
-  (multiple-value-bind (tokens functor arity)
-      (tokenize-term term
-                     permanent-variables
-                     reserved-variables
-                     reserved-arity
-                     #'flatten-query)
-    ;; We need to shove a CALL token onto the end.
-    (append tokens `((:call ,functor ,arity)))))
+    (term permanent-variables &optional nead-variables nead-arity)
+  "Tokenize `term` as a query term, returning its tokens."
+  (let ((tree (parse-top-level term)))
+    (allocate-registers tree permanent-variables nead-variables nead-arity)
+    (-<> tree
+      flatten-query
+      tokenize-assignments
+      ;; We need to shove a CALL token onto the end.
+      (append <> (list (make-instance 'call-token
+                                      :functor (node-functor tree)
+                                      :arity (node-arity tree)))))))
 
 
 ;;;; Precompilation
@@ -646,27 +863,26 @@
            (let ((newp (push-if-new register seen :test #'register=)))
              (push-instruction (find-opcode :register newp mode register)
                                register)))
+         (handle-token (token)
+           (etypecase token
+             (argument-variable-token
+               (handle-argument (token-register token)
+                                (token-target token)))
+             (structure-token
+               (handle-structure (token-register token)
+                                 (token-functor token)
+                                 (token-arity token)))
+             (list-token
+               (handle-list (token-register token)))
+             (cut-token
+               (handle-cut))
+             (call-token
+               (handle-call (token-functor token)
+                            (token-arity token)))
+             (register-token
+               (handle-register (token-register token)))))
          (handle-stream (tokens)
-           (loop :for token :in tokens :collect
-                 (ematch token
-                   ((guard `(:argument ,argument-register ,source-register)
-                           (and (eql (register-type argument-register) :argument)
-                                (member (register-type source-register)
-                                        '(:local :permanent))))
-                    (handle-argument argument-register source-register))
-                   ((guard `(:structure ,destination-register ,functor ,arity)
-                           (member (register-type destination-register)
-                                   '(:local :argument)))
-                    (handle-structure destination-register functor arity))
-                   (`(:list ,register)
-                    (handle-list register))
-                   (`(:cut)
-                    (handle-cut))
-                   (`(:call ,functor ,arity)
-                    (handle-call functor arity))
-                   ((guard register
-                           (typep register 'register))
-                    (handle-register register))))))
+           (map nil #'handle-token tokens)))
       (when head-tokens
         (setf mode :program)
         (handle-stream head-tokens))
@@ -696,13 +912,18 @@
 
   "
   (if (<= (length clause) 2)
-    (list) ; facts and chain rules have no permanent variables at all
+    (list) ; Facts and chain rules have no permanent variables at all
     (destructuring-bind (head body-first . body-rest) clause
-      ;; the head is treated as part of the first goal for the purposes of
-      ;; finding permanent variables
+      ;; The head is treated as part of the first goal for the purposes of
+      ;; finding permanent variables.
       (find-shared-variables (cons (cons head body-first) body-rest)))))
 
-(defun find-head-variables (clause)
+(defun find-nead-variables (clause)
+  "Return a list of all variables shared by the nead of `clause`.
+
+  The head and neck (first term in the body) are the 'nead'.
+
+  "
   (if (<= (length clause) 1)
     (list)
     (destructuring-bind (head body-first . body-rest) clause
@@ -722,40 +943,43 @@
 
   "
   (let* ((basic-clause
-           (remove '! (cons head body)))
+           (remove '! (cons head body))) ; gross
          (permanent-variables
            (if (null head)
              ;; For query clauses we cheat a bit and make ALL variables
              ;; permanent, so we can extract their bindings as results later.
              (find-variables body)
              (find-permanent-variables basic-clause)))
-         (head-variables
-           (set-difference (find-head-variables basic-clause)
+         ;; grep above to see what the hell the nead is.
+         (nead-variables
+           (set-difference (find-nead-variables basic-clause)
                            permanent-variables))
-         (head-arity
+         (nead-arity
            (max (1- (length head))
                 (1- (length (second basic-clause)))))
          (head-tokens
            (when head
              (tokenize-program-term head
                                     permanent-variables
-                                    head-variables
-                                    head-arity)))
+                                    nead-variables
+                                    nead-arity)))
          (body-tokens
            (when body
              (loop
                :with first = t
-               :for goal :in body :append
+               :for goal :in body
+               :append
                (cond
                  ;; cut just gets emitted straight, but DOESN'T flip `first`...
+                 ;; TODO: fix the cut layering violation here...
                  ((eql goal '!) ; gross
-                  (list (list :cut)))
+                  (list (make-instance 'cut-token)))
                  (first
                   (setf first nil)
                   (tokenize-query-term goal
                                        permanent-variables
-                                       head-variables
-                                       head-arity))
+                                       nead-variables
+                                       nead-arity))
                  (t
                   (tokenize-query-term goal permanent-variables)))))))
     (let ((instructions (precompile-tokens wam head-tokens body-tokens))
@@ -799,6 +1023,7 @@
       (t (1- (length head))))))
 
 (defun check-rules (rules)
+  ;; TODO: fix constant handling here...
   (let* ((predicates (mapcar #'caar rules))
          (arities (mapcar #'find-arity rules))
          (functors (zip predicates arities)))
@@ -833,12 +1058,12 @@
               :for first-p = t :then nil
               :for last-p = (null remaining)
               :for clause-instructions = (precompile-clause wam head body)
-              :do
-              (circle-insert-end instructions
-                                 (cond (first-p '(:try nil))
-                                       (last-p '(:trust))
-                                       (t '(:retry nil))))
-              (circle-append-circle instructions clause-instructions)
+              :do (progn
+                    (circle-insert-end instructions
+                                       (cond (first-p '(:try nil))
+                                             (last-p '(:trust))
+                                             (t '(:retry nil))))
+                    (circle-append-circle instructions clause-instructions))
               :finally (return instructions)))
       functor
       arity)))

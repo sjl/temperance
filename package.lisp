@@ -10,8 +10,11 @@
   (:export
     #:repeat
     #:hex
-    #:topological-sort
-    #:push-if-new))
+    #:push-if-new
+    #:recursively
+    #:recur
+    #:when-let
+    ))
 
 (defpackage #:bones.circle
   (:use #:cl #:defstar)

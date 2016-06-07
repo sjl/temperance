@@ -3,3 +3,6 @@
 (2 define-instruction define-instructions)
 (1 with-database)
 (3 with-cell)
+(2 set-when-unbound)
+(1 recursively)
+(1 when-let)

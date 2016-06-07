@@ -3,8 +3,8 @@
 (defparameter *d* (make-database))
 
 (with-database *d*
-  (rules ((member :thing '(:thing . :rest)))
-         ((member :thing '(:other . :rest))
+  (rules ((member :thing (list* :thing :rest)))
+         ((member :thing (list* :other :rest))
           (member :thing :rest)))
 
   (rule (true :state :thing)
@@ -176,7 +176,7 @@
 (defun to-prolog-list (l)
   (if (null l)
     nil
-    (list 'quote l)))
+    (list* 'list l)))
 
 (defun initial-state ()
   (to-prolog-list
@@ -205,9 +205,9 @@
     (perform-return `((goal ,state :role :goal)) :all)))
 
 (defun next-state (current-state move)
-  (let ((does `('(does
-                  ,(getf move :role)
-                  ,(getf move :move)))))
+  (let ((does `(list (does
+                       ,(getf move :role)
+                       ,(getf move :move)))))
     (with-database *d*
       (to-prolog-list
         (extract :what

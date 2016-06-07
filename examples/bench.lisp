@@ -37,5 +37,5 @@
     (reload)
     (run-test%)))
 
-(run-test (speed 3) (safety 1) (debug 1))
-; (run-test (speed 3) (safety 0) (debug 0))
+; (run-test (speed 3) (safety 1) (debug 1))
+(run-test (speed 3) (safety 0) (debug 0))

@@ -52,8 +52,8 @@
       (rules ((narcissist :person)
               (likes :person :person)))
 
-      (rules ((member :x '(:x . :rest)))
-             ((member :x '(:y . :rest))
+      (rules ((member :x (list* :x :rest)))
+             ((member :x (list* :y :rest))
               (member :x :rest))))
     db))
 
@@ -208,21 +208,20 @@
     (should-fail
       (member :anything nil)
       (member a nil)
-      (member b '(a))
-      (member '(a) '(a))
-      (member a '('(a))))
+      (member b (list a))
+      (member (list a) (list a))
+      (member a (list (list a))))
     (should-return
-      ((member :m '(a))
+      ((member :m (list a))
        ((:m a)))
-      ((member :m '(a b))
+      ((member :m (list a b))
        ((:m a) (:m b)))
-      ((member :m '(a b a))
+      ((member :m (list a b a))
        ((:m a) (:m b)))
-      ((member a '(a))
+      ((member a (list a))
        (nil))
-      ((member '(foo) '(a '(foo) b))
+      ((member (list foo) (list a (list foo) b))
        (nil)))))
-
 
 (test cut
   (with-fresh-database
