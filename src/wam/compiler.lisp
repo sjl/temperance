@@ -776,17 +776,79 @@
 ;;; The opcodes are keywords and the register arguments remain register objects.
 ;;; They get converted down to the raw bytes in the final "rendering" step.
 ;;;
+;;; # Cut
+;;;
 ;;; A quick note on cut (!): the book and original WAM do some nutty things to
 ;;; save one stack word per frame.  They store the cut register for non-neck
 ;;; cuts in a "pseudovariable" on the stack, so they only have to allocate that
-;;; extra stack word for things that actually *use* non-neck cuts.
+;;; extra stack word for things that actually USE non-neck cuts.
 ;;;
 ;;; We're going to just eat the extra stack word and store the cut register in
 ;;; every frame instead.  This massively simplifies the implementation and lets
-;;; me keep my sanity, and it *might* even end up being faster because there's
+;;; me keep my sanity, and it MIGHT even end up being faster because there's
 ;;; one fewer opcode, less fucking around in the compiler, etc.  But regardless:
 ;;; I don't want to go insane, and my laptop has sixteen gigabytes of RAM, so
 ;;; let's just store the damn word.
+;;;
+;;; # "Seen" Registers
+;;;
+;;; The book neglects to mention some REALLY important information about how you
+;;; have to handle registers when compiling a stream of tokens.  But if you've
+;;; made it this far, you should be pretty used to the book omitting vital
+;;; information.  So hop in the clown car and take a ride with me.
+;;;
+;;; From the very beginning,the book mentions that certain instructions come in
+;;; pairs, the first of which is used the first time the register is "seen" or
+;;; "encountered", and the second used of which is used subsequent times.
+;;;
+;;; For example, a simple query like `p(A, A, A)` would result in:
+;;;
+;;;     put-variable A0 X3
+;;;     put-value A1 X3
+;;;     put-value A2 X3
+;;;     call p/3
+;;;
+;;; This is all fine and dandy and works for single goals, but if you have
+;;; a clause with MULTIPLE body goals you need to "reset" the list of
+;;; already-seen registers after each goal.  For example, consider:
+;;;
+;;;     p() :-
+;;;       f(X, X),
+;;;       g(Y, Y).
+;;;
+;;; If you just apply what the book says without resetting the already-seen
+;;; register list, you get:
+;;;
+;;;     put-variable A0 X2
+;;;     put-value A1 X2
+;;;     call f/2
+;;;     put-value A0 X2   <--- wrong!
+;;;     put-value A1 X2
+;;;     call g/2
+;;;
+;;; But the variable in `g/2` is DIFFERENT than the one used in `f/2`, so that
+;;; second `put-value` instruction is wrong!  What we need instead is this:
+;;;
+;;;     put-variable A0 X2
+;;;     put-value A1 X2
+;;;     call f/2
+;;;     put-variable A0 X2   <--- right!
+;;;     put-value A1 X2
+;;;     call g/2
+;;;
+;;; So the list of seen registers needs to get cleared after each body goal.
+;;;
+;;; But be careful: it's only TEMPORARY registers that need to get cleared!  If
+;;; the variables in our example WEREN'T different (`p() :- f(X, X), g(X, X)`)
+;;; the instructions would be assigning to stack registers, and we WANT to do
+;;; one `put-variable` and have the rest be `put-value`s.
+;;;
+;;; And there's one more edge case you're probably wondering about: what happens
+;;; after the HEAD of a clause?  Do we need to reset?  The answer is: no,
+;;; because the head and first body goal share registers, which is what performs
+;;; the "substitution" for the first body goal (see the comment earlier for more
+;;; on that rabbit hole).
+
 
 (defun find-opcode (opcode newp mode &optional register)
   (flet ((find-variant (register)
@@ -836,6 +898,9 @@
     (labels
         ((push-instruction (&rest instruction)
            (circle-insert-end instructions instruction))
+         (reset-seen ()
+           ;; Reset the list of seen registers (grep for "clown car" above)
+           (setf seen (remove-if #'register-temporary-p seen)))
          (handle-argument (argument-register source-register)
            ;; OP X_n A_i
            (let ((newp (push-if-new source-register seen :test #'register=)))
@@ -857,7 +922,17 @@
          (handle-call (functor arity)
            ;; CALL functor
            (push-instruction :call
-                             (wam-ensure-functor-index wam (cons functor arity))))
+                             (wam-ensure-functor-index wam (cons functor arity)))
+           ;; This is a little janky, but at this point the body goals have been
+           ;; turned into one single stream of tokens, so we don't have a nice
+           ;; clean way to tell when one ends.  But in practice, a body goal is
+           ;; going to end with a CALL instruction, so we can use this as
+           ;; a kludge to know when to reset.
+           ;;
+           ;; TODO: We should probably dekludge this by emitting an extra "end
+           ;; body goal" token, especially once we add some special forms that
+           ;; might need to do some resetting but not end in a CALL.
+           (reset-seen))
          (handle-register (register)
            ;; OP reg
            (let ((newp (push-if-new register seen :test #'register=)))
@@ -919,7 +994,7 @@
       (find-shared-variables (cons (cons head body-first) body-rest)))))
 
 (defun find-nead-variables (clause)
-  "Return a list of all variables shared by the nead of `clause`.
+  "Return a list of all variables in the nead of `clause`.
 
   The head and neck (first term in the body) are the 'nead'.
 
@@ -928,7 +1003,7 @@
     (list)
     (destructuring-bind (head body-first . body-rest) clause
       (declare (ignore body-rest))
-      (find-shared-variables (list head body-first)))))
+      (find-variables (list head body-first)))))
 
 
 (defun precompile-clause (wam head body)

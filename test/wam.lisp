@@ -203,6 +203,22 @@
       ((narcissist :person)
        ((:person kim))))))
 
+(test register-allocation
+  ;; test for tricky register allocation bullshit
+  (with-fresh-database
+    (fact (a fact-a fact-a))
+    (fact (b fact-b fact-b))
+    (fact (c fact-c fact-c))
+
+    (rule (foo :x)
+          (a :a :a)
+          (b :b :b)
+          (c :c :c))
+
+    (should-return
+      ((foo dogs)
+       (nil)))))
+
 (test lists
   (with-database *test-database*
     (should-fail
@@ -221,7 +237,11 @@
       ((member a (list a))
        (nil))
       ((member (list foo) (list a (list foo) b))
-       (nil)))))
+       (nil)))
+    ;; Check that we can unify against unbound vars that turn into lists
+    (is ((lambda (result)
+           (eql (car (getf result :anything)) 'a))
+         (return-one (member a :anything))))))
 
 (test cut
   (with-fresh-database

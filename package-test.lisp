@@ -24,7 +24,9 @@
     #:with-database
     #:make-database
     #:with-fresh-database
+    #:rule
     #:rules
+    #:fact
     #:facts
     #:return-one
     #:return-all)

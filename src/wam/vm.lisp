@@ -413,7 +413,7 @@
       ;; bind it to a list and flip into write mode to write the upcoming two
       ;; things as its contents.
       ((cell-reference-p cell)
-       (bind! wam addr (push-new-list! wam))
+       (bind! wam addr (nth-value 1 (push-new-list! wam)))
        (setf (wam-mode wam) :write))
 
       ;; If this is a list, we need to unify its subterms.
