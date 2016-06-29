@@ -177,24 +177,38 @@
   (:returns :void)
   "Bind the unbound reference cell to the other.
 
-  `bind!` takes two addresses as arguments.  At least one of these *must* refer
-  to an unbound reference cell.  This unbound reference will be bound to point
-  at the other address.
+  `bind!` takes two addresses as arguments.  You are expected to have `deref`ed
+  previously to obtain these addresses, so neither of them should ever refer to
+  a bound reference.
 
-  If both addresses refer to unbound references, the direction of the binding is
-  chosen arbitrarily.
+  At least one of the arguments *must* refer to an unbound reference cell.  This
+  unbound reference will be bound to point at the other address.
+
+  If *both* addresses refer to unbound references, the direction of the binding
+  is chosen arbitrarily.
 
   "
+  ;; In case it's not absolutely clear from the book: binding has to actually
+  ;; COPY the source cell into the destination.
+  ;;
+  ;; It can't just update the cell value of the destination REF, because if
+  ;; you're binding a REF on the heap to something in a register then doing so
+  ;; would end up with a REF to a register address.  This would be bad because
+  ;; that register would probably get clobbered later, and the REF would now be
+  ;; pointing to garbage.
   (let ((cell-1 (wam-store-cell wam address-1))
         (cell-2 (wam-store-cell wam address-2)))
     (cond
-      ;; a1 <- a2
+      ;; Bind (a1 <- a2) if:
+      ;; 
+      ;; * A1 is a REF and A2 is something else, or...
+      ;; * They're both REFs but A2 has a lower address than A1.
       ((and (cell-reference-p cell-1)
             (or (not (cell-reference-p cell-2))
                 (< address-2 address-1)))
        (setf (wam-store-cell wam address-1) cell-2)
        (trail! wam address-1))
-      ;; a2 <- a1
+      ;; Bind (a2 <- a1) if A2 is a REF and A1 is something else.
       ((cell-reference-p cell-2)
        (setf (wam-store-cell wam address-2) cell-1)
        (trail! wam address-2))
