@@ -100,54 +100,58 @@
 
 
 ;;;; Opcodes
-(define-constant +opcode-noop+ 0)
+(defmacro define-opcodes (&rest symbols)
+  `(progn
+     ,@(loop :for c :from 0
+             :for s :in symbols
+             :collect `(define-constant ,s ,c))
+     (define-constant +number-of-opcodes+ ,(length symbols))))
 
+(define-opcodes
+  +opcode-noop+
 
-;;; Program
-(define-constant +opcode-get-structure+ 1)
-(define-constant +opcode-unify-variable-local+ 2)
-(define-constant +opcode-unify-variable-stack+ 3)
-(define-constant +opcode-unify-value-local+ 4)
-(define-constant +opcode-unify-value-stack+ 5)
-(define-constant +opcode-get-variable-local+ 6)
-(define-constant +opcode-get-variable-stack+ 7)
-(define-constant +opcode-get-value-local+ 8)
-(define-constant +opcode-get-value-stack+ 9)
+  ;; Program
+  +opcode-get-structure+
+  +opcode-unify-variable-local+
+  +opcode-unify-variable-stack+
+  +opcode-unify-value-local+
+  +opcode-unify-value-stack+
+  +opcode-get-variable-local+
+  +opcode-get-variable-stack+
+  +opcode-get-value-local+
+  +opcode-get-value-stack+
 
+  ;; Query
+  +opcode-put-structure+
+  +opcode-set-variable-local+
+  +opcode-set-variable-stack+
+  +opcode-set-value-local+
+  +opcode-set-value-stack+
+  +opcode-put-variable-local+
+  +opcode-put-variable-stack+
+  +opcode-put-value-local+
+  +opcode-put-value-stack+
 
-;;; Query
-(define-constant +opcode-put-structure+ 10)
-(define-constant +opcode-set-variable-local+ 11)
-(define-constant +opcode-set-variable-stack+ 12)
-(define-constant +opcode-set-value-local+ 13)
-(define-constant +opcode-set-value-stack+ 14)
-(define-constant +opcode-put-variable-local+ 15)
-(define-constant +opcode-put-variable-stack+ 16)
-(define-constant +opcode-put-value-local+ 17)
-(define-constant +opcode-put-value-stack+ 18)
+  ;; Control
+  +opcode-call+
+  +opcode-proceed+
+  +opcode-allocate+
+  +opcode-deallocate+
+  +opcode-done+
+  +opcode-try+
+  +opcode-retry+
+  +opcode-trust+
+  +opcode-cut+
 
+  ;; Constants
+  +opcode-get-constant+
+  +opcode-set-constant+
+  +opcode-put-constant+
+  +opcode-unify-constant+
 
-;;; Control
-(define-constant +opcode-call+ 19)
-(define-constant +opcode-proceed+ 20)
-(define-constant +opcode-allocate+ 21)
-(define-constant +opcode-deallocate+ 22)
-(define-constant +opcode-done+ 23)
-(define-constant +opcode-try+ 24)
-(define-constant +opcode-retry+ 25)
-(define-constant +opcode-trust+ 26)
-(define-constant +opcode-cut+ 27)
-
-
-;;; Constants
-(define-constant +opcode-get-constant+ 28)
-(define-constant +opcode-set-constant+ 29)
-(define-constant +opcode-put-constant+ 30)
-(define-constant +opcode-unify-constant+ 31)
-
-;;; Lists
-(define-constant +opcode-get-list+ 32)
-(define-constant +opcode-put-list+ 33)
+  ;; Lists
+  +opcode-get-list+
+  +opcode-put-list+)
 
 
 ;;;; Debug Config
