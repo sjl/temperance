@@ -33,6 +33,7 @@
     (+opcode-put-value-stack+ 3)
 
     (+opcode-call+ 2)
+    (+opcode-dynamic-call+ 1)
     (+opcode-proceed+ 1)
     (+opcode-allocate+ 2)
     (+opcode-deallocate+ 1)
@@ -76,6 +77,7 @@
     (+opcode-put-value-stack+ "PUT-VALUE")
 
     (+opcode-call+ "CALL")
+    (+opcode-dynamic-call+ "DYNAMIC-CALL")
     (+opcode-proceed+ "PROCEED")
     (+opcode-allocate+ "ALLOCATE")
     (+opcode-deallocate+ "DEALLOCATE")
@@ -119,6 +121,7 @@
     (+opcode-put-value-stack+ "PVLU")
 
     (+opcode-call+ "CALL")
+    (+opcode-dynamic-call+ "DYCL")
     (+opcode-proceed+ "PROC")
     (+opcode-allocate+ "ALOC")
     (+opcode-deallocate+ "DEAL")

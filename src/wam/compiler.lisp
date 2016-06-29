@@ -920,9 +920,14 @@
          (handle-cut ()
            (push-instruction :cut))
          (handle-call (functor arity)
-           ;; CALL functor
-           (push-instruction :call
-                             (wam-ensure-functor-index wam (cons functor arity)))
+           (if (and (eq functor 'call)
+                    (= arity 1))
+             ;; DYNAMIC-CALL
+             (push-instruction :dynamic-call)
+             ;; CALL functor
+             (push-instruction
+               :call
+               (wam-ensure-functor-index wam (cons functor arity))))
            ;; This is a little janky, but at this point the body goals have been
            ;; turned into one single stream of tokens, so we don't have a nice
            ;; clean way to tell when one ends.  But in practice, a body goal is
@@ -1250,6 +1255,7 @@
     (:put-list             +opcode-put-list+)
     (:unify-constant       +opcode-unify-constant+)
     (:call                 +opcode-call+)
+    (:dynamic-call         +opcode-dynamic-call+)
     (:proceed              +opcode-proceed+)
     (:allocate             +opcode-allocate+)
     (:deallocate           +opcode-deallocate+)

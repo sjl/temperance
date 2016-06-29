@@ -80,8 +80,15 @@
 
 (defmacro should-return (&body queries)
   `(progn
-     ,@(loop :for (query results) :in queries :collect
-             `(is (results= ',results (q ,query))))))
+    ,@(loop :for (query . results) :in queries
+            :collect
+            `(is (results= ',(cond
+                               ((equal results '(empty))
+                                (list nil))
+                               ((equal results '(fail))
+                                nil)
+                               (t results))
+                           (q ,query))))))
 
 
 ;;;; Tests
@@ -119,6 +126,55 @@
                   (q (listens :who blues)
                      (drinks :who :what))))))
 
+(test simple-unification
+  (with-fresh-database
+    (rule (= :x :x))
+    (should-return
+      ((= x x) empty)
+      ((= x y) fail)
+      ((= :x foo) (:x foo))
+      ((= foo :x) (:x foo))
+      ((= (f (g foo)) :x) (:x (f (g foo))))
+      ((= (f (g foo)) (f :x)) (:x (g foo)))
+      ((= (f :x cats) (f dogs :y)) (:x dogs :y cats))
+      ((= (f :x :x) (f dogs :y)) (:x dogs :y dogs)))))
+
+(test dynamic-call
+  (with-fresh-database
+    (facts (g cats)
+           (g (f dogs)))
+    (rule (normal :x)
+      (g :x))
+    (rule (dynamic :struct)
+      (call :struct))
+    (should-return
+      ((normal foo) fail)
+      ((normal cats) empty)
+      ((g cats) empty)
+      ((call (g cats)) empty)
+      ((call (g (f cats))) fail)
+      ((call (nothing)) fail)
+      ((call (g :x))
+       (:x cats)
+       (:x (f dogs)))
+      ((dynamic (g cats)) empty)
+      ((dynamic (g dogs)) fail)
+      ((dynamic (g (f dogs))) empty)
+      ((dynamic (g :x))
+       (:x cats)
+       (:x (f dogs))))))
+
+(test not
+  (with-fresh-database
+    (facts (yes :anything))
+    (rules ((not :x) (call :x) ! fail)
+           ((not :x)))
+    (should-return
+      ((yes x) empty)
+      ((no x) fail)
+      ((not (yes x)) fail)
+      ((not (no x)) empty))))
+
 (test backtracking
   (with-fresh-database
     (facts (a))
@@ -129,8 +185,7 @@
            ((f :x) (b) (c))
            ((f :x) (d)))
     (should-return
-      ((f foo)
-       (nil))))
+      ((f foo) empty)))
   (with-fresh-database
     ; (facts (a))
     (facts (b))
@@ -140,8 +195,7 @@
            ((f :x) (b) (c))
            ((f :x) (d)))
     (should-return
-      ((f foo)
-       (nil))))
+      ((f foo) empty)))
   (with-fresh-database
     ; (facts (a))
     (facts (b))
@@ -151,8 +205,7 @@
            ((f :x) (b) (c))
            ((f :x) (d)))
     (should-return
-      ((f foo)
-       (nil))))
+      ((f foo) empty)))
   (with-fresh-database
     ; (facts (a))
     ; (facts (b))
@@ -162,8 +215,7 @@
            ((f :x) (b) (c))
            ((f :x) (d)))
     (should-return
-      ((f foo)
-       nil)))
+      ((f foo) fail)))
   (with-fresh-database
     ; (facts (a))
     (facts (b))
@@ -173,8 +225,7 @@
            ((f :x) (b) (c))
            ((f :x) (d)))
     (should-return
-      ((f foo)
-       nil))))
+      ((f foo) fail))))
 
 (test basic-rules
   (with-database *test-database*
@@ -183,25 +234,26 @@
 
     (should-return
       ((pets alice :what)
-       ((:what snakes) (:what cats)))
+       (:what snakes)
+       (:what cats))
 
       ((pets bob :what)
-       ((:what cats)))
+       (:what cats))
 
       ((pets :who snakes)
-       ((:who alice)))
+       (:who alice))
 
       ((likes kim :who)
-       ((:who tom)
-        (:who alice)
-        (:who kim)
-        (:who cats)))
+       (:who tom)
+       (:who alice)
+       (:who kim)
+       (:who cats))
 
       ((likes sally :who)
-       ((:who tom)))
+       (:who tom))
 
       ((narcissist :person)
-       ((:person kim))))))
+       (:person kim)))))
 
 (test register-allocation
   ;; test for tricky register allocation bullshit
@@ -216,8 +268,7 @@
           (c :c :c))
 
     (should-return
-      ((foo dogs)
-       (nil)))))
+      ((foo dogs) empty))))
 
 (test lists
   (with-database *test-database*
@@ -229,15 +280,17 @@
       (member a (list (list a))))
     (should-return
       ((member :m (list a))
-       ((:m a)))
+       (:m a))
       ((member :m (list a b))
-       ((:m a) (:m b)))
+       (:m a)
+       (:m b))
       ((member :m (list a b a))
-       ((:m a) (:m b)))
+       (:m a)
+       (:m b))
       ((member a (list a))
-       (nil))
+       empty)
       ((member (list foo) (list a (list foo) b))
-       (nil)))
+       empty))
     ;; Check that we can unify against unbound vars that turn into lists
     (is ((lambda (result)
            (eql (car (getf result :anything)) 'a))
@@ -255,10 +308,12 @@
     (rules ((g :what) (never))
            ((g :what) (f :what)))
     (should-return
-      ((f :what) ((:what a)
-                  (:what bc)))
-      ((g :what) ((:what a)
-                  (:what bc)))))
+      ((f :what)
+       (:what a)
+       (:what bc))
+      ((g :what)
+       (:what a)
+       (:what bc))))
 
   (with-fresh-database
     ; (facts (a))
@@ -271,8 +326,10 @@
     (rules ((g :what) (never))
            ((g :what) (f :what)))
     (should-return
-      ((f :what) ((:what bc)))
-      ((g :what) ((:what bc)))))
+      ((f :what)
+       (:what bc))
+      ((g :what)
+       (:what bc))))
 
   (with-fresh-database
     ; (facts (a))
@@ -285,8 +342,10 @@
     (rules ((g :what) (never))
            ((g :what) (f :what)))
     (should-return
-      ((f :what) ((:what d)))
-      ((g :what) ((:what d)))))
+      ((f :what)
+       (:what d))
+      ((g :what)
+       (:what d))))
 
   (with-fresh-database
     ; (facts (a))

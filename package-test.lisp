@@ -28,6 +28,7 @@
     #:rules
     #:fact
     #:facts
+    #:call
     #:return-one
     #:return-all)
   (:shadowing-import-from #:bones.wam

@@ -134,6 +134,7 @@
 
   ;; Control
   +opcode-call+
+  +opcode-dynamic-call+
   +opcode-proceed+
   +opcode-allocate+
   +opcode-deallocate+

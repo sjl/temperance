@@ -76,6 +76,14 @@
 
 
 (defmacro with-cell ((address-symbol cell-symbol) wam target &body body)
+  "Bind variables to the (dereferenced) contents of the cell
+
+  `target` should be an address in the WAM store.
+
+  `address-symbol` and `cell-symbol` will be bound to the final address/cell
+  after dereferencing `target.`
+
+  "
   (once-only (wam target)
     `(let* ((,address-symbol (deref ,wam ,target))
             (,cell-symbol (wam-store-cell ,wam ,address-symbol)))
@@ -177,19 +185,22 @@
   chosen arbitrarily.
 
   "
-  (cond
-    ;; a1 <- a2
-    ((unbound-reference-p wam address-1)
-     (setf (wam-store-cell wam address-1)
-           (make-cell-reference address-2))
-     (trail! wam address-1))
-    ;; a2 <- 1a
-    ((unbound-reference-p wam address-2)
-     (setf (wam-store-cell wam address-2)
-           (make-cell-reference address-1))
-     (trail! wam address-2))
-    ;; wut
-    (t (error "At least one cell must be an unbound reference when binding.")))
+  (let ((cell-1 (wam-store-cell wam address-1))
+        (cell-2 (wam-store-cell wam address-2)))
+    (cond
+      ;; a1 <- a2
+      ((and (cell-reference-p cell-1)
+            (or (not (cell-reference-p cell-2))
+                (< address-2 address-1)))
+       (setf (wam-store-cell wam address-1) cell-2)
+       (trail! wam address-1))
+      ;; a2 <- a1
+      ((cell-reference-p cell-2)
+       (setf (wam-store-cell wam address-2) cell-1)
+       (trail! wam address-2))
+      ;; wut
+      (t
+       (error "At least one cell must be an unbound reference when binding."))))
   (values))
 
 (defun* unify! ((wam wam) (a1 store-index) (a2 store-index))
@@ -455,12 +466,13 @@
 
 
 ;;;; Control Instructions
-(define-instruction %call ((wam wam) (functor functor-index))
+(define-instruction %call ((wam wam) (functor functor-index)
+                           &optional (program-counter-increment
+                                       (instruction-size +opcode-call+)))
   (let ((target (wam-code-label wam functor)))
     (if target
       (setf (wam-continuation-pointer wam) ; CP <- next instruction
-            (+ (wam-program-counter wam)
-               (instruction-size +opcode-call+))
+            (+ (wam-program-counter wam) program-counter-increment)
 
             (wam-number-of-arguments wam) ; set NARGS
             (wam-functor-arity wam functor)
@@ -472,6 +484,34 @@
             target)
       ;; Trying to call an unknown procedure.
       (backtrack! wam))))
+
+(define-instruction %dynamic-call ((wam wam))
+  ;; It's assumed that whatever we want to dynamically call has been put in
+  ;; argument register zero.
+  (with-cell (addr cell) wam 0 ; A_0
+    (cond
+      ((cell-structure-p cell)
+       (with-cell (functor-address functor-cell) wam (cell-value cell)
+         (let ((functor (cell-value functor-cell)))
+           ;; If we have a non-zero-arity structure, we need to set up the
+           ;; argument registers before we call it.  Luckily all the arguments
+           ;; conveniently live contiguously right after the functor cell.
+           (loop :with arity = (wam-functor-arity wam functor)
+                 :for argument-register :from 0 :below arity
+                 :for argument-address :from (1+ functor-address)
+                 :do (setf (wam-local-register wam argument-register)
+                           (wam-heap-cell wam argument-address)))
+           (%call wam functor (instruction-size +opcode-dynamic-call+)))))
+      ((cell-constant-p cell)
+       ;; Zero-arity functors don't need to set up anything at all -- we can
+       ;; just call them immediately.
+       (%call wam (cell-value cell) (instruction-size +opcode-dynamic-call+)))
+      ((cell-reference-p cell)
+       ;; It's okay to do (call :var), but :var has to be bound by the time you
+       ;; actually reach it at runtime.
+       (error "Cannot dynamically call an unbound variable."))
+      (t ; You can't (call) anything else.
+       (error "Cannot dynamically call something other than a structure.")))))
 
 (define-instruction %proceed ((wam wam))
   (setf (wam-program-counter wam) ; P <- CP
@@ -732,6 +772,9 @@
               (+opcode-call+
                 (instruction %call 1)
                 (setf increment-pc nil))
+              (+opcode-dynamic-call+
+                (instruction %dynamic-call 0)
+                (setf increment-pc nil))
               (+opcode-done+
                 (if (funcall done-thunk)
                   (return-from run)
@@ -745,7 +788,7 @@
             (setf (wam-backtracked wam) nil
                   increment-pc t)
             (when (>= pc (fill-pointer code))
-              (error "Fell off the end of the program code store!"))))))
+              (error "Fell off the end of the program code store."))))))
     (values)))
 
 (defun run-query (wam term

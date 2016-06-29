@@ -6,3 +6,4 @@
 (2 set-when-unbound)
 (1 recursively)
 (1 when-let)
+(1 rule)
