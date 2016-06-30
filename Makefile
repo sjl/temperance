@@ -5,7 +5,11 @@ docfiles = $(shell ls docs/*.markdown)
 apidoc = docs/03-reference.markdown
 
 test:
-	sbcl-rlwrap --noinform --load test/run.lisp  --eval '(quit)'
+	figlet -kf big 'SBCL'
+	ros run -L sbcl --load test/run.lisp
+
+	figlet -kf big 'CCL'
+	ros run -L ccl-bin --load test/run.lisp
 
 src/quickutils.lisp: src/make-quickutils.lisp
 	cd src && sbcl-rlwrap --noinform --load make-quickutils.lisp  --eval '(quit)'

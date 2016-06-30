@@ -15,4 +15,6 @@
 (test :bones.wam)
 (test :bones.circle)
 
-(sb-ext:exit :code (if *passed* 0 1))
+(let ((exit-code (if *passed* 0 1)))
+  #+sbcl (sb-ext:exit :code exit-code)
+  #+ccl (quit exit-code))
