@@ -1,11 +1,13 @@
 (in-package #:bones.wam)
 (named-readtables:in-readtable :fare-quasiquote)
 
+
 ;;;; Utils
 (declaim (inline variablep))
 (defun* variablep (term)
   (:returns boolean)
-  (keywordp term))
+  (and (symbolp term)
+       (char= (char (symbol-name term) 0) #\?)))
 
 
 ;;;; Registers
@@ -101,7 +103,7 @@
 
 (defclass variable-node (vanilla-node)
   ((variable :accessor node-variable
-             :type keyword
+             :type symbol
              :initarg :variable)))
 
 (defclass argument-variable-node (variable-node)
@@ -244,7 +246,7 @@
 
 (defun parse (term &optional top-level-argument)
   (cond
-    ((keywordp term)
+    ((variablep term)
      (if top-level-argument
        (make-argument-variable-node term)
        (make-variable-node term)))
