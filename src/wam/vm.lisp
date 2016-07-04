@@ -359,6 +359,10 @@
      (register register-index))
   (wam-heap-push! wam (%wam-register% wam register)))
 
+(define-instruction %set-void ((wam wam) (n arity))
+  (repeat n
+    (push-unbound-reference! wam)))
+
 (define-instructions (%put-variable-local %put-variable-stack)
     ((wam wam)
      (register register-index)
@@ -464,6 +468,12 @@
     (:read (unify! wam register (wam-subterm wam)))
     (:write (wam-heap-push! wam (%wam-register% wam register))))
   (incf (wam-subterm wam)))
+
+(define-instruction %unify-void ((wam wam) (n arity))
+  (ecase (wam-mode wam)
+    (:read (incf (wam-subterm wam) n))
+    (:write (repeat n
+              (push-unbound-reference! wam)))))
 
 (define-instructions (%get-variable-local %get-variable-stack)
     ((wam wam)
@@ -746,6 +756,7 @@
               (+opcode-set-variable-stack+   (instruction %set-variable-stack 1))
               (+opcode-set-value-local+      (instruction %set-value-local 1))
               (+opcode-set-value-stack+      (instruction %set-value-stack 1))
+              (+opcode-set-void+             (instruction %set-void 1))
               (+opcode-put-variable-local+   (instruction %put-variable-local 2))
               (+opcode-put-variable-stack+   (instruction %put-variable-stack 2))
               (+opcode-put-value-local+      (instruction %put-value-local 2))
@@ -756,6 +767,7 @@
               (+opcode-unify-variable-stack+ (instruction %unify-variable-stack 1))
               (+opcode-unify-value-local+    (instruction %unify-value-local 1))
               (+opcode-unify-value-stack+    (instruction %unify-value-stack 1))
+              (+opcode-unify-void+           (instruction %unify-void 1))
               (+opcode-get-variable-local+   (instruction %get-variable-local 2))
               (+opcode-get-variable-stack+   (instruction %get-variable-stack 2))
               (+opcode-get-value-local+      (instruction %get-value-local 2))

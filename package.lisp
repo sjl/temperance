@@ -14,6 +14,7 @@
     #:recursively
     #:recur
     #:when-let
+    #:unique-items
     ))
 
 (defpackage #:bones.circle

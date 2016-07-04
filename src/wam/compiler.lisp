@@ -4,6 +4,7 @@
 
 ;;;; Utils
 (declaim (inline variablep))
+
 (defun* variablep (term)
   (:returns boolean)
   (and (symbolp term)
@@ -12,7 +13,7 @@
 
 ;;;; Registers
 (deftype register-type ()
-  '(member :argument :local :permanent))
+  '(member :argument :local :permanent :anonymous))
 
 (deftype register-number ()
   `(integer 0 ,(1- +register-count+)))
@@ -21,7 +22,7 @@
 (declaim (inline register-type register-number))
 (defstruct (register (:constructor make-register (type number)))
   (type :local :type register-type)
-   (number 0 :type register-number))
+  (number 0 :type register-number))
 
 
 (defun* make-temporary-register ((number register-number) (arity arity))
@@ -29,20 +30,25 @@
   (make-register (if (< number arity) :argument :local)
                  number))
 
-(defun* make-permanent-register ((number register-number) (arity arity))
+(defun* make-permanent-register ((number register-number))
   (:returns register)
-  (declare (ignore arity))
   (make-register :permanent number))
+
+(defun* make-anonymous-register ()
+  (:returns register)
+  (make-register :anonymous 0))
 
 
 (defun* register-to-string ((register register))
-  (format nil "~A~D"
-          (ecase (register-type register)
-            (:argument #\A)
-            (:local #\X)
-            (:permanent #\Y))
-          (+ (register-number register)
-             (if *off-by-one* 1 0))))
+  (if (eq (register-type register) :anonymous)
+    "__"
+    (format nil "~A~D"
+            (ecase (register-type register)
+              (:argument #\A)
+              (:local #\X)
+              (:permanent #\Y))
+            (+ (register-number register)
+               (if *off-by-one* 1 0)))))
 
 (defmethod print-object ((object register) stream)
   (print-unreadable-object (object stream :identity nil :type nil)
@@ -51,15 +57,19 @@
 
 (declaim (inline register-argument-p
                  register-temporary-p
-                 register-permanent-p))
+                 register-permanent-p
+                 register-anonymous-p))
 (defun* register-argument-p ((register register))
-  (eql (register-type register) :argument))
+  (eq (register-type register) :argument))
 
 (defun* register-temporary-p ((register register))
   (member (register-type register) '(:argument :local)))
 
 (defun* register-permanent-p ((register register))
-  (eql (register-type register) :permanent))
+  (eq (register-type register) :permanent))
+
+(defun* register-anonymous-p ((register register))
+  (eq (register-type register) :anonymous))
 
 
 (declaim (inline register=))
@@ -134,7 +144,10 @@
   (make-instance 'variable-node :variable variable))
 
 (defun make-argument-variable-node (variable)
-  (make-instance 'argument-variable-node :variable variable))
+  (make-instance 'argument-variable-node
+                 :variable (if (eq variable +wildcard-symbol+)
+                             (gensym "?")
+                             variable)))
 
 (defun make-list-node (head tail)
   (make-instance 'list-node :head head :tail tail))
@@ -268,6 +281,108 @@
       (make-top-level-node functor (length arguments)
                            (mapcar (lambda (a) (parse a t))
                                    arguments)))))
+
+
+;;;; Clause Properties
+;;; When tokenizing/precompiling a clause there are a few pieces of metadata
+;;; we're going to need.  We group them into a struct to make it easier to pass
+;;; everything around.
+
+(defstruct (clause-properties (:conc-name clause-))
+  (nead-vars nil :type list)
+  (nead-arity 0 :type arity)
+  (permanent-vars nil :type list)
+  (anonymous-vars nil :type list))
+
+
+(defun find-variables (terms)
+  "Return the set of variables in `terms`."
+  (remove-duplicates (tree-collect #'variablep terms)))
+
+(defun find-shared-variables (terms)
+  "Return the set of all variables shared by two or more terms."
+  (labels
+      ((count-uses (variable)
+         (count-if (curry #'tree-member-p variable) terms))
+       (shared-p (variable)
+         (> (count-uses variable) 1)))
+    (remove-if-not #'shared-p (find-variables terms))))
+
+(defun find-permanent-variables (clause)
+  "Return a list of all the permanent variables in `clause`.
+
+  Permanent variables are those that appear in more than one goal of the clause,
+  where the head of the clause is considered to be a part of the first goal.
+
+  "
+  (if (<= (length clause) 2)
+    (list) ; Facts and chain rules have no permanent variables at all
+    (destructuring-bind (head body-first . body-rest) clause
+      ;; The head is treated as part of the first goal for the purposes of
+      ;; finding permanent variables.
+      (find-shared-variables (cons (cons head body-first) body-rest)))))
+
+(defun find-nead-variables (clause)
+  "Return a list of all variables in the nead of `clause`.
+
+  The head and neck (first term in the body) are the 'nead'.
+
+  "
+  (if (<= (length clause) 1)
+    (list)
+    (destructuring-bind (head body-first . body-rest) clause
+      (declare (ignore body-rest))
+      (find-variables (list head body-first)))))
+
+(defun find-anonymous-variables (clause)
+  "Return a list of all anonymous variables in `clause`.
+
+  Anonymous variables are non-argument-position variables that are only ever
+  used once.
+
+  "
+  ;; clause: ((member :x (list* :y :rest)) ;-
+  ;;          (member :x :rest))
+  ;;
+  ;; terms: (member :x (list* :y :rest))
+  ;;        (member :x :rest)
+  (flet ((argument-variables (term)
+           (remove-if-not #'variablep (cdr term)))
+         (non-argument-variables (term)
+           (loop :for argument :in (cdr term)
+                 :when (consp argument)
+                 :append (tree-collect #'variablep (cdr argument)))))
+    (let ((terms (remove-if-not #'consp clause)))
+      (set-difference (unique-items (mapcan #'non-argument-variables terms))
+                      (mapcan #'argument-variables terms)))))
+
+
+(defun determine-clause-properties (head body)
+  (let* ((clause
+           (cons head body))
+         (permanent-vars
+           (if (null head)
+             ;; For query clauses we cheat a bit and make ALL variables
+             ;; permanent, so we can extract their bindings as results later.
+             (find-variables body)
+             (find-permanent-variables clause)))
+         (anonymous-vars
+           (if (null head)
+             ;; Again, for queries we cheat and never let anything be
+             ;; anonymous (except for the wildcard).
+             (list +wildcard-symbol+)
+             (cons +wildcard-symbol+
+                   (find-anonymous-variables clause))))
+         (nead-vars
+           (set-difference (find-nead-variables clause)
+                           permanent-vars))
+         (nead-arity
+           (max (1- (length head))
+                (1- (length (first (remove '! body))))))) ; gross
+    (make-clause-properties :nead-vars nead-vars
+                            :nead-arity nead-arity
+                            :permanent-vars permanent-vars
+                            :anonymous-vars anonymous-vars)))
 
 
 ;;;; Register Allocation
@@ -406,6 +521,7 @@
   local-registers
   stack-registers
   permanent-variables
+  anonymous-variables
   reserved-variables
   reserved-arity
   actual-arity)
@@ -416,7 +532,7 @@
   (or (when-let (r (position variable (allocation-state-local-registers state)))
         (make-temporary-register r (allocation-state-actual-arity state)))
       (when-let (s (position variable (allocation-state-stack-registers state)))
-        (make-permanent-register s (allocation-state-actual-arity state)))
+        (make-permanent-register s))
       nil))
 
 (defun store-variable (state variable)
@@ -443,6 +559,7 @@
     `(when (not (slot-boundp ,instance ,slot))
        (setf (slot-value ,instance ,slot) ,value-form))))
 
+
 (defun allocate-nonvariable-register (state)
   "Allocate and return a register for something that's not a variable."
   ;; We need to allocate registers for things like structures and lists, but we
@@ -462,7 +579,10 @@
 
 (defmethod allocate-register ((node variable-node) state)
   (set-when-unbound node 'register
-    (ensure-variable state (node-variable node))))
+    (if (member (node-variable node)
+                (allocation-state-anonymous-variables state))
+      (make-anonymous-register)
+      (ensure-variable state (node-variable node)))))
 
 (defmethod allocate-register ((node argument-variable-node) state)
   (set-when-unbound node 'secondary-register
@@ -484,11 +604,15 @@
                   (make-register :argument i)))
   (values))
 
-(defun allocate-nonargument-registers
-    (node permanent-variables reserved-variables reserved-arity)
+(defun allocate-nonargument-registers (node clause-props &key nead)
   ;; JESUS TAKE THE WHEEL
   (let*
       ((actual-arity (node-arity node))
+       (reserved-arity (when nead
+                         (clause-nead-arity clause-props)))
+       (reserved-variables (when nead
+                             (clause-nead-vars clause-props)))
+       (permanent-variables (clause-permanent-vars clause-props))
        ;; Preallocate enough registers for all of the arguments.  We'll fill
        ;; them in later.  Note that things are more complicated in the head and
        ;; first body term of a clause (see above).
@@ -504,13 +628,15 @@
        ;; flattened away anyway.
        (stack-registers (make-array (length permanent-variables)
                           :initial-contents permanent-variables))
-       (allocation-state (make-allocation-state
-                           :local-registers local-registers
-                           :stack-registers stack-registers
-                           :permanent-variables permanent-variables
-                           :reserved-variables reserved-variables
-                           :reserved-arity reserved-arity
-                           :actual-arity actual-arity)))
+       (allocation-state
+         (make-allocation-state
+           :local-registers local-registers
+           :stack-registers stack-registers
+           :permanent-variables permanent-variables
+           :anonymous-variables (clause-anonymous-vars clause-props)
+           :reserved-variables reserved-variables
+           :reserved-arity reserved-arity
+           :actual-arity actual-arity)))
     ;; Actually reserve the reserved (but non-permanent, see above) variables.
     ;; They need to live in consistent spots for the head and first body term.
     (loop :for variable :in reserved-variables
@@ -522,11 +648,9 @@
           (recur (append remaining (node-children node)))))))
   (values))
 
-(defun allocate-registers
-    (node permanent-variables &optional reserved-variables reserved-arity)
+(defun allocate-registers (node clause-props &key nead)
   (allocate-argument-registers node)
-  (allocate-nonargument-registers
-    node permanent-variables reserved-variables reserved-arity)
+  (allocate-nonargument-registers node clause-props :nead nead)
   (values))
 
 
@@ -733,18 +857,16 @@
   (mapcan #'tokenize-assignment assignments))
 
 
-(defun tokenize-program-term
-    (term permanent-variables nead-variables nead-arity)
+(defun tokenize-program-term (term clause-props)
   "Tokenize `term` as a program term, returning its tokens."
   (let ((tree (parse-top-level term)))
-    (allocate-registers tree permanent-variables nead-variables nead-arity)
+    (allocate-registers tree clause-props :nead t)
     (-> tree flatten-program tokenize-assignments)))
 
-(defun tokenize-query-term
-    (term permanent-variables &optional nead-variables nead-arity)
+(defun tokenize-query-term (term clause-props &key nead)
   "Tokenize `term` as a query term, returning its tokens."
   (let ((tree (parse-top-level term)))
-    (allocate-registers tree permanent-variables nead-variables nead-arity)
+    (allocate-registers tree clause-props :nead nead)
     (-<> tree
       flatten-query
       tokenize-assignments
@@ -851,35 +973,55 @@
 ;;; the "substitution" for the first body goal (see the comment earlier for more
 ;;; on that rabbit hole).
 
-
-(defun find-opcode (opcode newp mode &optional register)
-  (flet ((find-variant (register)
-           (when register
-             (if (register-temporary-p register)
-               :local
-               :stack))))
-    (eswitch ((list opcode newp mode (find-variant register)) :test #'equal)
-      ('(:argument t   :program :local) :get-variable-local)
-      ('(:argument t   :program :stack) :get-variable-stack)
-      ('(:argument t   :query   :local) :put-variable-local)
-      ('(:argument t   :query   :stack) :put-variable-stack)
-      ('(:argument nil :program :local) :get-value-local)
-      ('(:argument nil :program :stack) :get-value-stack)
-      ('(:argument nil :query   :local) :put-value-local)
-      ('(:argument nil :query   :stack) :put-value-stack)
+(defun find-opcode (opcode first-seen mode &optional register)
+  (let ((register-variant (when register
+                            (case (register-type register)
+                              ((:local :argument) :local)
+                              ((:permanent) :stack)
+                              ((:anonymous) :void)))))
+    (case opcode ; oh fuck off
+      (:argument (if first-seen
+                   (case mode
+                     (:program (case register-variant
+                                 (:local :get-variable-local)
+                                 (:stack :get-variable-stack)))
+                     (:query (case register-variant
+                               (:local :put-variable-local)
+                               (:stack :put-variable-stack))))
+                   (case mode
+                     (:program (case register-variant
+                                 (:local :get-value-local)
+                                 (:stack :get-value-stack)))
+                     (:query (case register-variant
+                               (:local :put-value-local)
+                               (:stack :put-value-stack))))))
       ;; Structures and lists can only live locally, they never go on the stack
-      ('(:structure nil :program :local) :get-structure)
-      ('(:structure nil :query   :local) :put-structure)
-      ('(:list      nil :program :local) :get-list)
-      ('(:list      nil :query   :local) :put-list)
-      ('(:register t   :program :local) :unify-variable-local)
-      ('(:register t   :program :stack) :unify-variable-stack)
-      ('(:register t   :query   :local) :set-variable-local)
-      ('(:register t   :query   :stack) :set-variable-stack)
-      ('(:register nil :program :local) :unify-value-local)
-      ('(:register nil :program :stack) :unify-value-stack)
-      ('(:register nil :query   :local) :set-value-local)
-      ('(:register nil :query   :stack) :set-value-stack))))
+      (:structure (case mode
+                    (:program :get-structure)
+                    (:query :put-structure)))
+      (:list (case mode
+               (:program :get-list)
+               (:query :put-list)))
+      (:register (if first-seen
+                   (case mode
+                     (:program (case register-variant
+                                 (:local :unify-variable-local)
+                                 (:stack :unify-variable-stack)
+                                 (:void :unify-void)))
+                     (:query (case register-variant
+                               (:local :set-variable-local)
+                               (:stack :set-variable-stack)
+                               (:void :set-void))))
+                   (case mode
+                     (:program (case register-variant
+                                 (:local :unify-value-local)
+                                 (:stack :unify-value-stack)
+                                 (:void :unify-void)))
+                     (:query (case register-variant
+                               (:local :set-value-local)
+                               (:stack :set-value-stack)
+                               (:void :set-void)))))))))
+
 
 (defun precompile-tokens (wam head-tokens body-tokens)
   "Generate a series of machine instructions from a stream of head and body
@@ -942,9 +1084,12 @@
            (reset-seen))
          (handle-register (register)
            ;; OP reg
-           (let ((newp (push-if-new register seen :test #'register=)))
-             (push-instruction (find-opcode :register newp mode register)
-                               register)))
+           (if (eq (register-type register) :anonymous)
+             (push-instruction (find-opcode :register nil mode register) 1)
+             (let ((first-seen (push-if-new register seen :test #'register=)))
+               (push-instruction
+                 (find-opcode :register first-seen mode register)
+                 register))))
          (handle-token (token)
            (etypecase token
              (argument-variable-token
@@ -973,46 +1118,6 @@
       instructions)))
 
 
-(defun find-variables (terms)
-  "Return the set of variables in `terms`."
-  (remove-duplicates (tree-collect #'variablep terms)))
-
-(defun find-shared-variables (terms)
-  "Return the set of all variables shared by two or more terms."
-  (labels
-      ((count-uses (variable)
-         (count-if (curry #'tree-member-p variable) terms))
-       (shared-p (variable)
-         (> (count-uses variable) 1)))
-    (remove-if-not #'shared-p (find-variables terms))))
-
-(defun find-permanent-variables (clause)
-  "Return a list of all the permanent variables in `clause`.
-
-  Permanent variables are those that appear in more than one goal of the clause,
-  where the head of the clause is considered to be a part of the first goal.
-
-  "
-  (if (<= (length clause) 2)
-    (list) ; Facts and chain rules have no permanent variables at all
-    (destructuring-bind (head body-first . body-rest) clause
-      ;; The head is treated as part of the first goal for the purposes of
-      ;; finding permanent variables.
-      (find-shared-variables (cons (cons head body-first) body-rest)))))
-
-(defun find-nead-variables (clause)
-  "Return a list of all variables in the nead of `clause`.
-
-  The head and neck (first term in the body) are the 'nead'.
-
-  "
-  (if (<= (length clause) 1)
-    (list)
-    (destructuring-bind (head body-first . body-rest) clause
-      (declare (ignore body-rest))
-      (find-variables (list head body-first)))))
-
-
 (defun precompile-clause (wam head body)
   "Precompile the clause.
 
@@ -1021,30 +1126,14 @@
 
   `body` is the body of the clause, or `nil` for facts.
 
-  Returns a circle of instructions and the permanent variables.
+  Returns a circle of instructions and the properties of the clause.
 
   "
-  (let* ((basic-clause
-           (remove '! (cons head body))) ; gross
-         (permanent-variables
-           (if (null head)
-             ;; For query clauses we cheat a bit and make ALL variables
-             ;; permanent, so we can extract their bindings as results later.
-             (find-variables body)
-             (find-permanent-variables basic-clause)))
-         ;; grep above to see what the hell the nead is.
-         (nead-variables
-           (set-difference (find-nead-variables basic-clause)
-                           permanent-variables))
-         (nead-arity
-           (max (1- (length head))
-                (1- (length (second basic-clause)))))
+  (let* ((clause-props
+           (determine-clause-properties head body))
          (head-tokens
            (when head
-             (tokenize-program-term head
-                                    permanent-variables
-                                    nead-variables
-                                    nead-arity)))
+             (tokenize-program-term head clause-props)))
          (body-tokens
            (when body
              (loop
@@ -1058,14 +1147,12 @@
                   (list (make-instance 'cut-token)))
                  (first
                   (setf first nil)
-                  (tokenize-query-term goal
-                                       permanent-variables
-                                       nead-variables
-                                       nead-arity))
+                  (tokenize-query-term goal clause-props
+                                       :nead t))
                  (t
-                  (tokenize-query-term goal permanent-variables)))))))
+                  (tokenize-query-term goal clause-props)))))))
     (let ((instructions (precompile-tokens wam head-tokens body-tokens))
-          (variable-count (length permanent-variables)))
+          (variable-count (length (clause-permanent-vars clause-props))))
       ;; We need to compile facts and rules differently.  Facts end with
       ;; a PROCEED and rules are wrapped in ALOC/DEAL.
       (cond
@@ -1085,7 +1172,7 @@
          ;; can poke at it.
          (circle-insert-beginning instructions `(:allocate ,variable-count))
          (circle-insert-end instructions `(:done))))
-      (values instructions permanent-variables))))
+      (values instructions clause-props))))
 
 
 (defun precompile-query (wam query)
@@ -1094,7 +1181,10 @@
   `query` should be a list of goal terms.
 
   "
-  (precompile-clause wam nil query))
+  (multiple-value-bind (instructions clause-props)
+      (precompile-clause wam nil query)
+    (values instructions
+            (clause-permanent-vars clause-props))))
 
 
 (defun find-arity (rule)
@@ -1222,8 +1312,35 @@
     instructions))
 
 
+(defun optimize-void-runs (wam instructions)
+  ;; We can optimize runs of N (:[unify/set]-void 1) instructions into a single
+  ;; one that does all N at once.
+  (declare (ignore wam))
+  (loop
+    :for node = (circle-forward instructions) :then (circle-forward node)
+    :while node
+    :for opcode = (car (circle-value node))
+    :when (or (eq opcode :set-void)
+              (eq opcode :unify-void))
+    :do
+    (loop
+      :with beginning = (circle-backward node)
+      :for run-node = node :then (circle-forward run-node)
+      :for run-opcode = (car (circle-value run-node))
+      :while (eq opcode run-opcode)
+      :do (circle-remove run-node)
+      :sum 1 :into run-length
+      :finally
+      (progn
+        (setf node (circle-forward beginning))
+        (circle-insert-after beginning
+                             `(,opcode ,run-length))))))
+
+
 (defun optimize-instructions (wam instructions)
-  (optimize-constants wam instructions))
+  (->> instructions
+    (optimize-constants wam)
+    (optimize-void-runs wam)))
 
 
 ;;;; Rendering
@@ -1237,6 +1354,7 @@
     (:unify-variable-stack +opcode-unify-variable-stack+)
     (:unify-value-local    +opcode-unify-value-local+)
     (:unify-value-stack    +opcode-unify-value-stack+)
+    (:unify-void           +opcode-unify-void+)
     (:get-variable-local   +opcode-get-variable-local+)
     (:get-variable-stack   +opcode-get-variable-stack+)
     (:get-value-local      +opcode-get-value-local+)
@@ -1246,6 +1364,7 @@
     (:set-variable-stack   +opcode-set-variable-stack+)
     (:set-value-local      +opcode-set-value-local+)
     (:set-value-stack      +opcode-set-value-stack+)
+    (:set-void             +opcode-set-void+)
     (:put-variable-local   +opcode-put-variable-local+)
     (:put-variable-stack   +opcode-put-variable-stack+)
     (:put-value-local      +opcode-put-value-local+)

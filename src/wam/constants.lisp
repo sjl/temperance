@@ -99,6 +99,9 @@
   :documentation "The maximum number of functors the WAM can keep track of.")
 
 
+(define-constant +wildcard-symbol+ '?)
+
+
 ;;;; Opcodes
 (defmacro define-opcodes (&rest symbols)
   `(progn
@@ -116,6 +119,7 @@
   +opcode-unify-variable-stack+
   +opcode-unify-value-local+
   +opcode-unify-value-stack+
+  +opcode-unify-void+
   +opcode-get-variable-local+
   +opcode-get-variable-stack+
   +opcode-get-value-local+
@@ -127,6 +131,7 @@
   +opcode-set-variable-stack+
   +opcode-set-value-local+
   +opcode-set-value-stack+
+  +opcode-set-void+
   +opcode-put-variable-local+
   +opcode-put-variable-stack+
   +opcode-put-value-local+

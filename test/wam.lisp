@@ -52,9 +52,7 @@
       (rules ((narcissist ?person)
               (likes ?person ?person)))
 
-      (rules ((member ?x (list* ?x ?rest)))
-             ((member ?x (list* ?y ?rest))
-              (member ?x ?rest))))
+      )
     db))
 
 (defparameter *test-database* (make-test-database))
@@ -271,7 +269,11 @@
       ((foo dogs) empty))))
 
 (test lists
-  (with-database *test-database*
+  (with-fresh-database
+    (rules ((member ?x (list* ?x ?)))
+           ((member ?x (list* ? ?rest))
+            (member ?x ?rest)))
+
     (should-fail
       (member ?anything nil)
       (member a nil)
@@ -375,3 +377,13 @@
       (f ?what)
       (g ?what))))
 
+(test anonymous-variables
+  (with-fresh-database
+    (fact (foo x))
+    (rule (bar (baz ?x ?y ?z ?thing))
+          (foo ?thing))
+    (fact (wild ? ? ?))
+    (should-return
+      ((bar (baz a b c no)) fail)
+      ((bar (baz a b c ?what)) (?what x))
+      ((wild a b c) empty))))

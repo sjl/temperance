@@ -43,6 +43,19 @@
      (when ,symbol ,@body)))
 
 
+(defun unique-items (list)
+  (loop
+    :with once = nil
+    :with seen = nil
+    :for item :in list
+    :do (if (member item seen)
+          (when (member item once)
+            (setf once (delete item once)))
+          (progn (push item seen)
+                 (push item once)))
+    :finally (return once)))
+
+
 ;;;; loop/recur
 (defmacro recursively (bindings &body body)
   "Execute body recursively, like Clojure's `loop`/`recur`.

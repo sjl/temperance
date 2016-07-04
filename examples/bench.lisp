@@ -19,11 +19,11 @@
     (load "examples/ggp-wam.lisp")))
 
 (defun run-test% ()
-  (format t "PAIP (Compiled) --------------------~%")
-  (time (paiprolog-test::dfs-exhaust))
+  ; (format t "PAIP (Compiled) --------------------~%")
+  ; (time (paiprolog-test::dfs-exhaust))
 
-  (format t "PAIP (Interpreted) -----------------~%")
-  (time (bones.paip::dfs-exhaust))
+  ; (format t "PAIP (Interpreted) -----------------~%")
+  ; (time (bones.paip::dfs-exhaust))
 
   (format t "WAM --------------------------------~%")
   (time (bones.wam::dfs-exhaust)))

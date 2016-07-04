@@ -10,6 +10,7 @@
 
   "
   (eswitch (opcode)
+    ;; TODO: make this thing a jump table somehow...
     (+opcode-noop+ 1)
 
     (+opcode-get-structure+ 3)
@@ -17,6 +18,7 @@
     (+opcode-unify-variable-stack+ 2)
     (+opcode-unify-value-local+ 2)
     (+opcode-unify-value-stack+ 2)
+    (+opcode-unify-void+ 2)
     (+opcode-get-variable-local+ 3)
     (+opcode-get-variable-stack+ 3)
     (+opcode-get-value-local+ 3)
@@ -27,6 +29,7 @@
     (+opcode-set-variable-stack+ 2)
     (+opcode-set-value-local+ 2)
     (+opcode-set-value-stack+ 2)
+    (+opcode-set-void+ 2)
     (+opcode-put-variable-local+ 3)
     (+opcode-put-variable-stack+ 3)
     (+opcode-put-value-local+ 3)
@@ -61,6 +64,7 @@
     (+opcode-unify-variable-stack+ "UNIFY-VARIABLE")
     (+opcode-unify-value-local+ "UNIFY-VALUE")
     (+opcode-unify-value-stack+ "UNIFY-VALUE")
+    (+opcode-unify-void+ "UNIFY-VOID")
     (+opcode-get-variable-local+ "GET-VARIABLE")
     (+opcode-get-variable-stack+ "GET-VARIABLE")
     (+opcode-get-value-local+ "GET-VALUE")
@@ -71,6 +75,7 @@
     (+opcode-set-variable-stack+ "SET-VARIABLE")
     (+opcode-set-value-local+ "SET-VALUE")
     (+opcode-set-value-stack+ "SET-VALUE")
+    (+opcode-set-void+ "SET-VOID")
     (+opcode-put-variable-local+ "PUT-VARIABLE")
     (+opcode-put-variable-stack+ "PUT-VARIABLE")
     (+opcode-put-value-local+ "PUT-VALUE")
@@ -105,6 +110,7 @@
     (+opcode-unify-variable-stack+ "UVAR")
     (+opcode-unify-value-local+ "UVLU")
     (+opcode-unify-value-stack+ "UVLU")
+    (+opcode-unify-void+ "UVOI")
     (+opcode-get-variable-local+ "GVAR")
     (+opcode-get-variable-stack+ "GVAR")
     (+opcode-get-value-local+ "GVLU")
@@ -115,6 +121,7 @@
     (+opcode-set-variable-stack+ "SVAR")
     (+opcode-set-value-local+ "SVLU")
     (+opcode-set-value-stack+ "SVLU")
+    (+opcode-set-void+ "SVOI")
     (+opcode-put-variable-local+ "PVAR")
     (+opcode-put-variable-stack+ "PVAR")
     (+opcode-put-value-local+ "PVLU")
