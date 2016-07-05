@@ -2,7 +2,7 @@
 ;;;; See http://quickutil.org for details.
 
 ;;;; To regenerate:
-;;;; (qtlc:save-utils-as "quickutils.lisp" :utilities '(:DEFINE-CONSTANT :SET-EQUAL :CURRY :SWITCH :ENSURE-BOOLEAN :WHILE :UNTIL :TREE-MEMBER-P :TREE-COLLECT :WITH-GENSYMS :ONCE-ONLY :ZIP :ALIST-TO-HASH-TABLE :MAP-TREE :WEAVE :RANGE :ALIST-PLIST) :ensure-package T :package "BONES.QUICKUTILS")
+;;;; (qtlc:save-utils-as "quickutils.lisp" :utilities '(:DEFINE-CONSTANT :SET-EQUAL :CURRY :SWITCH :ENSURE-BOOLEAN :WHILE :UNTIL :TREE-MEMBER-P :TREE-COLLECT :WITH-GENSYMS :ONCE-ONLY :ZIP :ALIST-TO-HASH-TABLE :MAP-TREE :WEAVE :RANGE :ALIST-PLIST :EQUIVALENCE-CLASSES :MAP-PRODUCT) :ensure-package T :package "BONES.QUICKUTILS")
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (unless (find-package "BONES.QUICKUTILS")
@@ -21,7 +21,9 @@
                                          :TREE-MEMBER-P :TREE-COLLECT
                                          :ONCE-ONLY :TRANSPOSE :ZIP
                                          :ALIST-TO-HASH-TABLE :MAP-TREE :WEAVE
-                                         :RANGE :SAFE-ENDP :ALIST-PLIST))))
+                                         :RANGE :SAFE-ENDP :ALIST-PLIST
+                                         :EQUIVALENCE-CLASSES :MAPPEND
+                                         :MAP-PRODUCT))))
 
   (defun %reevaluate-constant (name value test)
     (if (not (boundp name))
@@ -366,10 +368,64 @@ property list PLIST in the same order."
           ((safe-endp tail) (nreverse alist))
         (push (cons (car tail) (cadr tail)) alist))))
   
+
+  (defun equivalence-classes (equiv seq)
+    "Partition the sequence `seq` into a list of equivalence classes
+defined by the equivalence relation `equiv`."
+    (let ((classes nil))
+      (labels ((find-equivalence-class (x)
+                 (member-if (lambda (class)
+                              (funcall equiv x (car class)))
+                            classes))
+               
+               (add-to-class (x)
+                 (let ((class (find-equivalence-class x)))
+                   (if class
+                       (push x (car class))
+                       (push (list x) classes)))))
+        (declare (dynamic-extent (function find-equivalence-class)
+                                 (function add-to-class))
+                 (inline find-equivalence-class
+                         add-to-class))
+        
+        ;; Partition into equivalence classes.
+        (map nil #'add-to-class seq)
+        
+        ;; Return the classes.
+        classes)))
+  
+
+  (defun mappend (function &rest lists)
+    "Applies `function` to respective element(s) of each `list`, appending all the
+all the result list to a single list. `function` must return a list."
+    (loop for results in (apply #'mapcar function lists)
+          append results))
+  
+
+  (defun map-product (function list &rest more-lists)
+    "Returns a list containing the results of calling `function` with one argument
+from `list`, and one from each of `more-lists` for each combination of arguments.
+In other words, returns the product of `list` and `more-lists` using `function`.
+
+Example:
+
+    (map-product 'list '(1 2) '(3 4) '(5 6))
+     => ((1 3 5) (1 3 6) (1 4 5) (1 4 6)
+         (2 3 5) (2 3 6) (2 4 5) (2 4 6))"
+    (labels ((%map-product (f lists)
+               (let ((more (cdr lists))
+                     (one (car lists)))
+                 (if (not more)
+                     (mapcar f one)
+                     (mappend (lambda (x)
+                                (%map-product (curry f x) more))
+                              one)))))
+      (%map-product (ensure-function function) (cons list more-lists))))
+  
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (export '(define-constant set-equal curry switch eswitch cswitch
             ensure-boolean while until tree-member-p tree-collect with-gensyms
             with-unique-names once-only zip alist-to-hash-table map-tree weave
-            range alist-plist plist-alist)))
+            range alist-plist plist-alist equivalence-classes map-product)))
 
 ;;;; END OF quickutils.lisp ;;;;

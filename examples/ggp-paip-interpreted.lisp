@@ -1,17 +1,61 @@
 (in-package #:bones.paip)
 
+;;;; Queues
+(deftype queue () '(cons list list))
+(declaim (inline queue-contents make-queue
+                 enqueue dequeue
+                 queue-empty-p queue-append))
+
+
+(defun* queue-contents ((q queue))
+  (:returns list)
+  (cdr q))
+
+(defun* make-queue ()
+  (:returns queue)
+  (let ((q (cons nil nil)))
+    (setf (car q) q)))
+
+(defun* enqueue ((item t) (q queue))
+  (:returns queue)
+  (setf (car q)
+        (setf (rest (car q))
+              (cons item nil)))
+  q)
+
+(defun* dequeue ((q queue))
+  (:returns t)
+  (prog1
+      (pop (cdr q))
+    (if (null (cdr q))
+      (setf (car q) q))))
+
+(defun* queue-empty-p ((q queue))
+  (:returns boolean)
+  (null (queue-contents q)))
+
+(defun* queue-append ((q queue) (l list))
+  (:returns queue)
+  (when l
+    (setf (car q)
+          (last (setf (rest (car q))
+                      l))))
+  q)
+
+
+;;;; Rules
 (clear-db)
 
 (rule (member ?thing (cons ?thing ?rest)))
 
 (rule (member ?thing (cons ?other ?rest))
-      (member ?thing ?rest))
+  (member ?thing ?rest))
 
 (rule (true ?state ?thing)
-      (member ?thing ?state))
+  (member ?thing ?state))
 
 (rule (does ?performed ?role ?move)
-      (member (does ?role ?move) ?performed))
+  (member (does ?role ?move) ?performed))
 
 (rule (role robot))
 
@@ -22,111 +66,111 @@
 (rule (init (step num1)))
 
 (rule (next ?state ?performed (on p))
-      (does ?performed robot a)
-      (true ?state (off p)))
+  (does ?performed robot a)
+  (true ?state (off p)))
 (rule (next ?state ?performed (on q))
-      (does ?performed robot a)
-      (true ?state (on q)))
+  (does ?performed robot a)
+  (true ?state (on q)))
 (rule (next ?state ?performed (on r))
-      (does ?performed robot a)
-      (true ?state (on r)))
+  (does ?performed robot a)
+  (true ?state (on r)))
 (rule (next ?state ?performed (off p))
-      (does ?performed robot a)
-      (true ?state (on p)))
+  (does ?performed robot a)
+  (true ?state (on p)))
 (rule (next ?state ?performed (off q))
-      (does ?performed robot a)
-      (true ?state (off q)))
+  (does ?performed robot a)
+  (true ?state (off q)))
 (rule (next ?state ?performed (off r))
-      (does ?performed robot a)
-      (true ?state (off r)))
+  (does ?performed robot a)
+  (true ?state (off r)))
 
 (rule (next ?state ?performed (on p))
-      (does ?performed robot b)
-      (true ?state (on q)))
+  (does ?performed robot b)
+  (true ?state (on q)))
 (rule (next ?state ?performed (on q))
-      (does ?performed robot b)
-      (true ?state (on p)))
+  (does ?performed robot b)
+  (true ?state (on p)))
 (rule (next ?state ?performed (on r))
-      (does ?performed robot b)
-      (true ?state (on r)))
+  (does ?performed robot b)
+  (true ?state (on r)))
 (rule (next ?state ?performed (off p))
-      (does ?performed robot b)
-      (true ?state (off q)))
+  (does ?performed robot b)
+  (true ?state (off q)))
 (rule (next ?state ?performed (off q))
-      (does ?performed robot b)
-      (true ?state (off p)))
+  (does ?performed robot b)
+  (true ?state (off p)))
 (rule (next ?state ?performed (off r))
-      (does ?performed robot b)
-      (true ?state (off r)))
+  (does ?performed robot b)
+  (true ?state (off r)))
 
 (rule (next ?state ?performed (on p))
-      (does ?performed robot c)
-      (true ?state (on p)))
+  (does ?performed robot c)
+  (true ?state (on p)))
 (rule (next ?state ?performed (on q))
-      (does ?performed robot c)
-      (true ?state (on r)))
+  (does ?performed robot c)
+  (true ?state (on r)))
 (rule (next ?state ?performed (on r))
-      (does ?performed robot c)
-      (true ?state (on q)))
+  (does ?performed robot c)
+  (true ?state (on q)))
 (rule (next ?state ?performed (off p))
-      (does ?performed robot c)
-      (true ?state (off p)))
+  (does ?performed robot c)
+  (true ?state (off p)))
 (rule (next ?state ?performed (off q))
-      (does ?performed robot c)
-      (true ?state (off r)))
+  (does ?performed robot c)
+  (true ?state (off r)))
 (rule (next ?state ?performed (off r))
-      (does ?performed robot c)
-      (true ?state (off q)))
+  (does ?performed robot c)
+  (true ?state (off q)))
 
 (rule (next ?state ?performed (off s))
-      (does ?performed robot a)
-      (true ?state (off s)))
+  (does ?performed robot a)
+  (true ?state (off s)))
 (rule (next ?state ?performed (off s))
-      (does ?performed robot b)
-      (true ?state (off s)))
+  (does ?performed robot b)
+  (true ?state (off s)))
 (rule (next ?state ?performed (off s))
-      (does ?performed robot c)
-      (true ?state (off s)))
+  (does ?performed robot c)
+  (true ?state (off s)))
 (rule (next ?state ?performed (on s))
-      (does ?performed robot a)
-      (true ?state (on s)))
+  (does ?performed robot a)
+  (true ?state (on s)))
 (rule (next ?state ?performed (on s))
-      (does ?performed robot b)
-      (true ?state (on s)))
+  (does ?performed robot b)
+  (true ?state (on s)))
 (rule (next ?state ?performed (on s))
-      (does ?performed robot c)
-      (true ?state (on s)))
+  (does ?performed robot c)
+  (true ?state (on s)))
 (rule (next ?state ?performed (off s))
-      (does ?performed robot d)
-      (true ?state (on s)))
+  (does ?performed robot d)
+  (true ?state (on s)))
 (rule (next ?state ?performed (on s))
-      (does ?performed robot d)
-      (true ?state (off s)))
+  (does ?performed robot d)
+  (true ?state (off s)))
 
 (rule (next ?state ?performed (on p))
-      (does ?performed robot d)
-      (true ?state (on p)))
+  (does ?performed robot d)
+  (true ?state (on p)))
 (rule (next ?state ?performed (off p))
-      (does ?performed robot d)
-      (true ?state (off p)))
+  (does ?performed robot d)
+  (true ?state (off p)))
 
 (rule (next ?state ?performed (on q))
-      (does ?performed robot d)
-      (true ?state (on q)))
+  (does ?performed robot d)
+  (true ?state (on q)))
 (rule (next ?state ?performed (off q))
-      (does ?performed robot d)
-      (true ?state (off q)))
+  (does ?performed robot d)
+  (true ?state (off q)))
 
 (rule (next ?state ?performed (on r))
-      (does ?performed robot d)
-      (true ?state (on r)))
+  (does ?performed robot d)
+  (true ?state (on r)))
 (rule (next ?state ?performed (off r))
-      (does ?performed robot d)
-      (true ?state (off r)))
+  (does ?performed robot d)
+  (true ?state (off r)))
 
 (rule (next ?state ?performed (step ?y))
-      (true ?state (step ?x))
-      (succ ?x ?y))
+  (true ?state (step ?x))
+  (succ ?x ?y))
 
 (rule (succ num1 num2))
 (rule (succ num2 num3))
@@ -142,26 +186,26 @@
 (rule (legal robot d))
 
 (rule (goal ?state robot num100)
-      (true ?state (on p))
-      (true ?state (on q))
-      (true ?state (on r))
-      (true ?state (on s)))
+  (true ?state (on p))
+  (true ?state (on q))
+  (true ?state (on r))
+  (true ?state (on s)))
 (rule (goal ?state robot num0)
-      (true ?state (off p)))
+  (true ?state (off p)))
 (rule (goal ?state robot num0)
-      (true ?state (off q)))
+  (true ?state (off q)))
 (rule (goal ?state robot num0)
-      (true ?state (off r)))
+  (true ?state (off r)))
 (rule (goal ?state robot num0)
-      (true ?state (off s)))
+  (true ?state (off s)))
 
 (rule (terminal ?state)
-      (true ?state (step num8)))
+  (true ?state (step num8)))
 (rule (terminal ?state)
-      (true ?state (on p))
-      (true ?state (on q))
-      (true ?state (on r))
-      (true ?state (on s)))
+  (true ?state (on p))
+  (true ?state (on q))
+  (true ?state (on r))
+  (true ?state (on s)))
 
 
 (defvar *count* 0)
@@ -182,9 +226,21 @@
 (defun terminalp (state)
   (raw-provable-p `(terminal ,state)))
 
+
+(defun equiv-roles (move1 move2)
+  (eq (car move1) (car move2)))
+
 (defun legal-moves (state)
   (declare (ignore state))
-  (return-all (legal ?role ?move)))
+  (let* ((individual-moves
+           (loop :for move :in (return-all (legal ?role ?action))
+                 :collect (cons (cdr (assoc '?role move))
+                                (cdr (assoc '?action move)))))
+         (joint-moves
+           (apply #'map-product #'list
+                  (equivalence-classes #'equiv-roles individual-moves))))
+    joint-moves))
+
 
 (defun roles ()
   (extract '?role (return-all (role ?role))))
@@ -196,79 +252,34 @@
 (defun goal-values (state)
   (raw-return-all `(goal ,state ?role ?goal)))
 
-(defun next-state (current-state move)
-  (let ((does (to-fake-list `((does
-                                ,(cdr (assoc '?role move))
-                                ,(cdr (assoc '?move move)))))))
+(defun next-state (current-state joint-move)
+  (let ((does (to-fake-list
+                (loop :for (role . action) :in joint-move
+                      :collect `(does ,role ,action)))))
     (to-fake-list
       (extract
         '?what
         (raw-return-all `(next ,current-state ,does ?what))))))
 
 
-(defstruct search-path state (path nil) (previous nil))
+(defun depth-first-search (&key exhaust)
+  (let ((*count* 0)
+        (nodes (make-queue)))
+    (enqueue (cons (initial-state) nil) nodes)
+    (pprint
+      (while (not (queue-empty-p nodes))
+        (incf *count*)
+        (destructuring-bind (state . path)
+            (dequeue nodes)
+          ; (format t "Searching: ~S (~D remaining)~%" state (length remaining))
+          (if (and (not exhaust)
+                   (eql 'num100 (goal-value state 'robot)))
+            (return (list state (reverse path)))
+            (let ((children
+                    (when (not (terminalp state))
+                      (loop :for joint-move :in (legal-moves state)
+                            :collect (cons (next-state state joint-move)
+                                           (cons joint-move path))))))
+              (queue-append nodes children))))))
+    (format t "~%Searched ~D nodes.~%" *count*)))
 
-(defun tree-search (states goal-p children combine)
-  (labels
-      ((recur (states)
-         (if (null states)
-           nil
-           (destructuring-bind (state . remaining) states
-             (incf *count*)
-             ; (format t "Searching: ~S (~D remaining)~%" state (length remaining))
-             (if (funcall goal-p state)
-               state
-               (recur (funcall combine
-                               (funcall children state)
-                               remaining)))))))
-    (let ((result (recur states)))
-      (when result
-        (reverse (search-path-path result))))))
-
-
-(defun buttons-goal-p (search-path)
-  (let ((state (search-path-state search-path)))
-    (and (terminalp state)
-         (eql (goal-value state 'robot) 'num100))))
-
-(defun buttons-children (search-path)
-  (let ((state (search-path-state search-path))
-        (path (search-path-path search-path)))
-    (when (not (terminalp state))
-      (loop :for move :in (legal-moves state)
-            :collect (make-search-path :state (next-state state move)
-                                       :path (cons move path)
-                                       :previous search-path)))))
-
-(defun never (&rest args)
-  (declare (ignore args))
-  nil)
-
-(defun dfs ()
-  (tree-search (list (make-search-path :state (initial-state)))
-               #'buttons-goal-p
-               #'buttons-children
-               #'append))
-
-(defun dfs-exhaust ()
-  (let ((*count* 0))
-    (prog1
-        (tree-search (list (make-search-path :state (initial-state)))
-                     #'never
-                     #'buttons-children
-                     #'append)
-        (format t "Searched ~D nodes.~%" *count*))))
-
-(defun bfs ()
-  (tree-search (list (make-search-path :state (initial-state)))
-               #'buttons-goal-p
-               #'buttons-children
-               (lambda (x y)
-                 (append y x))))
-
-; (sb-sprof:with-profiling
-;     (:report :flat
-;      :sample-interval 0.001
-;      :loop nil)
-;   (dfs-exhaust)
-;   )

@@ -19,5 +19,6 @@
                :weave
                :range
                :alist-plist
-               )
+               :equivalence-classes
+               :map-product)
   :package "BONES.QUICKUTILS")

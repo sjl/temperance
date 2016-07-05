@@ -8,49 +8,50 @@
 (defun make-test-database ()
   (let ((db (make-database)))
     (with-database db
+      (push-logic-frame-with
 
-      (facts (always))
+        (facts (always)
 
-      (facts (drinks tom ?anything)
-             (drinks kim water)
-             (drinks alice bourbon)
-             (drinks bob genny-cream)
-             (drinks candace birch-beer))
+               (drinks tom ?anything)
+               (drinks kim water)
+               (drinks alice bourbon)
+               (drinks bob genny-cream)
+               (drinks candace birch-beer)
 
-      (facts (listens alice blues)
-             (listens alice jazz)
-             (listens bob blues)
-             (listens bob rock)
-             (listens candace blues))
+               (listens alice blues)
+               (listens alice jazz)
+               (listens bob blues)
+               (listens bob rock)
+               (listens candace blues)
 
-      (facts (fuzzy cats))
+               (fuzzy cats)
 
-      (facts (cute cats)
-             (cute snakes))
+               (cute cats)
+               (cute snakes))
 
-      (rules ((pets alice ?what)
-              (cute ?what))
+        (rule (pets alice ?what)
+          (cute ?what))
 
-             ((pets bob ?what)
-              (cute ?what)
-              (fuzzy ?what))
+        (rule (pets bob ?what)
+          (cute ?what)
+          (fuzzy ?what))
 
-             ((pets candace ?bird)
-              (flies ?bird)))
+        (rule (pets candace ?bird)
+          (flies ?bird))
 
-      (rules ((likes sally ?who)
-              (likes ?who cats)
-              (drinks ?who beer))
+        (rule (likes sally ?who)
+          (likes ?who cats)
+          (drinks ?who beer))
 
-             ((likes tom cats))
-             ((likes alice cats))
-             ((likes kim cats))
+        (facts (likes tom cats)
+               (likes alice cats)
+               (likes kim cats))
 
-             ((likes kim ?who)
-              (likes ?who cats)))
+        (rule (likes kim ?who)
+          (likes ?who cats))
 
-      (rules ((narcissist ?person)
-              (likes ?person ?person)))
+        (rule (narcissist ?person)
+          (likes ?person ?person)))
 
       )
     db))
@@ -126,7 +127,8 @@
 
 (test simple-unification
   (with-fresh-database
-    (rule (= ?x ?x))
+    (push-logic-frame-with
+      (rule (= ?x ?x)))
     (should-return
       ((= x x) empty)
       ((= x y) fail)
@@ -139,12 +141,13 @@
 
 (test dynamic-call
   (with-fresh-database
-    (facts (g cats)
-           (g (f dogs)))
-    (rule (normal ?x)
-      (g ?x))
-    (rule (dynamic ?struct)
-      (call ?struct))
+    (push-logic-frame-with
+      (facts (g cats)
+             (g (f dogs)))
+      (rule (normal ?x)
+        (g ?x))
+      (rule (dynamic ?struct)
+        (call ?struct)))
     (should-return
       ((normal foo) fail)
       ((normal cats) empty)
@@ -164,9 +167,11 @@
 
 (test not
   (with-fresh-database
-    (facts (yes ?anything))
-    (rules ((not ?x) (call ?x) ! fail)
-           ((not ?x)))
+    (push-logic-frame-with
+      (fact (yes ?anything))
+
+      (rule (not ?x) (call ?x) ! fail)
+      (rule (not ?x)))
     (should-return
       ((yes x) empty)
       ((no x) fail)
@@ -175,53 +180,57 @@
 
 (test backtracking
   (with-fresh-database
-    (facts (a))
-    (facts (b))
-    (facts (c))
-    (facts (d))
-    (rules ((f ?x) (a))
-           ((f ?x) (b) (c))
-           ((f ?x) (d)))
+    (push-logic-frame-with
+      (facts (b))
+      (facts (c))
+      (facts (d))
+      (rule (f ?x) (a))
+      (rule (f ?x) (b) (c))
+      (rule (f ?x) (d)))
     (should-return
       ((f foo) empty)))
   (with-fresh-database
-    ; (facts (a))
-    (facts (b))
-    (facts (c))
-    (facts (d))
-    (rules ((f ?x) (a))
-           ((f ?x) (b) (c))
-           ((f ?x) (d)))
+    (push-logic-frame-with
+      ; (facts (a))
+      (facts (b))
+      (facts (c))
+      (facts (d))
+      (rule (f ?x) (a))
+      (rule (f ?x) (b) (c))
+      (rule (f ?x) (d)))
     (should-return
       ((f foo) empty)))
   (with-fresh-database
-    ; (facts (a))
-    (facts (b))
-    (facts (c))
-    ; (facts (d))
-    (rules ((f ?x) (a))
-           ((f ?x) (b) (c))
-           ((f ?x) (d)))
+    (push-logic-frame-with
+      ; (facts (a))
+      (facts (b))
+      (facts (c))
+      ; (facts (d))
+      (rule (f ?x) (a))
+      (rule (f ?x) (b) (c))
+      (rule (f ?x) (d)))
     (should-return
       ((f foo) empty)))
   (with-fresh-database
-    ; (facts (a))
-    ; (facts (b))
-    (facts (c))
-    ; (facts (d))
-    (rules ((f ?x) (a))
-           ((f ?x) (b) (c))
-           ((f ?x) (d)))
+    (push-logic-frame-with
+      ; (facts (a))
+      ; (facts (b))
+      (facts (c))
+      ; (facts (d))
+      (rule (f ?x) (a))
+      (rule (f ?x) (b) (c))
+      (rule (f ?x) (d)))
     (should-return
       ((f foo) fail)))
   (with-fresh-database
-    ; (facts (a))
-    (facts (b))
-    ; (facts (c))
-    ; (facts (d))
-    (rules ((f ?x) (a))
-           ((f ?x) (b) (c))
-           ((f ?x) (d)))
+    (push-logic-frame-with
+      ; (facts (a))
+      (facts (b))
+      ; (facts (c))
+      ; (facts (d))
+      (rule (f ?x) (a))
+      (rule (f ?x) (b) (c))
+      (rule (f ?x) (d)))
     (should-return
       ((f foo) fail))))
 
@@ -256,23 +265,25 @@
 (test register-allocation
   ;; test for tricky register allocation bullshit
   (with-fresh-database
-    (fact (a fact-a fact-a))
-    (fact (b fact-b fact-b))
-    (fact (c fact-c fact-c))
+    (push-logic-frame-with
+      (fact (a fact-a fact-a))
+      (fact (b fact-b fact-b))
+      (fact (c fact-c fact-c))
 
-    (rule (foo ?x)
-          (a ?a ?a)
-          (b ?b ?b)
-          (c ?c ?c))
+      (rule (foo ?x)
+        (a ?a ?a)
+        (b ?b ?b)
+        (c ?c ?c)))
 
     (should-return
       ((foo dogs) empty))))
 
 (test lists
   (with-fresh-database
-    (rules ((member ?x (list* ?x ?)))
-           ((member ?x (list* ? ?rest))
-            (member ?x ?rest)))
+    (push-logic-frame-with
+      (rule (member ?x (list* ?x ?)))
+      (rule (member ?x (list* ?y ?rest))
+        (member ?x ?rest)))
 
     (should-fail
       (member ?anything nil)
@@ -300,15 +311,18 @@
 
 (test cut
   (with-fresh-database
-    (facts (a))
-    (facts (b))
-    (facts (c))
-    (facts (d))
-    (rules ((f a) (a))
-           ((f bc) (b) ! (c))
-           ((f d) (d)))
-    (rules ((g ?what) (never))
-           ((g ?what) (f ?what)))
+    (push-logic-frame-with
+      (facts (a))
+      (facts (b))
+      (facts (c))
+      (facts (d))
+
+      (rule (f a) (a))
+      (rule (f bc) (b) ! (c))
+      (rule (f d) (d))
+
+      (rule (g ?what) (never))
+      (rule (g ?what) (f ?what)))
     (should-return
       ((f ?what)
        (?what a)
@@ -318,15 +332,18 @@
        (?what bc))))
 
   (with-fresh-database
-    ; (facts (a))
-    (facts (b))
-    (facts (c))
-    (facts (d))
-    (rules ((f a) (a))
-           ((f bc) (b) ! (c))
-           ((f d) (d)))
-    (rules ((g ?what) (never))
-           ((g ?what) (f ?what)))
+    (push-logic-frame-with
+      ; (facts (a))
+      (facts (b))
+      (facts (c))
+      (facts (d))
+
+      (rule (f a) (a))
+      (rule (f bc) (b) ! (c))
+      (rule (f d) (d))
+
+      (rule (g ?what) (never))
+      (rule (g ?what) (f ?what)))
     (should-return
       ((f ?what)
        (?what bc))
@@ -334,15 +351,18 @@
        (?what bc))))
 
   (with-fresh-database
-    ; (facts (a))
-    ; (facts (b))
-    (facts (c))
-    (facts (d))
-    (rules ((f a) (a))
-           ((f bc) (b) ! (c))
-           ((f d) (d)))
-    (rules ((g ?what) (never))
-           ((g ?what) (f ?what)))
+    (push-logic-frame-with
+      ; (facts (a))
+      ; (facts (b))
+      (facts (c))
+      (facts (d))
+
+      (rule (f a) (a))
+      (rule (f bc) (b) ! (c))
+      (rule (f d) (d))
+
+      (rule (g ?what) (never))
+      (rule (g ?what) (f ?what)))
     (should-return
       ((f ?what)
        (?what d))
@@ -350,39 +370,46 @@
        (?what d))))
 
   (with-fresh-database
-    ; (facts (a))
-    (facts (b))
-    ; (facts (c))
-    (facts (d))
-    (rules ((f a) (a))
-           ((f bc) (b) ! (c))
-           ((f d) (d)))
-    (rules ((g ?what) (never))
-           ((g ?what) (f ?what)))
+    (push-logic-frame-with
+      ; (facts (a))
+      (facts (b))
+      ; (facts (c))
+      (facts (d))
+
+      (rule (f a) (a))
+      (rule (f bc) (b) ! (c))
+      (rule (f d) (d))
+
+      (rule (g ?what) (never))
+      (rule (g ?what) (f ?what)))
     (should-fail
       (f ?what)
       (g ?what)))
 
   (with-fresh-database
-    ; (facts (a))
-    ; (facts (b))
-    (facts (c))
-    ; (facts (d))
-    (rules ((f a) (a))
-           ((f bc) (b) ! (c))
-           ((f d) (d)))
-    (rules ((g ?what) (never))
-           ((g ?what) (f ?what)))
+    (push-logic-frame-with
+      ; (facts (a))
+      ; (facts (b))
+      (facts (c))
+      ; (facts (d))
+
+      (rule (f a) (a))
+      (rule (f bc) (b) ! (c))
+      (rule (f d) (d))
+
+      (rule (g ?what) (never))
+      (rule (g ?what) (f ?what)))
     (should-fail
       (f ?what)
       (g ?what))))
 
 (test anonymous-variables
   (with-fresh-database
-    (fact (foo x))
-    (rule (bar (baz ?x ?y ?z ?thing))
-          (foo ?thing))
-    (fact (wild ? ? ?))
+    (push-logic-frame-with
+      (fact (foo x))
+      (rule (bar (baz ?x ?y ?z ?thing))
+        (foo ?thing))
+      (fact (wild ? ? ?)))
     (should-return
       ((bar (baz a b c no)) fail)
       ((bar (baz a b c ?what)) (?what x))

@@ -1187,22 +1187,35 @@
             (clause-permanent-vars clause-props))))
 
 
-(defun find-arity (rule)
-  (let ((head (first rule)))
+(defun find-predicate (clause)
+  "Return a pair of the functor and arity of `clause`
+
+  A functor and an arity together specify a particular Prolog predicate.
+
+  "
+  ;; ( (f ?x ?y)   | head   ||| clause
+  ;;   (foo ?x)    || body  |||
+  ;;   (bar ?y) )  ||       |||
+  (destructuring-bind (head . body) clause
+    (declare (ignore body))
     (cond
-      ((null head) (error "Rule ~S has a NIL head." rule))
-      ((atom head) 0) ; constants are 0-arity
-      (t (1- (length head))))))
+      ((null head)
+       (error "Clause ~S has a NIL head." clause))
+      ((atom head) ; constants are 0-arity
+       (cons head 0))
+      (t
+       (cons (car head)
+             (1- (length head)))))))
 
 (defun check-rules (rules)
-  ;; TODO: fix constant handling here...
-  (let* ((predicates (mapcar #'caar rules))
-         (arities (mapcar #'find-arity rules))
-         (functors (zip predicates arities)))
-    (assert (= 1 (length (remove-duplicates functors :test #'equal))) ()
-      "Must add exactly 1 predicate at a time (got: ~S)."
-      functors)
-    (values (first predicates) (first arities))))
+  (let ((predicates (-<> rules
+                      (mapcar #'find-predicate <>)
+                      (remove-duplicates <> :test #'equal))))
+    (assert (= 1 (length predicates)) ()
+      "Must add exactly one predicate at a time (got: ~S)."
+      predicates)
+    (values (car (first predicates))
+            (cdr (first predicates)))))
 
 (defun precompile-rules (wam rules)
   "Compile `rules` into a list of instructions.

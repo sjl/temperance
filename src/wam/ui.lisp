@@ -1,6 +1,7 @@
 (in-package #:bones.wam)
 
 
+;;;; Database
 (defparameter *database* nil)
 (defvar *results* nil)
 
@@ -16,23 +17,49 @@
   `(with-database (make-database) ,@body))
 
 
-(defun add-rules (rules)
-  (compile-rules *database* rules))
+;;;; Assertion
+(defun add-rule (clause)
+  (wam-code-add-clause! *database* clause)
+  (values))
+
+(defun add-fact (fact)
+  (add-rule (list fact))
+  (values))
+
+(defun add-facts (facts)
+  (mapc #'add-fact facts)
+  (values))
 
 
 (defmacro rule (&body body)
-  `(add-rules '(,body)))
+  `(add-rule ',body))
 
-(defmacro fact (&body body)
-  `(add-rules '(,body)))
+(defmacro fact (fact)
+  `(add-fact ',fact))
 
-(defmacro rules (&body rules)
-  `(add-rules ',rules))
-
-(defmacro facts (&body rules)
-  `(add-rules ',(mapcar #'list rules)))
+(defmacro facts (&body facts)
+  `(progn
+     ,@(loop :for f :in facts :collect `(fact ,f))))
 
 
+;;;; Logic Frames
+(defun push-logic-frame ()
+  (wam-code-push-frame! *database*))
+
+(defun pop-logic-frame ()
+  (wam-code-pop-frame! *database*))
+
+(defun finalize-logic-frame ()
+  (wam-code-finalize-frame! *database*))
+
+(defmacro push-logic-frame-with (&body body)
+  `(prog2
+     (push-logic-frame)
+     (progn ,@body)
+     (finalize-logic-frame)))
+
+
+;;;; Querying
 (defun display-results (results)
   (format t "~%")
   (loop :for (var result . more) :on results :by #'cddr :do

@@ -22,11 +22,11 @@
   ; (format t "PAIP (Compiled) --------------------~%")
   ; (time (paiprolog-test::dfs-exhaust))
 
-  ; (format t "PAIP (Interpreted) -----------------~%")
-  ; (time (bones.paip::dfs-exhaust))
+  (format t "PAIP (Interpreted) -----------------~%")
+  (time (bones.paip::depth-first-search :exhaust t))
 
   (format t "WAM --------------------------------~%")
-  (time (bones.wam::dfs-exhaust)))
+  (time (bones.wam::depth-first-search :exhaust t)))
 
 (defmacro run-test (&rest settings)
   `(progn

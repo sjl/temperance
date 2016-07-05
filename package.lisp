@@ -16,7 +16,14 @@
     #:recur
     #:when-let
     #:unique-items
-    #:dis))
+    #:dis
+    #:make-queue
+    #:enqueue
+    #:dequeue
+    #:queue-empty-p
+    #:queue-append)
+  (:shadowing-import-from #:cl-arrows
+    #:->))
 
 (defpackage #:bones.circle
   (:use #:cl #:defstar)
@@ -49,9 +56,7 @@
     #:circle-backward-splice
     #:circle-forward-splice
     #:circle-insert-beginning
-    #:circle-insert-end
-    )
-  )
+    #:circle-insert-end))
 
 (defpackage #:bones.wam
   (:use
@@ -101,6 +106,5 @@
     ;; Interactive queries
     #:query
     #:query-one
-    #:query-all
-    ))
+    #:query-all))
 

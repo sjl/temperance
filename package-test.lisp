@@ -24,8 +24,8 @@
     #:with-database
     #:make-database
     #:with-fresh-database
+    #:push-logic-frame-with
     #:rule
-    #:rules
     #:fact
     #:facts
     #:call

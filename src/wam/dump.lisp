@@ -307,7 +307,9 @@
                 0)) ; this
      (to (min (+ (wam-program-counter wam) 8) ; is
               (length (wam-code wam))))) ; bad
-  (format t "CODE~%")
+  (format t "CODE (size: ~D frame(s) / ~:[OPEN~;CLOSED~])~%"
+          (length (wam-code-stack wam))
+          (wam-code-closed-p wam))
   (dump-code-store wam (wam-code wam) from to))
 
 

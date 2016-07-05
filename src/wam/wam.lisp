@@ -5,8 +5,9 @@
   ;; Inline all these struct accessors, otherwise things get REAL slow.
   (inline wam-store
           wam-code
-          wam-functors
+          wam-code-stack
           wam-code-labels
+          wam-functors
           wam-fail
           wam-backtracked
           wam-unification-stack
@@ -58,15 +59,18 @@
       :element-type 'code-word)
     :type (vector code-word)
     :read-only t)
+  (code-labels
+    (make-hash-table)
+    :read-only t)
+  (code-stack
+    nil
+    :type list)
   (functors
     (make-array 64
       :fill-pointer 0
       :adjustable t
       :element-type 'functor)
     :type (vector functor)
-    :read-only t)
-  (code-labels
-    (make-hash-table)
     :read-only t)
   (unification-stack
     (make-array 16
@@ -585,8 +589,8 @@
   (:returns (or null code-index))
   (gethash functor (wam-code-labels wam)))
 
-;; Note that this takes a functor/arity and not a cons.
 (defun (setf wam-code-label) (new-value wam functor arity)
+  ;; Note that this takes a functor/arity and not a cons.
   (setf (gethash (wam-ensure-functor-index wam (cons functor arity))
                  (wam-code-labels wam))
         new-value))
@@ -601,6 +605,88 @@
         :for addr :from 0
         :do (setf (aref (wam-code wam) addr)
                   word))
+  (values))
+
+
+;;;; Code Stack
+(defstruct code-stack-frame
+  (start 0 :type code-index)
+  (final nil :type boolean)
+  (predicates (make-hash-table) :type hash-table))
+
+
+(defun* wam-code-stack-current-frame ((wam wam))
+  (:returns (or null code-stack-frame))
+  (first (wam-code-stack wam)))
+
+(defun* wam-code-stack-empty-p ((wam wam))
+  (:returns boolean)
+  (not (wam-code-stack-current-frame wam)))
+
+
+(defun* wam-code-open-p ((wam wam))
+  (:returns boolean)
+  (let ((frame (wam-code-stack-current-frame wam)))
+    (and frame (not (code-stack-frame-final frame)))))
+
+(defun* wam-code-closed-p ((wam wam))
+  (:returns boolean)
+  (not (wam-code-open-p wam)))
+
+
+(defun* wam-code-push-frame! ((wam wam))
+  (:returns :void)
+  (assert (wam-code-closed-p wam) ()
+    "Cannot push code frame unless the code stack is closed.")
+  (push (make-code-stack-frame
+          :start (fill-pointer (wam-code wam))
+          :final nil
+          :predicates (make-hash-table))
+        (wam-code-stack wam))
+  (values))
+
+(defun* wam-code-pop-frame! ((wam wam))
+  (:returns :void)
+  (with-slots (code-stack) wam
+    (assert code-stack ()
+      "Cannot pop code frame from an empty code stack.")
+    (assert (code-stack-frame-final (first code-stack)) ()
+      "Cannot pop unfinalized code frame.")
+    (with-slots (start predicates)
+        (pop code-stack)
+      (setf (fill-pointer (wam-code wam)) start)
+      (loop :for label :being :the hash-keys :of predicates
+            :do (remhash label (wam-code-labels wam)))))
+  (values))
+
+
+(defun* assert-label-not-already-compiled ((wam wam) clause label)
+  (assert (not (wam-code-label wam label))
+      ()
+    "Cannot add clause ~S because its predicate has preexisting compiled code."
+    clause))
+
+
+(defun* wam-code-add-clause! ((wam wam) clause)
+  (assert (wam-code-open-p wam) ()
+    "Cannot add clause ~S without an open code stack frame."
+    clause)
+  (let ((label (wam-ensure-functor-index wam (find-predicate clause))))
+    (assert-label-not-already-compiled wam clause label)
+    (with-slots (predicates)
+        (wam-code-stack-current-frame wam)
+      (push clause (gethash label predicates))))
+  (values))
+
+
+(defun* wam-code-finalize-frame! ((wam wam))
+  (assert (wam-code-open-p wam) ()
+    "There is no code frame waiting to be finalized.")
+  (with-slots (predicates final)
+      (wam-code-stack-current-frame wam)
+    (loop :for clauses :being :the hash-values :of predicates
+          :do (compile-rules wam (reverse clauses))) ; circular dep here, ugh.
+    (setf final t))
   (values))
 
 
