@@ -17,9 +17,11 @@
     #:when-let
     #:unique-items
     #:dis
+    #:gethash-or-init
     #:make-queue
     #:enqueue
     #:dequeue
+    #:queue-contents
     #:queue-empty-p
     #:queue-append)
   (:shadowing-import-from #:cl-arrows

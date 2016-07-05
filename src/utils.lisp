@@ -93,9 +93,28 @@
                 ,@body))
       (recur ,@(mapcar #'extract-val bindings)))))
 
+(defmacro gethash-or-init (key hash-table default-form)
+  "Get the a key's value in a hash table, initializing if necessary.
+
+  If `key` is in `hash-table`: return its value without evaluating
+  `default-form` at all.
+
+  If `key` is NOT in `hash-table`: evaluate `default-form` and insert it before
+  returning it.
+
+  "
+  ;; TODO: think up a less shitty name for this
+  (once-only (key hash-table)
+    (with-gensyms (value found)
+      `(multiple-value-bind (,value ,found)
+        (gethash ,key ,hash-table)
+        (if ,found
+          ,value
+          (setf (gethash ,key ,hash-table) ,default-form))))))
+
 
 ;;;; Queues
-;;; Thanks, Norvig.
+;;; From PAIP (thanks, Norvig).
 
 (deftype queue () '(cons list list))
 (declaim (inline queue-contents make-queue

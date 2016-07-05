@@ -674,7 +674,7 @@
     (assert-label-not-already-compiled wam clause label)
     (with-slots (predicates)
         (wam-current-logic-frame wam)
-      (push clause (gethash label predicates))))
+      (enqueue clause (gethash-or-init label predicates (make-queue)))))
   (values))
 
 
@@ -684,7 +684,8 @@
   (with-slots (predicates final)
       (wam-current-logic-frame wam)
     (loop :for clauses :being :the hash-values :of predicates
-          :do (compile-rules wam (reverse clauses))) ; circular dep here, ugh.
+          ;; circular dep on the compiler here, ugh.
+          :do (compile-rules wam (queue-contents clauses)))
     (setf final t))
   (values))
 
