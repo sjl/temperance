@@ -5,8 +5,8 @@
   ;; Inline all these struct accessors, otherwise things get REAL slow.
   (inline wam-store
           wam-code
-          wam-code-stack
           wam-code-labels
+          wam-logic-stack
           wam-functors
           wam-fail
           wam-backtracked
@@ -62,7 +62,7 @@
   (code-labels
     (make-hash-table)
     :read-only t)
-  (code-stack
+  (logic-stack
     nil
     :type list)
   (functors
@@ -608,52 +608,52 @@
   (values))
 
 
-;;;; Code Stack
-(defstruct code-stack-frame
+;;;; Logic Stack
+(defstruct logic-frame
   (start 0 :type code-index)
   (final nil :type boolean)
   (predicates (make-hash-table) :type hash-table))
 
 
-(defun* wam-code-stack-current-frame ((wam wam))
-  (:returns (or null code-stack-frame))
-  (first (wam-code-stack wam)))
+(defun* wam-current-logic-frame ((wam wam))
+  (:returns (or null logic-frame))
+  (first (wam-logic-stack wam)))
 
-(defun* wam-code-stack-empty-p ((wam wam))
+(defun* wam-logic-stack-empty-p ((wam wam))
   (:returns boolean)
-  (not (wam-code-stack-current-frame wam)))
+  (not (wam-current-logic-frame wam)))
 
 
-(defun* wam-code-open-p ((wam wam))
+(defun* wam-logic-open-p ((wam wam))
   (:returns boolean)
-  (let ((frame (wam-code-stack-current-frame wam)))
-    (and frame (not (code-stack-frame-final frame)))))
+  (let ((frame (wam-current-logic-frame wam)))
+    (and frame (not (logic-frame-final frame)))))
 
-(defun* wam-code-closed-p ((wam wam))
+(defun* wam-logic-closed-p ((wam wam))
   (:returns boolean)
-  (not (wam-code-open-p wam)))
+  (not (wam-logic-open-p wam)))
 
 
-(defun* wam-code-push-frame! ((wam wam))
+(defun* wam-push-logic-frame! ((wam wam))
   (:returns :void)
-  (assert (wam-code-closed-p wam) ()
-    "Cannot push code frame unless the code stack is closed.")
-  (push (make-code-stack-frame
+  (assert (wam-logic-closed-p wam) ()
+    "Cannot push logic frame unless the logic stack is closed.")
+  (push (make-logic-frame
           :start (fill-pointer (wam-code wam))
           :final nil
           :predicates (make-hash-table))
-        (wam-code-stack wam))
+        (wam-logic-stack wam))
   (values))
 
-(defun* wam-code-pop-frame! ((wam wam))
+(defun* wam-pop-logic-frame! ((wam wam))
   (:returns :void)
-  (with-slots (code-stack) wam
-    (assert code-stack ()
-      "Cannot pop code frame from an empty code stack.")
-    (assert (code-stack-frame-final (first code-stack)) ()
-      "Cannot pop unfinalized code frame.")
+  (with-slots (logic-stack) wam
+    (assert logic-stack ()
+      "Cannot pop logic frame from an empty logic stack.")
+    (assert (logic-frame-final (first logic-stack)) ()
+      "Cannot pop unfinalized logic frame.")
     (with-slots (start predicates)
-        (pop code-stack)
+        (pop logic-stack)
       (setf (fill-pointer (wam-code wam)) start)
       (loop :for label :being :the hash-keys :of predicates
             :do (remhash label (wam-code-labels wam)))))
@@ -666,24 +666,23 @@
     "Cannot add clause ~S because its predicate has preexisting compiled code."
     clause))
 
-
-(defun* wam-code-add-clause! ((wam wam) clause)
-  (assert (wam-code-open-p wam) ()
-    "Cannot add clause ~S without an open code stack frame."
+(defun* wam-logic-frame-add-clause! ((wam wam) clause)
+  (assert (wam-logic-open-p wam) ()
+    "Cannot add clause ~S without an open logic stack frame."
     clause)
   (let ((label (wam-ensure-functor-index wam (find-predicate clause))))
     (assert-label-not-already-compiled wam clause label)
     (with-slots (predicates)
-        (wam-code-stack-current-frame wam)
+        (wam-current-logic-frame wam)
       (push clause (gethash label predicates))))
   (values))
 
 
-(defun* wam-code-finalize-frame! ((wam wam))
-  (assert (wam-code-open-p wam) ()
-    "There is no code frame waiting to be finalized.")
+(defun* wam-finalize-logic-frame! ((wam wam))
+  (assert (wam-logic-open-p wam) ()
+    "There is no logic frame waiting to be finalized.")
   (with-slots (predicates final)
-      (wam-code-stack-current-frame wam)
+      (wam-current-logic-frame wam)
     (loop :for clauses :being :the hash-values :of predicates
           :do (compile-rules wam (reverse clauses))) ; circular dep here, ugh.
     (setf final t))

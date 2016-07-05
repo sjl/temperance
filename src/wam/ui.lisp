@@ -19,7 +19,7 @@
 
 ;;;; Assertion
 (defun add-rule (clause)
-  (wam-code-add-clause! *database* clause)
+  (wam-logic-frame-add-clause! *database* clause)
   (values))
 
 (defun add-fact (fact)
@@ -44,13 +44,13 @@
 
 ;;;; Logic Frames
 (defun push-logic-frame ()
-  (wam-code-push-frame! *database*))
+  (wam-push-logic-frame! *database*))
 
 (defun pop-logic-frame ()
-  (wam-code-pop-frame! *database*))
+  (wam-pop-logic-frame! *database*))
 
 (defun finalize-logic-frame ()
-  (wam-code-finalize-frame! *database*))
+  (wam-finalize-logic-frame! *database*))
 
 (defmacro push-logic-frame-with (&body body)
   `(prog2
