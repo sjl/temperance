@@ -17,7 +17,6 @@
                :alist-to-hash-table
                :map-tree
                :weave
-               :range
                :alist-plist
                :equivalence-classes
                :map-product)

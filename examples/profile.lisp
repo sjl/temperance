@@ -24,6 +24,7 @@
   (sb-sprof:profile-call-counts "BONES.QUICKUTILS")
 
   (sb-sprof:with-profiling (:max-samples 5000
+                            :mode :alloc
                             :sample-interval 0.0005
                             :loop nil)
     (bones.wam::depth-first-search :exhaust t))

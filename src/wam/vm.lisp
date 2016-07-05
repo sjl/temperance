@@ -719,9 +719,9 @@
                 (destructuring-bind (functor . arity)
                     (wam-functor-lookup wam (cell-value cell))
                   (list* functor
-                         (mapcar #'recur
-                                 (range (+ address 1)
-                                        (+ address arity 1))))))
+                         (loop :for addr
+                               :from (+ address 1) :below (+ address arity 1)
+                               :collect (recur addr)))))
                (t (error "What to heck is this?"))))))
       (mapcar #'recur addresses))))
 
