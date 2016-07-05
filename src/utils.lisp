@@ -56,6 +56,15 @@
     :finally (return once)))
 
 
+(defmacro dis (arglist &body body)
+  `(->> '(lambda* ,arglist
+          (declare (optimize speed))
+          ,@body)
+    macroexpand-1
+    (compile nil)
+    disassemble))
+
+
 ;;;; loop/recur
 (defmacro recursively (bindings &body body)
   "Execute body recursively, like Clojure's `loop`/`recur`.

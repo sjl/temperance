@@ -6,6 +6,7 @@
   (:use
     #:cl
     #:defstar
+    #:cl-arrows
     #:bones.quickutils)
   (:export
     #:repeat
@@ -15,7 +16,7 @@
     #:recur
     #:when-let
     #:unique-items
-    ))
+    #:dis))
 
 (defpackage #:bones.circle
   (:use #:cl #:defstar)
