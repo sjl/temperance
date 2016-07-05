@@ -1,8 +1,8 @@
 (in-package #:bones.utils)
 
 (defmacro push-if-new (thing place
-                             &environment env
-                             &key key (test '#'eql))
+                       &environment env
+                       &key key (test '#'eql))
   "Push `thing` into the list at `place` if it's not already there.
 
   Returns whether `thing` was actually pushed.  This function is basically
@@ -18,14 +18,14 @@
               (,result (pushnew ,thing ,place :key ,key :test ,test)))
         (not (eql ,current ,result))))))
 
-(defun invert-hash-table (ht)
+(defun invert-hash-table (hash-table)
   "Jesus christ don't actually use this for anything but debugging.
 
-  Inverts the keys/values of a hash table.
+  Inverts the keys/values of a `hash-table`.
 
   "
   (alist-to-hash-table
-    (loop :for k :being :the :hash-keys :of ht
+    (loop :for k :being :the :hash-keys :of hash-table
           :using (hash-value v)
           :collect (list v k))))
 
@@ -37,13 +37,13 @@
 (defun hex (d)
   (format nil "~X" d))
 
-
 (defmacro when-let ((symbol value) &body body)
+  "Bind `value` to `symbol` and execute `body` if the value was not `nil`."
   `(let ((,symbol ,value))
      (when ,symbol ,@body)))
 
-
 (defun unique-items (list)
+  "Return a list of the items that appear exactly once in `list`."
   (loop
     :with once = nil
     :with seen = nil
@@ -55,8 +55,13 @@
                  (push item once)))
     :finally (return once)))
 
-
 (defmacro dis (arglist &body body)
+  "Disassemble the code generated for a `lambda*` with `arglist` and `body`.
+
+  It will also spew compiler notes so you can see why the garbage box isn't
+  doing what you think it should be doing.
+
+  "
   `(->> '(lambda* ,arglist
           (declare (optimize speed))
           ,@body)
@@ -64,8 +69,6 @@
     (compile nil)
     disassemble))
 
-
-;;;; loop/recur
 (defmacro recursively (bindings &body body)
   "Execute body recursively, like Clojure's `loop`/`recur`.
 
