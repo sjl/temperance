@@ -69,7 +69,7 @@
   (set-equal r1 r2 :test #'result=))
 
 (defmacro q (&body query)
-  `(return-all ,@query))
+  `(query-all ,@query))
 
 
 (defmacro should-fail (&body queries)
@@ -307,7 +307,7 @@
     ;; Check that we can unify against unbound vars that turn into lists
     (is ((lambda (result)
            (eql (car (getf result '?anything)) 'a))
-         (return-one (member a ?anything))))))
+         (query (member a ?anything))))))
 
 (test cut
   (with-fresh-database

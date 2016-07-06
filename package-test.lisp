@@ -30,8 +30,8 @@
     #:facts
     #:call
     #:?
-    #:return-one
-    #:return-all)
+    #:query
+    #:query-all)
   (:shadowing-import-from #:bones.wam
     #:!))
 

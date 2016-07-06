@@ -167,7 +167,7 @@
 
 
 (defun initial-state ()
-  (extract '?what (return-all (init ?what))))
+  (extract '?what (query-all (init ?what))))
 
 (defun terminalp ()
   (prove (terminal)))
@@ -178,28 +178,27 @@
 
 (defun legal-moves ()
   (let* ((individual-moves
-           (loop :for move :in (return-all (legal ?role ?action))
-                 :collect (cons (getf move '?role)
-                                (getf move '?action))))
+           (query-map (lambda (move)
+                        (cons (getf move '?role)
+                              (getf move '?action)))
+                      (legal ?role ?action)))
          (joint-moves
            (apply #'map-product #'list
                   (equivalence-classes #'equiv-roles individual-moves))))
     joint-moves))
 
 (defun roles ()
-  (extract '?role (return-all (role ?role))))
+  (extract '?role (query-all (role ?role))))
 
 (defun goal-value (role)
-  (getf (perform-return `((goal ,role ?goal))
-                        :one)
+  (getf (invoke-query `(goal ,role ?goal))
         '?goal))
 
 (defun goal-values ()
-  (perform-return `((goal ?role ?goal))
-                  :all))
+  (invoke-query-all `(goal ?role ?goal)))
 
 (defun next-state ()
-  (extract '?what (return-all (next ?what))))
+  (extract '?what (query-all (next ?what))))
 
 
 (defun apply-state (state)

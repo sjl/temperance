@@ -2,8 +2,7 @@
 
 
 ;;;; Database
-(defparameter *database* nil)
-(defvar *results* nil)
+(defvar *database* nil)
 
 
 (defun make-database ()
@@ -60,96 +59,91 @@
 
 
 ;;;; Querying
-(defun display-results (results)
-  (format t "~%")
-  (loop :for (var result . more) :on results :by #'cddr :do
-        (format t "~S = ~S~%" var result)))
+(defun invoke-query (&rest terms)
+  (let ((result nil)
+        (succeeded nil))
+    (run-query *database* terms
+               :result-function (lambda (r)
+                                  (setf result r
+                                        succeeded t)
+                                  t))
+    (values result succeeded)))
 
-(defun display-results-one (results)
-  (display-results results)
-  t)
+(defun invoke-query-all (&rest terms)
+  (let ((results nil))
+    (run-query *database* terms
+               :result-function (lambda (result)
+                                  (push result results)
+                                  nil))
+    (nreverse results)))
 
-(defun display-results-all (results)
-  (display-results results)
-  nil)
+(defun invoke-query-map (function &rest terms)
+  (let ((results nil))
+    (run-query *database* terms
+               :result-function (lambda (result)
+                                  (push (funcall function result) results)
+                                  nil))
+    (nreverse results)))
 
-(defun display-results-interactive (results)
-  (display-results results)
-  (format t "~%More? [Yn] ")
-  (force-output)
-  (switch ((read-line) :test #'string=)
-    ("y" nil)
-    ("" nil)
-    ("n" t)
-    (t t)))
-
-
-(defun perform-query (query mode)
-  (run-query *database* query
-             :result-function
-             (ecase mode
-               (:interactive #'display-results-interactive)
-               (:all #'display-results-all)
-               (:one #'display-results-one))
-             :status-function
-             (lambda (failp)
-               (if failp
-                 (princ "No.")
-                 (princ "Yes."))))
+(defun invoke-query-do (function &rest terms)
+  (run-query *database* terms
+             :result-function (lambda (result)
+                                (funcall function result)
+                                nil))
   (values))
 
+(defun invoke-query-find (predicate &rest terms)
+  (let ((results nil)
+        (succeeded nil))
+    (run-query *database* terms
+               :result-function (lambda (result)
+                                  (if (funcall predicate result)
+                                    (progn (setf results result
+                                                 succeeded t)
+                                           t)
+                                    nil)))
+    (values results succeeded)))
 
-(defun return-results-one (results)
-  (setf *results* results)
-  t)
-
-(defun return-results-all (results)
-  (push results *results*)
-  nil)
-
-
-(defun perform-return (query mode)
-  (ecase mode
-    (:all (let ((*results* nil))
-            (run-query *database* query
-                       :result-function
-                       #'return-results-all)
-            (values *results* (ensure-boolean *results*))))
-    (:one (let* ((no-results (gensym))
-                 (*results* no-results))
-            (run-query *database* query
-                       :result-function
-                       #'return-results-one)
-            (if (eql *results* no-results)
-              (values nil nil)
-              (values *results* t))))))
+(defun invoke-prove (&rest terms)
+  (let ((succeeded nil))
+    (run-query *database* terms
+               :result-function (lambda (result)
+                                  (declare (ignore result))
+                                  (setf succeeded t)
+                                  t))
+    succeeded))
 
 
-(defun perform-prove (query)
-  (nth-value 1 (perform-return query :one)))
+(defun quote-terms (terms)
+  (loop :for term :in terms :collect `',term))
+
+(defmacro query (&rest terms)
+  `(invoke-query ,@(quote-terms terms)))
+
+(defmacro query-all (&rest terms)
+  `(invoke-query-all ,@(quote-terms terms)))
+
+(defmacro query-map (function &rest terms)
+  `(invoke-query-map ,function ,@(quote-terms terms)))
+
+(defmacro query-do (function &rest terms)
+  `(invoke-query-do ,function ,@(quote-terms terms)))
+
+(defmacro query-find (predicate &rest terms)
+  `(invoke-query-find ,predicate ,@(quote-terms terms)))
+
+(defmacro prove (&rest terms)
+  `(invoke-prove ,@(quote-terms terms)))
 
 
-(defmacro query (&body body)
-  `(perform-query ',body :interactive))
-
-(defmacro query-all (&body body)
-  `(perform-query ',body :all))
-
-(defmacro query-one (&body body)
-  `(perform-query ',body :one))
-
-
-(defmacro return-all (&body body)
-  `(perform-return ',body :all))
-
-(defmacro return-one (&body body)
-  `(perform-return ',body :one))
-
-(defmacro prove (&body body)
-  `(perform-prove ',body))
-
-
+;;;; Debugging
 (defun dump (&optional full-code)
   (dump-wam-full *database*)
   (when full-code
     (dump-wam-code *database*)))
+
+(defmacro bytecode (&body body)
+  `(with-fresh-database
+     (push-logic-frame-with ,@body)
+     (dump-wam-code *database*)))
+
