@@ -4,3 +4,4 @@ docs/build
 scratch.lisp
 STATUS
 bench-results.txt
+profile.out
