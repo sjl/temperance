@@ -16,9 +16,28 @@
   `(with-database (make-database) ,@body))
 
 
+;;;; Normalization
+(defun normalize-term (term)
+  ;; Normally a rule consists of a head terms and multiple body terms, like so:
+  ;;
+  ;;     (likes sally ?who) (likes ?who cats)
+  ;;
+  ;; But sometimes people are lazy and don't include the parens around
+  ;; zero-arity predicates:
+  ;;
+  ;;     (happy steve) sunny
+  (if (and (not (variablep term))
+           (symbolp term)
+           (not (eq term '!))) ; jesus
+    (list term)
+    term))
+
+
 ;;;; Assertion
 (defun invoke-rule (head &rest body)
-  (wam-logic-frame-add-clause! *database* (list* head body))
+  (wam-logic-frame-add-clause! *database*
+                               (list* (normalize-term head)
+                                      (mapcar #'normalize-term body)))
   (values))
 
 (defun invoke-fact (fact)
@@ -26,7 +45,7 @@
   (values))
 
 (defun invoke-facts (&rest facts)
-  (mapc #'add-fact facts)
+  (mapc #'invoke-fact facts)
   (values))
 
 
@@ -59,58 +78,57 @@
 
 
 ;;;; Querying
+(defun perform-query (terms result-function)
+  (run-query *database* (mapcar #'normalize-term terms)
+             :result-function result-function))
+
+
 (defun invoke-query (&rest terms)
   (let ((result nil)
         (succeeded nil))
-    (run-query *database* terms
-               :result-function (lambda (r)
-                                  (setf result r
-                                        succeeded t)
-                                  t))
+    (perform-query terms (lambda (r)
+                           (setf result r
+                                 succeeded t)
+                           t))
     (values result succeeded)))
 
 (defun invoke-query-all (&rest terms)
   (let ((results nil))
-    (run-query *database* terms
-               :result-function (lambda (result)
-                                  (push result results)
-                                  nil))
+    (perform-query terms (lambda (result)
+                           (push result results)
+                           nil))
     (nreverse results)))
 
 (defun invoke-query-map (function &rest terms)
   (let ((results nil))
-    (run-query *database* terms
-               :result-function (lambda (result)
-                                  (push (funcall function result) results)
-                                  nil))
+    (perform-query terms (lambda (result)
+                           (push (funcall function result) results)
+                           nil))
     (nreverse results)))
 
 (defun invoke-query-do (function &rest terms)
-  (run-query *database* terms
-             :result-function (lambda (result)
-                                (funcall function result)
-                                nil))
+  (perform-query terms (lambda (result)
+                         (funcall function result)
+                         nil))
   (values))
 
 (defun invoke-query-find (predicate &rest terms)
   (let ((results nil)
         (succeeded nil))
-    (run-query *database* terms
-               :result-function (lambda (result)
-                                  (if (funcall predicate result)
-                                    (progn (setf results result
-                                                 succeeded t)
-                                           t)
-                                    nil)))
+    (perform-query terms (lambda (result)
+                           (if (funcall predicate result)
+                             (progn (setf results result
+                                          succeeded t)
+                                    t)
+                             nil)))
     (values results succeeded)))
 
 (defun invoke-prove (&rest terms)
   (let ((succeeded nil))
-    (run-query *database* terms
-               :result-function (lambda (result)
-                                  (declare (ignore result))
-                                  (setf succeeded t)
-                                  t))
+    (perform-query terms (lambda (result)
+                           (declare (ignore result))
+                           (setf succeeded t)
+                           t))
     succeeded))
 
 

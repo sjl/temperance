@@ -68,14 +68,11 @@
 (defun results= (r1 r2)
   (set-equal r1 r2 :test #'result=))
 
-(defmacro q (&body query)
-  `(query-all ,@query))
-
 
 (defmacro should-fail (&body queries)
   `(progn
      ,@(loop :for query :in queries :collect
-             `(is (results= nil (q ,query))))))
+             `(is (results= nil (query-all ,query))))))
 
 (defmacro should-return (&body queries)
   `(progn
@@ -87,43 +84,47 @@
                                ((equal results '(fail))
                                 nil)
                                (t results))
-                           (q ,query))))))
+                           (query-all ,query))))))
 
 
 ;;;; Tests
 (test facts-literal
   (with-database *test-database*
-    (is (results= '(nil) (q (always))))
-    (is (results= '(nil) (q (fuzzy cats))))
-    (is (results= nil (q (fuzzy snakes))))))
+    (should-return
+      ((always) empty)
+      ((fuzzy cats) empty)
+      ((fuzzy snakes) fail))))
 
 (test facts-variables
   (with-database *test-database*
-    (is (results= '((?what cats))
-                  (q (fuzzy ?what))))
-    (is (results= '((?what blues)
-                    (?what rock))
-                  (q (listens bob ?what))))
-    (is (results= '((?who alice)
-                    (?who bob)
-                    (?who candace))
-                  (q (listens ?who blues))))
-    (is (results= '()
-                  (q (listens ?who metal))))))
+    (should-return
+      ((fuzzy ?what)
+       (?what cats))
+
+      ((listens bob ?what)
+       (?what blues)
+       (?what rock))
+
+      ((listens ?who blues)
+       (?who alice)
+       (?who bob)
+       (?who candace))
+
+      ((listens ?who metal) fail))))
 
 (test facts-conjunctions
   (with-database *test-database*
     (is (results= '((?who alice))
-                  (q (listens ?who blues)
-                     (listens ?who jazz))))
+                  (query-all (listens ?who blues)
+                             (listens ?who jazz))))
     (is (results= '((?who alice))
-                  (q (listens ?who blues)
-                     (drinks ?who bourbon))))
+                  (query-all (listens ?who blues)
+                             (drinks ?who bourbon))))
     (is (results= '((?what bourbon ?who alice)
                     (?what genny-cream ?who bob)
                     (?what birch-beer ?who candace))
-                  (q (listens ?who blues)
-                     (drinks ?who ?what))))))
+                  (query-all (listens ?who blues)
+                             (drinks ?who ?what))))))
 
 (test simple-unification
   (with-fresh-database
@@ -414,3 +415,23 @@
       ((bar (baz a b c no)) fail)
       ((bar (baz a b c ?what)) (?what x))
       ((wild a b c) empty))))
+
+(test normalization-ui
+  (with-fresh-database
+    (push-logic-frame-with
+      (fact a)
+      (facts (b)
+             c)
+      (rule dogs
+        a b (c)))
+    (should-return
+      (a empty)
+      (b empty)
+      (c empty)
+      (d fail)
+      (dogs empty)
+      ((a) empty)
+      ((b) empty)
+      ((c) empty)
+      ((d) fail)
+      (dogs empty))))

@@ -204,13 +204,13 @@
 (defun apply-state (state)
   (push-logic-frame)
   (loop :for fact :in state
-        :do (add-fact `(true ,fact)))
+        :do (invoke-fact `(true ,fact)))
   (finalize-logic-frame))
 
 (defun apply-moves (moves)
   (push-logic-frame)
   (loop :for (role . action) :in moves
-        :do (add-fact `(does ,role ,action)))
+        :do (invoke-fact `(does ,role ,action)))
   (finalize-logic-frame))
 
 
