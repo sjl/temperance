@@ -17,24 +17,24 @@
 
 
 ;;;; Assertion
-(defun add-rule (clause)
-  (wam-logic-frame-add-clause! *database* clause)
+(defun invoke-rule (head &rest body)
+  (wam-logic-frame-add-clause! *database* (list* head body))
   (values))
 
-(defun add-fact (fact)
-  (add-rule (list fact))
+(defun invoke-fact (fact)
+  (invoke-rule fact)
   (values))
 
-(defun add-facts (facts)
+(defun invoke-facts (&rest facts)
   (mapc #'add-fact facts)
   (values))
 
 
-(defmacro rule (&body body)
-  `(add-rule ',body))
+(defmacro rule (head &body body)
+  `(invoke-rule ',head ,@(loop :for term :in body :collect `',term)))
 
 (defmacro fact (fact)
-  `(add-fact ',fact))
+  `(invoke-fact ',fact))
 
 (defmacro facts (&body facts)
   `(progn
