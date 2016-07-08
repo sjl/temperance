@@ -2,7 +2,7 @@
   (:use
     #:cl
     #:5am
-    #:bones))
+    ))
 
 (defpackage #:bones-test.paip
   (:use

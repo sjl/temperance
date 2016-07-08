@@ -144,10 +144,7 @@
   (make-instance 'variable-node :variable variable))
 
 (defun make-argument-variable-node (variable)
-  (make-instance 'argument-variable-node
-                 :variable (if (eq variable +wildcard-symbol+)
-                             (gensym "?")
-                             variable)))
+  (make-instance 'argument-variable-node :variable variable))
 
 (defun make-list-node (head tail)
   (make-instance 'list-node :head head :tail tail))
@@ -190,6 +187,7 @@
     (format stream
             (if space-before " ~A =" "~A = ")
             (node-secondary-register node))))
+
 
 (defgeneric dump-node (node))
 
@@ -337,24 +335,10 @@
 (defun find-anonymous-variables (clause)
   "Return a list of all anonymous variables in `clause`.
 
-  Anonymous variables are non-argument-position variables that are only ever
-  used once.
+  Anonymous variables are variables that are only ever used once.
 
   "
-  ;; clause: ((member :x (list* :y :rest)) ;-
-  ;;          (member :x :rest))
-  ;;
-  ;; terms: (member :x (list* :y :rest))
-  ;;        (member :x :rest)
-  (flet ((argument-variables (term)
-           (remove-if-not #'variablep (cdr term)))
-         (non-argument-variables (term)
-           (loop :for argument :in (cdr term)
-                 :when (consp argument)
-                 :append (tree-collect #'variablep (cdr argument)))))
-    (let ((terms (remove-if-not #'consp clause)))
-      (set-difference (unique-items (mapcan #'non-argument-variables terms))
-                      (mapcan #'argument-variables terms)))))
+  (unique-items (tree-collect #'variablep clause)))
 
 
 (defun determine-clause-properties (head body)
@@ -560,6 +544,17 @@
        (setf (slot-value ,instance ,slot) ,value-form))))
 
 
+(defun variable-anonymous-p (state variable)
+  "Return whether `variable` is considered anonymous in `state`"
+  (ensure-boolean
+    (member variable (allocation-state-anonymous-variables state))))
+
+
+(defun allocate-variable-register (state variable)
+  (if (variable-anonymous-p state variable)
+    (make-anonymous-register)
+    (ensure-variable state variable)))
+
 (defun allocate-nonvariable-register (state)
   "Allocate and return a register for something that's not a variable."
   ;; We need to allocate registers for things like structures and lists, but we
@@ -579,14 +574,11 @@
 
 (defmethod allocate-register ((node variable-node) state)
   (set-when-unbound node 'register
-    (if (member (node-variable node)
-                (allocation-state-anonymous-variables state))
-      (make-anonymous-register)
-      (ensure-variable state (node-variable node)))))
+    (allocate-variable-register state (node-variable node))))
 
 (defmethod allocate-register ((node argument-variable-node) state)
   (set-when-unbound node 'secondary-register
-    (ensure-variable state (node-variable node))))
+    (allocate-variable-register state (node-variable node))))
 
 (defmethod allocate-register ((node structure-node) state)
   (set-when-unbound node 'register
@@ -1046,11 +1038,15 @@
            ;; Reset the list of seen registers (grep for "clown car" above)
            (setf seen (remove-if #'register-temporary-p seen)))
          (handle-argument (argument-register source-register)
-           ;; OP X_n A_i
-           (let ((newp (push-if-new source-register seen :test #'register=)))
-             (push-instruction (find-opcode :argument newp mode source-register)
-                               source-register
-                               argument-register)))
+           (if (register-anonymous-p source-register)
+             ;; Crazy, but we can just drop argument-position anonymous
+             ;; variables on the floor at this point.
+             nil
+             ;; OP X_n A_i
+             (let ((newp (push-if-new source-register seen :test #'register=)))
+               (push-instruction (find-opcode :argument newp mode source-register)
+                                 source-register
+                                 argument-register))))
          (handle-structure (destination-register functor arity)
            ;; OP functor reg
            (push destination-register seen)
@@ -1083,9 +1079,10 @@
            ;; might need to do some resetting but not end in a CALL.
            (reset-seen))
          (handle-register (register)
-           ;; OP reg
-           (if (eq (register-type register) :anonymous)
+           (if (register-anonymous-p register)
+             ;; VOID 1
              (push-instruction (find-opcode :register nil mode register) 1)
+             ;; OP reg
              (let ((first-seen (push-if-new register seen :test #'register=)))
                (push-instruction
                  (find-opcode :register first-seen mode register)
