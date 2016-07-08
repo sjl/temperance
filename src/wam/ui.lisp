@@ -35,6 +35,7 @@
 
 ;;;; Assertion
 (defun invoke-rule (head &rest body)
+  (assert *database* (*database*) "No database.")
   (wam-logic-frame-add-clause! *database*
                                (list* (normalize-term head)
                                       (mapcar #'normalize-term body)))
@@ -62,12 +63,15 @@
 
 ;;;; Logic Frames
 (defun push-logic-frame ()
+  (assert *database* (*database*) "No database.")
   (wam-push-logic-frame! *database*))
 
 (defun pop-logic-frame ()
+  (assert *database* (*database*) "No database.")
   (wam-pop-logic-frame! *database*))
 
 (defun finalize-logic-frame ()
+  (assert *database* (*database*) "No database.")
   (wam-finalize-logic-frame! *database*))
 
 (defmacro push-logic-frame-with (&body body)
@@ -79,6 +83,7 @@
 
 ;;;; Querying
 (defun perform-query (terms result-function)
+  (assert *database* (*database*) "No database.")
   (run-query *database* (mapcar #'normalize-term terms)
              :result-function result-function))
 

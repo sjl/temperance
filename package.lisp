@@ -1,6 +1,3 @@
-(defpackage #:bones
-  (:use #:cl)
-  (:export #:hello))
 
 (defpackage #:bones.utils
   (:use
@@ -69,6 +66,42 @@
     #:bones.circle
     #:bones.quickutils
     #:bones.utils)
+  (:export
+    #:make-database
+    #:with-database
+    #:with-fresh-database
+
+    #:invoke-rule
+    #:invoke-fact
+    #:invoke-facts
+
+    #:rule
+    #:fact
+    #:facts
+
+    #:push-logic-frame
+    #:pop-logic-frame
+    #:finalize-logic-frame
+    #:push-logic-frame-with
+
+    #:invoke-query
+    #:invoke-query-all
+    #:invoke-query-map
+    #:invoke-query-do
+    #:invoke-query-find
+    #:invoke-prove
+
+    #:query
+    #:query-all
+    #:query-map
+    #:query-do
+    #:query-find
+    #:prove
+
+    #:call
+    #:?
+    #:!
+    )
   (:import-from #:optima
     #:match)
   (:shadowing-import-from #:cl-arrows
@@ -110,3 +143,45 @@
     #:query-one
     #:query-all))
 
+
+
+
+(defpackage #:bones
+  (:use #:cl #:bones.wam)
+  (:export
+    #:make-database
+    #:with-database
+    #:with-fresh-database
+
+    #:invoke-rule
+    #:invoke-fact
+    #:invoke-facts
+
+    #:rule
+    #:fact
+    #:facts
+
+    #:push-logic-frame
+    #:pop-logic-frame
+    #:finalize-logic-frame
+    #:push-logic-frame-with
+
+    #:invoke-query
+    #:invoke-query-all
+    #:invoke-query-map
+    #:invoke-query-do
+    #:invoke-query-find
+    #:invoke-prove
+
+    #:query
+    #:query-all
+    #:query-map
+    #:query-do
+    #:query-find
+    #:prove
+
+    #:call
+    #:?
+    #:!
+
+    ))
