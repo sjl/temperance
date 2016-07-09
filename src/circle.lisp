@@ -45,7 +45,7 @@
 (defparameter *circle-sentinel* 'circle-sentinel)
 
 
-(declaim (inline circle-prev circle-value circle-next))
+(declaim (inline circle-prev circle-value circle-next make-circle))
 
 (defstruct circle prev value next)
 

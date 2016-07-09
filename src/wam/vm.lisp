@@ -662,13 +662,15 @@
 
 (define-instruction %set-constant ((wam wam)
                                    (constant functor-index))
-  (wam-heap-push! wam (make-cell-constant constant)))
+  (wam-heap-push! wam (make-cell-constant constant))
+  (incf (wam-subterm wam)))
 
 (define-instruction %unify-constant ((wam wam)
                                      (constant functor-index))
   (ecase (wam-mode wam)
     (:read (%%match-constant wam constant (wam-subterm wam)))
-    (:write (wam-heap-push! wam (make-cell-constant constant)))))
+    (:write (wam-heap-push! wam (make-cell-constant constant))))
+  (incf (wam-subterm wam)))
 
 
 ;;;; Running

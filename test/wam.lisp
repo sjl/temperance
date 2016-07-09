@@ -435,3 +435,11 @@
       ((c) empty)
       ((d) fail)
       (dogs empty))))
+
+(test nested-constants
+  (with-fresh-database
+    (push-logic-frame-with
+      (fact (foo (s a b c))))
+    (should-return
+      ((foo (s ?x ?y ?z))
+       (?x a ?y b ?z c)))))
