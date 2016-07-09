@@ -7,6 +7,7 @@
           wam-code
           wam-code-labels
           wam-logic-stack
+          wam-logic-pool
           wam-functors
           wam-fail
           wam-backtracked
@@ -63,6 +64,9 @@
     (make-hash-table)
     :read-only t)
   (logic-stack
+    nil
+    :type list)
+  (logic-pool
     nil
     :type list)
   (functors
@@ -615,6 +619,20 @@
   (predicates (make-hash-table) :type hash-table))
 
 
+(defun* wam-logic-pool-release ((wam wam) (frame logic-frame))
+  (:returns :void)
+  (with-slots (start final predicates) frame
+    (clrhash predicates)
+    (setf start 0 final nil))
+  (push frame (wam-logic-pool wam))
+  (values))
+
+(defun* wam-logic-pool-request ((wam wam))
+  (:returns logic-frame)
+  (or (pop (wam-logic-pool wam))
+      (make-logic-frame)))
+
+
 (defun* wam-current-logic-frame ((wam wam))
   (:returns (or null logic-frame))
   (first (wam-logic-stack wam)))
@@ -638,11 +656,10 @@
   (:returns :void)
   (assert (wam-logic-closed-p wam) ()
     "Cannot push logic frame unless the logic stack is closed.")
-  (push (make-logic-frame
-          :start (fill-pointer (wam-code wam))
-          :final nil
-          :predicates (make-hash-table))
-        (wam-logic-stack wam))
+  (let ((frame (wam-logic-pool-request wam)))
+    (setf (logic-frame-start frame)
+          (fill-pointer (wam-code wam)))
+    (push frame (wam-logic-stack wam)))
   (values))
 
 (defun* wam-pop-logic-frame! ((wam wam))
@@ -652,11 +669,12 @@
       "Cannot pop logic frame from an empty logic stack.")
     (assert (logic-frame-final (first logic-stack)) ()
       "Cannot pop unfinalized logic frame.")
-    (with-slots (start predicates)
-        (pop logic-stack)
-      (setf (fill-pointer (wam-code wam)) start)
-      (loop :for label :being :the hash-keys :of predicates
-            :do (remhash label (wam-code-labels wam)))))
+    (let ((frame (pop logic-stack)))
+      (setf (fill-pointer (wam-code wam))
+            (logic-frame-start frame))
+      (loop :for label :being :the hash-keys :of (logic-frame-predicates frame)
+            :do (remhash label (wam-code-labels wam)))
+      (wam-logic-pool-release wam frame)))
   (values))
 
 
