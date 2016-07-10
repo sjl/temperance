@@ -340,28 +340,19 @@
      (register register-index))
   (setf (wam-local-register wam register)
         (make-cell-structure
-          (nth-value 1 (push-new-functor! wam functor)))))
+          (nth-value 1 (push-new-functor! wam functor)))
+
+        (wam-mode wam)
+        :write))
 
 (define-instruction %put-list
     ((wam wam)
      (register register-index))
   (setf (wam-local-register wam register)
-        (make-cell-list (wam-heap-pointer wam))))
+        (make-cell-list (wam-heap-pointer wam))
 
-(define-instructions (%set-variable-local %set-variable-stack)
-    ((wam wam)
-     (register register-index))
-  (setf (%wam-register% wam register)
-        (push-unbound-reference! wam)))
-
-(define-instructions (%set-value-local %set-value-stack)
-    ((wam wam)
-     (register register-index))
-  (wam-heap-push! wam (%wam-register% wam register)))
-
-(define-instruction %set-void ((wam wam) (n arity))
-  (repeat n
-    (push-unbound-reference! wam)))
+        (wam-mode wam)
+        :write))
 
 (define-instructions (%put-variable-local %put-variable-stack)
     ((wam wam)
@@ -369,14 +360,15 @@
      (argument register-index))
   (let ((new-reference (push-unbound-reference! wam)))
     (setf (%wam-register% wam register) new-reference
-          (wam-local-register wam argument) new-reference)))
+          (wam-local-register wam argument) new-reference
+          (wam-mode wam) :write)))
 
 (define-instructions (%put-value-local %put-value-stack)
     ((wam wam)
      (register register-index)
      (argument register-index))
-  (setf (wam-local-register wam argument)
-        (%wam-register% wam register)))
+  (setf (wam-local-register wam argument) (%wam-register% wam register)
+        (wam-mode wam) :write))
 
 
 ;;;; Program Instructions
@@ -452,6 +444,21 @@
 
       (t (backtrack! wam)))))
 
+(define-instructions (%get-variable-local %get-variable-stack)
+    ((wam wam)
+     (register register-index)
+     (argument register-index))
+  (setf (%wam-register% wam register)
+        (wam-local-register wam argument)))
+
+(define-instructions (%get-value-local %get-value-stack)
+    ((wam wam)
+     (register register-index)
+     (argument register-index))
+  (unify! wam register argument))
+
+
+;;;; Subterm Instructions
 (define-instructions (%unify-variable-local %unify-variable-stack)
     ((wam wam)
      (register register-index))
@@ -474,19 +481,6 @@
     (:read (incf (wam-subterm wam) n))
     (:write (repeat n
               (push-unbound-reference! wam)))))
-
-(define-instructions (%get-variable-local %get-variable-stack)
-    ((wam wam)
-     (register register-index)
-     (argument register-index))
-  (setf (%wam-register% wam register)
-        (wam-local-register wam argument)))
-
-(define-instructions (%get-value-local %get-value-stack)
-    ((wam wam)
-     (register register-index)
-     (argument register-index))
-  (unify! wam register argument))
 
 
 ;;;; Control Instructions
@@ -652,18 +646,13 @@
 (define-instruction %put-constant ((wam wam)
                                    (constant functor-index)
                                    (register register-index))
-  (setf (wam-local-register wam register)
-        (make-cell-constant constant)))
+  (setf (wam-local-register wam register) (make-cell-constant constant)
+        (wam-mode wam) :write))
 
 (define-instruction %get-constant ((wam wam)
                                    (constant functor-index)
                                    (register register-index))
   (%%match-constant wam constant register))
-
-(define-instruction %set-constant ((wam wam)
-                                   (constant functor-index))
-  (wam-heap-push! wam (make-cell-constant constant))
-  (incf (wam-subterm wam)))
 
 (define-instruction %unify-constant ((wam wam)
                                      (constant functor-index))
@@ -754,30 +743,25 @@
             (eswitch (opcode)
               ;; Query
               (+opcode-put-structure+        (instruction %put-structure 2))
-              (+opcode-set-variable-local+   (instruction %set-variable-local 1))
-              (+opcode-set-variable-stack+   (instruction %set-variable-stack 1))
-              (+opcode-set-value-local+      (instruction %set-value-local 1))
-              (+opcode-set-value-stack+      (instruction %set-value-stack 1))
-              (+opcode-set-void+             (instruction %set-void 1))
               (+opcode-put-variable-local+   (instruction %put-variable-local 2))
               (+opcode-put-variable-stack+   (instruction %put-variable-stack 2))
               (+opcode-put-value-local+      (instruction %put-value-local 2))
               (+opcode-put-value-stack+      (instruction %put-value-stack 2))
               ;; Program
               (+opcode-get-structure+        (instruction %get-structure 2))
+              (+opcode-get-variable-local+   (instruction %get-variable-local 2))
+              (+opcode-get-variable-stack+   (instruction %get-variable-stack 2))
+              (+opcode-get-value-local+      (instruction %get-value-local 2))
+              (+opcode-get-value-stack+      (instruction %get-value-stack 2))
+              ;; Subterm
               (+opcode-unify-variable-local+ (instruction %unify-variable-local 1))
               (+opcode-unify-variable-stack+ (instruction %unify-variable-stack 1))
               (+opcode-unify-value-local+    (instruction %unify-value-local 1))
               (+opcode-unify-value-stack+    (instruction %unify-value-stack 1))
               (+opcode-unify-void+           (instruction %unify-void 1))
-              (+opcode-get-variable-local+   (instruction %get-variable-local 2))
-              (+opcode-get-variable-stack+   (instruction %get-variable-stack 2))
-              (+opcode-get-value-local+      (instruction %get-value-local 2))
-              (+opcode-get-value-stack+      (instruction %get-value-stack 2))
               ;; Constant
               (+opcode-put-constant+         (instruction %put-constant 2))
               (+opcode-get-constant+         (instruction %get-constant 2))
-              (+opcode-set-constant+         (instruction %set-constant 1))
               (+opcode-unify-constant+       (instruction %unify-constant 1))
               ;; List
               (+opcode-put-list+             (instruction %put-list 1))

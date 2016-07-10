@@ -883,11 +883,11 @@
 ;;; into a list of instructions, each of which is a list:
 ;;;
 ;;;   (:put-structure X2 q 2)
-;;;   (:set-variable X1)
-;;;   (:set-variable X3)
+;;;   (:unify-variable X1)
+;;;   (:unify-variable X3)
 ;;;   (:put-structure X0 p 2)
-;;;   (:set-value X1)
-;;;   (:set-value X2)
+;;;   (:unify-value X1)
+;;;   (:unify-value X2)
 ;;;
 ;;; The opcodes are keywords and the register arguments remain register objects.
 ;;; They get converted down to the raw bytes in the final "rendering" step.
@@ -995,24 +995,14 @@
                (:program :get-list)
                (:query :put-list)))
       (:register (if first-seen
-                   (case mode
-                     (:program (case register-variant
-                                 (:local :unify-variable-local)
-                                 (:stack :unify-variable-stack)
-                                 (:void :unify-void)))
-                     (:query (case register-variant
-                               (:local :set-variable-local)
-                               (:stack :set-variable-stack)
-                               (:void :set-void))))
-                   (case mode
-                     (:program (case register-variant
-                                 (:local :unify-value-local)
-                                 (:stack :unify-value-stack)
-                                 (:void :unify-void)))
-                     (:query (case register-variant
-                               (:local :set-value-local)
-                               (:stack :set-value-stack)
-                               (:void :set-void)))))))))
+                   (case register-variant
+                     (:local :unify-variable-local)
+                     (:stack :unify-variable-stack)
+                     (:void :unify-void))
+                   (case register-variant
+                     (:local :unify-value-local)
+                     (:stack :unify-value-stack)
+                     (:void :unify-void)))))))
 
 
 (defun precompile-tokens (wam head-tokens body-tokens)
@@ -1081,11 +1071,11 @@
          (handle-register (register)
            (if (register-anonymous-p register)
              ;; VOID 1
-             (push-instruction (find-opcode :register nil mode register) 1)
+             (push-instruction (find-opcode :register nil nil register) 1)
              ;; OP reg
              (let ((first-seen (push-if-new register seen :test #'register=)))
                (push-instruction
-                 (find-opcode :register first-seen mode register)
+                 (find-opcode :register first-seen nil register)
                  register))))
          (handle-token (token)
            (etypecase token
@@ -1264,24 +1254,24 @@
   ;; 2. put_structure c/0, Ai -> put_constant c, Ai
   (circle-replace node `(:put-constant ,constant ,register)))
 
-(defun optimize-set-constant (node constant register)
+(defun optimize-unify-constant-query (node constant register)
   ;; 3. put_structure c/0, Xi                     *** WE ARE HERE
   ;;    ...
-  ;;    set_value Xi          -> set_constant c
+  ;;    unify_value Xi          -> unify_constant c
   (loop
     :with previous = (circle-prev node)
-    ;; Search forward for the corresponding set-value instruction
+    ;; Search for the corresponding set-value instruction
     :for n = (circle-forward-remove node) :then (circle-forward n)
     :while n
     :for (opcode . arguments) = (circle-value n)
-    :when (and (eql opcode :set-value-local)
+    :when (and (eql opcode :unify-value-local)
                (register= register (first arguments)))
     :do
-    (circle-replace n `(:set-constant ,constant))
+    (circle-replace n `(:unify-constant ,constant))
     (return previous)))
 
-(defun optimize-unify-constant (node constant register)
-  ;; 4. unify_variable Xi     -> unify_constant c
+(defun optimize-unify-constant-program (node constant register)
+  ;; 4. unify_variable Xi       -> unify_constant c
   ;;    ...
   ;;    get_structure c/0, Xi                     *** WE ARE HERE
   (loop
@@ -1311,14 +1301,14 @@
              (setf node
                    (if (register-argument-p register)
                      (optimize-put-constant node functor register)
-                     (optimize-set-constant node functor register))))
+                     (optimize-unify-constant-query node functor register))))
 
             ((guard `(:get-structure ,functor ,register)
                     (constant-p functor))
              (setf node
                    (if (register-argument-p register)
                      (optimize-get-constant node functor register)
-                     (optimize-unify-constant node functor register))))))
+                     (optimize-unify-constant-program node functor register))))))
     instructions))
 
 
@@ -1360,28 +1350,22 @@
 (defun render-opcode (opcode)
   (ecase opcode
     (:get-structure        +opcode-get-structure+)
-    (:unify-variable-local +opcode-unify-variable-local+)
-    (:unify-variable-stack +opcode-unify-variable-stack+)
-    (:unify-value-local    +opcode-unify-value-local+)
-    (:unify-value-stack    +opcode-unify-value-stack+)
-    (:unify-void           +opcode-unify-void+)
     (:get-variable-local   +opcode-get-variable-local+)
     (:get-variable-stack   +opcode-get-variable-stack+)
     (:get-value-local      +opcode-get-value-local+)
     (:get-value-stack      +opcode-get-value-stack+)
     (:put-structure        +opcode-put-structure+)
-    (:set-variable-local   +opcode-set-variable-local+)
-    (:set-variable-stack   +opcode-set-variable-stack+)
-    (:set-value-local      +opcode-set-value-local+)
-    (:set-value-stack      +opcode-set-value-stack+)
-    (:set-void             +opcode-set-void+)
     (:put-variable-local   +opcode-put-variable-local+)
     (:put-variable-stack   +opcode-put-variable-stack+)
     (:put-value-local      +opcode-put-value-local+)
     (:put-value-stack      +opcode-put-value-stack+)
+    (:unify-variable-local +opcode-unify-variable-local+)
+    (:unify-variable-stack +opcode-unify-variable-stack+)
+    (:unify-value-local    +opcode-unify-value-local+)
+    (:unify-value-stack    +opcode-unify-value-stack+)
+    (:unify-void           +opcode-unify-void+)
     (:put-constant         +opcode-put-constant+)
     (:get-constant         +opcode-get-constant+)
-    (:set-constant         +opcode-set-constant+)
     (:get-list             +opcode-get-list+)
     (:put-list             +opcode-put-list+)
     (:unify-constant       +opcode-unify-constant+)

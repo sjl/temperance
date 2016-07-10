@@ -155,26 +155,6 @@
           (pretty-arguments arguments)))
 
 
-(defmethod instruction-details ((opcode (eql +opcode-set-variable-local+)) arguments functor-list)
-  (format nil "SVAR~A      ; X~A <- new unbound REF"
-          (pretty-arguments arguments)
-          (first arguments)))
-
-(defmethod instruction-details ((opcode (eql +opcode-set-variable-stack+)) arguments functor-list)
-  (format nil "SVAR~A      ; Y~A <- new unbound REF"
-          (pretty-arguments arguments)
-          (first arguments)))
-
-(defmethod instruction-details ((opcode (eql +opcode-set-value-local+)) arguments functor-list)
-  (format nil "SVLU~A      ; new REF to X~A"
-          (pretty-arguments arguments)
-          (first arguments)))
-
-(defmethod instruction-details ((opcode (eql +opcode-set-value-stack+)) arguments functor-list)
-  (format nil "SVLU~A      ; new REF to Y~A"
-          (pretty-arguments arguments)
-          (first arguments)))
-
 (defmethod instruction-details ((opcode (eql +opcode-get-structure+)) arguments functor-list)
   (format nil "GETS~A ; X~A = ~A"
           (pretty-arguments arguments)
@@ -250,11 +230,6 @@
   (format nil "PCON~A ; X~A <- CONSTANT ~A"
           (pretty-arguments arguments)
           (second arguments)
-          (pretty-functor (first arguments) functor-list)))
-
-(defmethod instruction-details ((opcode (eql +opcode-set-constant+)) arguments functor-list)
-  (format nil "SCON~A      ; SET CONSTANT ~A"
-          (pretty-arguments arguments)
           (pretty-functor (first arguments) functor-list)))
 
 (defmethod instruction-details ((opcode (eql +opcode-unify-constant+)) arguments functor-list)

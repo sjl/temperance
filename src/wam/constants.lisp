@@ -115,11 +115,6 @@
 
   ;; Program
   +opcode-get-structure+
-  +opcode-unify-variable-local+
-  +opcode-unify-variable-stack+
-  +opcode-unify-value-local+
-  +opcode-unify-value-stack+
-  +opcode-unify-void+
   +opcode-get-variable-local+
   +opcode-get-variable-stack+
   +opcode-get-value-local+
@@ -127,15 +122,17 @@
 
   ;; Query
   +opcode-put-structure+
-  +opcode-set-variable-local+
-  +opcode-set-variable-stack+
-  +opcode-set-value-local+
-  +opcode-set-value-stack+
-  +opcode-set-void+
   +opcode-put-variable-local+
   +opcode-put-variable-stack+
   +opcode-put-value-local+
   +opcode-put-value-stack+
+
+  ;; Subterm
+  +opcode-unify-variable-local+
+  +opcode-unify-variable-stack+
+  +opcode-unify-value-local+
+  +opcode-unify-value-stack+
+  +opcode-unify-void+
 
   ;; Control
   +opcode-call+
@@ -151,7 +148,6 @@
 
   ;; Constants
   +opcode-get-constant+
-  +opcode-set-constant+
   +opcode-put-constant+
   +opcode-unify-constant+
 
