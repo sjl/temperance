@@ -390,7 +390,7 @@
         ;;
         ;; It seems a bit confusing that we don't push the rest of the structure
         ;; stuff on the heap after it too.  But that's going to happen in the
-        ;; next few instructions (which will be unify-*'s, executed in write
+        ;; next few instructions (which will be subterm-*'s, executed in write
         ;; mode).
         ((cell-reference-p cell)
          (let ((structure-address (nth-value 1 (push-new-structure! wam)))
@@ -459,7 +459,7 @@
 
 
 ;;;; Subterm Instructions
-(define-instructions (%unify-variable-local %unify-variable-stack)
+(define-instructions (%subterm-variable-local %subterm-variable-stack)
     ((wam wam)
      (register register-index))
   (setf (%wam-register% wam register)
@@ -468,7 +468,7 @@
           (:write (push-unbound-reference! wam))))
   (incf (wam-subterm wam)))
 
-(define-instructions (%unify-value-local %unify-value-stack)
+(define-instructions (%subterm-value-local %subterm-value-stack)
     ((wam wam)
      (register register-index))
   (ecase (wam-mode wam)
@@ -476,7 +476,7 @@
     (:write (wam-heap-push! wam (%wam-register% wam register))))
   (incf (wam-subterm wam)))
 
-(define-instruction %unify-void ((wam wam) (n arity))
+(define-instruction %subterm-void ((wam wam) (n arity))
   (ecase (wam-mode wam)
     (:read (incf (wam-subterm wam) n))
     (:write (repeat n
@@ -654,7 +654,7 @@
                                    (register register-index))
   (%%match-constant wam constant register))
 
-(define-instruction %unify-constant ((wam wam)
+(define-instruction %subterm-constant ((wam wam)
                                      (constant functor-index))
   (ecase (wam-mode wam)
     (:read (%%match-constant wam constant (wam-subterm wam)))
@@ -742,37 +742,37 @@
               (break "About to execute instruction at ~4,'0X" pc))
             (eswitch (opcode)
               ;; Query
-              (+opcode-put-structure+        (instruction %put-structure 2))
-              (+opcode-put-variable-local+   (instruction %put-variable-local 2))
-              (+opcode-put-variable-stack+   (instruction %put-variable-stack 2))
-              (+opcode-put-value-local+      (instruction %put-value-local 2))
-              (+opcode-put-value-stack+      (instruction %put-value-stack 2))
+              (+opcode-put-structure+          (instruction %put-structure 2))
+              (+opcode-put-variable-local+     (instruction %put-variable-local 2))
+              (+opcode-put-variable-stack+     (instruction %put-variable-stack 2))
+              (+opcode-put-value-local+        (instruction %put-value-local 2))
+              (+opcode-put-value-stack+        (instruction %put-value-stack 2))
               ;; Program
-              (+opcode-get-structure+        (instruction %get-structure 2))
-              (+opcode-get-variable-local+   (instruction %get-variable-local 2))
-              (+opcode-get-variable-stack+   (instruction %get-variable-stack 2))
-              (+opcode-get-value-local+      (instruction %get-value-local 2))
-              (+opcode-get-value-stack+      (instruction %get-value-stack 2))
+              (+opcode-get-structure+          (instruction %get-structure 2))
+              (+opcode-get-variable-local+     (instruction %get-variable-local 2))
+              (+opcode-get-variable-stack+     (instruction %get-variable-stack 2))
+              (+opcode-get-value-local+        (instruction %get-value-local 2))
+              (+opcode-get-value-stack+        (instruction %get-value-stack 2))
               ;; Subterm
-              (+opcode-unify-variable-local+ (instruction %unify-variable-local 1))
-              (+opcode-unify-variable-stack+ (instruction %unify-variable-stack 1))
-              (+opcode-unify-value-local+    (instruction %unify-value-local 1))
-              (+opcode-unify-value-stack+    (instruction %unify-value-stack 1))
-              (+opcode-unify-void+           (instruction %unify-void 1))
+              (+opcode-subterm-variable-local+ (instruction %subterm-variable-local 1))
+              (+opcode-subterm-variable-stack+ (instruction %subterm-variable-stack 1))
+              (+opcode-subterm-value-local+    (instruction %subterm-value-local 1))
+              (+opcode-subterm-value-stack+    (instruction %subterm-value-stack 1))
+              (+opcode-subterm-void+           (instruction %subterm-void 1))
               ;; Constant
-              (+opcode-put-constant+         (instruction %put-constant 2))
-              (+opcode-get-constant+         (instruction %get-constant 2))
-              (+opcode-unify-constant+       (instruction %unify-constant 1))
+              (+opcode-put-constant+           (instruction %put-constant 2))
+              (+opcode-get-constant+           (instruction %get-constant 2))
+              (+opcode-subterm-constant+       (instruction %subterm-constant 1))
               ;; List
-              (+opcode-put-list+             (instruction %put-list 1))
-              (+opcode-get-list+             (instruction %get-list 1))
+              (+opcode-put-list+               (instruction %put-list 1))
+              (+opcode-get-list+               (instruction %get-list 1))
               ;; Choice
-              (+opcode-try+                  (instruction %try 1))
-              (+opcode-retry+                (instruction %retry 1))
-              (+opcode-trust+                (instruction %trust 0))
-              (+opcode-cut+                  (instruction %cut 0))
+              (+opcode-try+                    (instruction %try 1))
+              (+opcode-retry+                  (instruction %retry 1))
+              (+opcode-trust+                  (instruction %trust 0))
+              (+opcode-cut+                    (instruction %cut 0))
               ;; Control
-              (+opcode-allocate+             (instruction %allocate 1))
+              (+opcode-allocate+               (instruction %allocate 1))
               ;; need to skip the PC increment for PROC/CALL/DEAL/DONE
               ;; TODO: this is still ugly
               (+opcode-deallocate+

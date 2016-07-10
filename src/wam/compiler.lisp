@@ -883,11 +883,11 @@
 ;;; into a list of instructions, each of which is a list:
 ;;;
 ;;;   (:put-structure X2 q 2)
-;;;   (:unify-variable X1)
-;;;   (:unify-variable X3)
+;;;   (:subterm-variable X1)
+;;;   (:subterm-variable X3)
 ;;;   (:put-structure X0 p 2)
-;;;   (:unify-value X1)
-;;;   (:unify-value X2)
+;;;   (:subterm-value X1)
+;;;   (:subterm-value X2)
 ;;;
 ;;; The opcodes are keywords and the register arguments remain register objects.
 ;;; They get converted down to the raw bytes in the final "rendering" step.
@@ -996,13 +996,13 @@
                (:query :put-list)))
       (:register (if first-seen
                    (case register-variant
-                     (:local :unify-variable-local)
-                     (:stack :unify-variable-stack)
-                     (:void :unify-void))
+                     (:local :subterm-variable-local)
+                     (:stack :subterm-variable-stack)
+                     (:void :subterm-void))
                    (case register-variant
-                     (:local :unify-value-local)
-                     (:stack :unify-value-stack)
-                     (:void :unify-void)))))))
+                     (:local :subterm-value-local)
+                     (:stack :subterm-value-stack)
+                     (:void :subterm-void)))))))
 
 
 (defun precompile-tokens (wam head-tokens body-tokens)
@@ -1254,35 +1254,35 @@
   ;; 2. put_structure c/0, Ai -> put_constant c, Ai
   (circle-replace node `(:put-constant ,constant ,register)))
 
-(defun optimize-unify-constant-query (node constant register)
+(defun optimize-subterm-constant-query (node constant register)
   ;; 3. put_structure c/0, Xi                     *** WE ARE HERE
   ;;    ...
-  ;;    unify_value Xi          -> unify_constant c
+  ;;    subterm_value Xi          -> subterm_constant c
   (loop
     :with previous = (circle-prev node)
     ;; Search for the corresponding set-value instruction
     :for n = (circle-forward-remove node) :then (circle-forward n)
     :while n
     :for (opcode . arguments) = (circle-value n)
-    :when (and (eql opcode :unify-value-local)
+    :when (and (eql opcode :subterm-value-local)
                (register= register (first arguments)))
     :do
-    (circle-replace n `(:unify-constant ,constant))
+    (circle-replace n `(:subterm-constant ,constant))
     (return previous)))
 
-(defun optimize-unify-constant-program (node constant register)
-  ;; 4. unify_variable Xi       -> unify_constant c
+(defun optimize-subterm-constant-program (node constant register)
+  ;; 4. subterm_variable Xi       -> subterm_constant c
   ;;    ...
   ;;    get_structure c/0, Xi                     *** WE ARE HERE
   (loop
-    ;; Search backward for the corresponding unify-variable instruction
+    ;; Search backward for the corresponding subterm-variable instruction
     :for n = (circle-backward node) :then (circle-backward n)
     :while n
     :for (opcode . arguments) = (circle-value n)
-    :when (and (eql opcode :unify-variable-local)
+    :when (and (eql opcode :subterm-variable-local)
                (register= register (first arguments)))
     :do
-    (circle-replace n `(:unify-constant ,constant))
+    (circle-replace n `(:subterm-constant ,constant))
     (return (circle-backward-remove node))))
 
 (defun optimize-constants (wam instructions)
@@ -1301,14 +1301,14 @@
              (setf node
                    (if (register-argument-p register)
                      (optimize-put-constant node functor register)
-                     (optimize-unify-constant-query node functor register))))
+                     (optimize-subterm-constant-query node functor register))))
 
             ((guard `(:get-structure ,functor ,register)
                     (constant-p functor))
              (setf node
                    (if (register-argument-p register)
                      (optimize-get-constant node functor register)
-                     (optimize-unify-constant-program node functor register))))))
+                     (optimize-subterm-constant-program node functor register))))))
     instructions))
 
 
@@ -1321,7 +1321,7 @@
     :while node
     :for opcode = (car (circle-value node))
     :when (or (eq opcode :set-void)
-              (eq opcode :unify-void))
+              (eq opcode :subterm-void))
     :do
     (loop
       :with beginning = (circle-backward node)
@@ -1349,36 +1349,36 @@
 
 (defun render-opcode (opcode)
   (ecase opcode
-    (:get-structure        +opcode-get-structure+)
-    (:get-variable-local   +opcode-get-variable-local+)
-    (:get-variable-stack   +opcode-get-variable-stack+)
-    (:get-value-local      +opcode-get-value-local+)
-    (:get-value-stack      +opcode-get-value-stack+)
-    (:put-structure        +opcode-put-structure+)
-    (:put-variable-local   +opcode-put-variable-local+)
-    (:put-variable-stack   +opcode-put-variable-stack+)
-    (:put-value-local      +opcode-put-value-local+)
-    (:put-value-stack      +opcode-put-value-stack+)
-    (:unify-variable-local +opcode-unify-variable-local+)
-    (:unify-variable-stack +opcode-unify-variable-stack+)
-    (:unify-value-local    +opcode-unify-value-local+)
-    (:unify-value-stack    +opcode-unify-value-stack+)
-    (:unify-void           +opcode-unify-void+)
-    (:put-constant         +opcode-put-constant+)
-    (:get-constant         +opcode-get-constant+)
-    (:get-list             +opcode-get-list+)
-    (:put-list             +opcode-put-list+)
-    (:unify-constant       +opcode-unify-constant+)
-    (:call                 +opcode-call+)
-    (:dynamic-call         +opcode-dynamic-call+)
-    (:proceed              +opcode-proceed+)
-    (:allocate             +opcode-allocate+)
-    (:deallocate           +opcode-deallocate+)
-    (:done                 +opcode-done+)
-    (:try                  +opcode-try+)
-    (:retry                +opcode-retry+)
-    (:trust                +opcode-trust+)
-    (:cut                  +opcode-cut+)))
+    (:get-structure          +opcode-get-structure+)
+    (:get-variable-local     +opcode-get-variable-local+)
+    (:get-variable-stack     +opcode-get-variable-stack+)
+    (:get-value-local        +opcode-get-value-local+)
+    (:get-value-stack        +opcode-get-value-stack+)
+    (:put-structure          +opcode-put-structure+)
+    (:put-variable-local     +opcode-put-variable-local+)
+    (:put-variable-stack     +opcode-put-variable-stack+)
+    (:put-value-local        +opcode-put-value-local+)
+    (:put-value-stack        +opcode-put-value-stack+)
+    (:subterm-variable-local +opcode-subterm-variable-local+)
+    (:subterm-variable-stack +opcode-subterm-variable-stack+)
+    (:subterm-value-local    +opcode-subterm-value-local+)
+    (:subterm-value-stack    +opcode-subterm-value-stack+)
+    (:subterm-void           +opcode-subterm-void+)
+    (:put-constant           +opcode-put-constant+)
+    (:get-constant           +opcode-get-constant+)
+    (:get-list               +opcode-get-list+)
+    (:put-list               +opcode-put-list+)
+    (:subterm-constant       +opcode-subterm-constant+)
+    (:call                   +opcode-call+)
+    (:dynamic-call           +opcode-dynamic-call+)
+    (:proceed                +opcode-proceed+)
+    (:allocate               +opcode-allocate+)
+    (:deallocate             +opcode-deallocate+)
+    (:done                   +opcode-done+)
+    (:try                    +opcode-try+)
+    (:retry                  +opcode-retry+)
+    (:trust                  +opcode-trust+)
+    (:cut                    +opcode-cut+)))
 
 (defun render-argument (argument)
   (etypecase argument

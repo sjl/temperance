@@ -128,11 +128,11 @@
   +opcode-put-value-stack+
 
   ;; Subterm
-  +opcode-unify-variable-local+
-  +opcode-unify-variable-stack+
-  +opcode-unify-value-local+
-  +opcode-unify-value-stack+
-  +opcode-unify-void+
+  +opcode-subterm-variable-local+
+  +opcode-subterm-variable-stack+
+  +opcode-subterm-value-local+
+  +opcode-subterm-value-stack+
+  +opcode-subterm-void+
 
   ;; Control
   +opcode-call+
@@ -149,7 +149,7 @@
   ;; Constants
   +opcode-get-constant+
   +opcode-put-constant+
-  +opcode-unify-constant+
+  +opcode-subterm-constant+
 
   ;; Lists
   +opcode-get-list+

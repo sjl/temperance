@@ -232,8 +232,8 @@
           (second arguments)
           (pretty-functor (first arguments) functor-list)))
 
-(defmethod instruction-details ((opcode (eql +opcode-unify-constant+)) arguments functor-list)
-  (format nil "UCON~A      ; UNIFY CONSTANT ~A"
+(defmethod instruction-details ((opcode (eql +opcode-subterm-constant+)) arguments functor-list)
+  (format nil "SCON~A      ; SUBTERM CONSTANT ~A"
           (pretty-arguments arguments)
           (pretty-functor (first arguments) functor-list)))
 

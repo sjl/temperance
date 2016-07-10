@@ -25,11 +25,11 @@
     (+opcode-put-value-local+ 3)
     (+opcode-put-value-stack+ 3)
 
-    (+opcode-unify-variable-local+ 2)
-    (+opcode-unify-variable-stack+ 2)
-    (+opcode-unify-value-local+ 2)
-    (+opcode-unify-value-stack+ 2)
-    (+opcode-unify-void+ 2)
+    (+opcode-subterm-variable-local+ 2)
+    (+opcode-subterm-variable-stack+ 2)
+    (+opcode-subterm-value-local+ 2)
+    (+opcode-subterm-value-stack+ 2)
+    (+opcode-subterm-void+ 2)
 
     (+opcode-call+ 2)
     (+opcode-dynamic-call+ 1)
@@ -44,7 +44,7 @@
 
     (+opcode-get-constant+ 3)
     (+opcode-put-constant+ 3)
-    (+opcode-unify-constant+ 2)
+    (+opcode-subterm-constant+ 2)
 
     (+opcode-get-list+ 2)
     (+opcode-put-list+ 2)))
@@ -67,11 +67,11 @@
     (+opcode-put-value-local+ "PUT-VALUE")
     (+opcode-put-value-stack+ "PUT-VALUE")
 
-    (+opcode-unify-variable-local+ "UNIFY-VARIABLE")
-    (+opcode-unify-variable-stack+ "UNIFY-VARIABLE")
-    (+opcode-unify-value-local+ "UNIFY-VALUE")
-    (+opcode-unify-value-stack+ "UNIFY-VALUE")
-    (+opcode-unify-void+ "UNIFY-VOID")
+    (+opcode-subterm-variable-local+ "SUBTERM-VARIABLE")
+    (+opcode-subterm-variable-stack+ "SUBTERM-VARIABLE")
+    (+opcode-subterm-value-local+ "SUBTERM-VALUE")
+    (+opcode-subterm-value-stack+ "SUBTERM-VALUE")
+    (+opcode-subterm-void+ "SUBTERM-VOID")
 
     (+opcode-call+ "CALL")
     (+opcode-dynamic-call+ "DYNAMIC-CALL")
@@ -86,7 +86,7 @@
 
     (+opcode-get-constant+ "GET-CONSTANT")
     (+opcode-put-constant+ "PUT-CONSTANT")
-    (+opcode-unify-constant+ "UNIFY-CONSTANT")
+    (+opcode-subterm-constant+ "SUBTERM-CONSTANT")
 
     (+opcode-get-list+ "GET-LIST")
     (+opcode-put-list+ "PUT-LIST")))
@@ -108,11 +108,11 @@
     (+opcode-put-value-local+ "PVLU")
     (+opcode-put-value-stack+ "PVLU")
 
-    (+opcode-unify-variable-local+ "UVAR")
-    (+opcode-unify-variable-stack+ "UVAR")
-    (+opcode-unify-value-local+ "UVLU")
-    (+opcode-unify-value-stack+ "UVLU")
-    (+opcode-unify-void+ "UVOI")
+    (+opcode-subterm-variable-local+ "SVAR")
+    (+opcode-subterm-variable-stack+ "SVAR")
+    (+opcode-subterm-value-local+ "SVLU")
+    (+opcode-subterm-value-stack+ "SVLU")
+    (+opcode-subterm-void+ "SVOI")
 
     (+opcode-call+ "CALL")
     (+opcode-dynamic-call+ "DYCL")
@@ -127,7 +127,7 @@
 
     (+opcode-get-constant+ "GCON")
     (+opcode-put-constant+ "PCON")
-    (+opcode-unify-constant+ "UCON")
+    (+opcode-subterm-constant+ "UCON")
 
     (+opcode-get-list+ "GLST")
     (+opcode-put-list+ "PLST")))
