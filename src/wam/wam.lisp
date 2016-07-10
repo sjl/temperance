@@ -1,5 +1,6 @@
 (in-package #:bones.wam)
 
+
 ;;;; WAM
 (declaim
   ;; Inline all these struct accessors, otherwise things get REAL slow.
@@ -121,7 +122,9 @@
   "
   (aref (wam-store wam) address))
 
-(defun (setf wam-store-cell) (new-value wam address)
+(defun* (setf wam-store-cell) ((new-value cell)
+                               (wam wam)
+                               (address store-index))
   (setf (aref (wam-store wam) address) new-value))
 
 
@@ -163,7 +166,8 @@
   "Return the current heap pointer of the WAM."
   (fill-pointer (wam-store wam)))
 
-(defun (setf wam-heap-pointer) (new-value wam)
+(defun* (setf wam-heap-pointer) ((new-value heap-index)
+                                 (wam wam))
   (setf (fill-pointer (wam-store wam)) new-value))
 
 
@@ -174,7 +178,9 @@
     (error "Cannot read from heap address zero."))
   (aref (wam-store wam) address))
 
-(defun (setf wam-heap-cell) (new-value wam address)
+(defun* (setf wam-heap-cell) ((new-value cell)
+                              (wam wam)
+                              (address heap-index))
   (when (wam-heap-pointer-unset-p wam address)
     (error "Cannot write to heap address zero."))
   (setf (aref (wam-store wam) address) new-value))
@@ -186,7 +192,8 @@
   "Return the current trail pointer of the WAM."
   (fill-pointer (wam-trail wam)))
 
-(defun (setf wam-trail-pointer) (new-value wam)
+(defun* (setf wam-trail-pointer) ((new-value trail-index)
+                                  (wam wam))
   (setf (fill-pointer (wam-trail wam)) new-value))
 
 
@@ -214,7 +221,9 @@
   "Return the element (a heap index) in the WAM trail at `address`."
   (aref (wam-trail wam) address))
 
-(defun (setf wam-trail-value) (new-value wam address)
+(defun* (setf wam-trail-value) ((new-value store-index)
+                                (wam wam)
+                                (address trail-index))
   (setf (aref (wam-trail wam) address) new-value))
 
 
@@ -262,7 +271,9 @@
   (assert-inside-stack wam address)
   (aref (wam-store wam) address))
 
-(defun (setf wam-stack-word) (new-value wam address)
+(defun* (setf wam-stack-word) ((new-value stack-word)
+                               (wam wam)
+                               (address stack-index))
   (assert-inside-stack wam address)
   (setf (aref (wam-store wam) address) new-value))
 
@@ -346,11 +357,11 @@
   (:returns cell)
   (wam-stack-word wam (+ 4 n e)))
 
-(defun* (setf wam-stack-frame-arg)
-    ((new-value cell)
-     (wam wam)
-     (n register-index)
-     &optional ((e environment-pointer) (wam-environment-pointer wam)))
+(defun* (setf wam-stack-frame-arg) ((new-value cell)
+                                    (wam wam)
+                                    (n register-index)
+                                    &optional ((e environment-pointer)
+                                               (wam-environment-pointer wam)))
   (setf (wam-stack-word wam (+ e 4 n))
         new-value))
 
@@ -457,11 +468,11 @@
   (:returns cell)
   (wam-stack-word wam (+ b 7 n)))
 
-(defun* (setf wam-stack-choice-arg)
-    ((new-value cell)
-     (wam wam)
-     (n arity)
-     &optional ((b backtrack-pointer) (wam-backtrack-pointer wam)))
+(defun* (setf wam-stack-choice-arg) ((new-value cell)
+                                     (wam wam)
+                                     (n arity)
+                                     &optional ((b backtrack-pointer)
+                                                (wam-backtrack-pointer wam)))
   (setf (wam-stack-word wam (+ b 7 n))
         new-value))
 
@@ -547,7 +558,9 @@
   "Return the word at the given address in the code store."
   (aref (wam-code wam) address))
 
-(defun (setf wam-code-word) (word wam address)
+(defun* (setf wam-code-word) ((word code-word)
+                              (wam wam)
+                              (address code-index))
   (setf (aref (wam-code wam) address) word))
 
 
@@ -593,7 +606,10 @@
   (:returns (or null code-index))
   (gethash functor (wam-code-labels wam)))
 
-(defun (setf wam-code-label) (new-value wam functor arity)
+(defun* (setf wam-code-label) ((new-value code-index)
+                               (wam wam)
+                               (functor symbol)
+                               (arity arity))
   ;; Note that this takes a functor/arity and not a cons.
   (setf (gethash (wam-ensure-functor-index wam (cons functor arity))
                  (wam-code-labels wam))
@@ -780,7 +796,9 @@
   "Return the value stored in the WAM local register with the given index."
   (aref (wam-store wam) register))
 
-(defun (setf wam-local-register) (new-value wam register)
+(defun* (setf wam-local-register) ((new-value cell)
+                                   (wam wam)
+                                   (register register-index))
   (setf (aref (wam-store wam) register) new-value))
 
 
@@ -789,7 +807,9 @@
   "Return the value stored in the WAM stack register with the given index."
   (wam-stack-frame-arg wam register))
 
-(defun (setf wam-stack-register) (new-value wam register)
+(defun* (setf wam-stack-register) ((new-value cell)
+                                   (wam wam)
+                                   (register register-index))
   (setf (wam-stack-frame-arg wam register) new-value))
 
 

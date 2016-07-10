@@ -113,6 +113,12 @@
           (setf (gethash ,key ,hash-table) ,default-form))))))
 
 
+(defmacro yolo (&body body)
+  `(locally
+     #+sbcl (declare (optimize (sb-c::insert-array-bounds-checks 0)))
+     ,@body))
+
+
 ;;;; Queues
 ;;; From PAIP (thanks, Norvig).
 

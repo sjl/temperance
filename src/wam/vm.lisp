@@ -315,10 +315,11 @@
   make sure it actually does return void.
 
   "
-  `(defun* ,name ,lambda-list
-     (:returns :void)
-     ,@body
-     (values)))
+  `(progn
+    (defun* ,name ,lambda-list
+      (:returns :void)
+      ,@body
+      (values))))
 
 (defmacro define-instructions ((local-name stack-name) lambda-list &body body)
   "Define a local/stack pair of instructions."
