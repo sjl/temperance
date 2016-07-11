@@ -654,11 +654,12 @@
   (assert (wam-logic-open-p wam) ()
     "Cannot add clause ~S without an open logic stack frame."
     clause)
-  (let ((label (wam-ensure-functor-index wam (find-predicate clause))))
-    (assert-label-not-already-compiled wam clause label)
-    (with-slots (predicates)
-        (wam-current-logic-frame wam)
-      (enqueue clause (gethash-or-init label predicates (make-queue)))))
+  (multiple-value-bind (functor arity) (find-predicate clause)
+    (let ((label (wam-ensure-functor-index wam (cons functor arity))))
+      (assert-label-not-already-compiled wam clause label)
+      (with-slots (predicates)
+          (wam-current-logic-frame wam)
+        (enqueue clause (gethash-or-init label predicates (make-queue))))))
   (values))
 
 
