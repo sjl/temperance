@@ -542,7 +542,7 @@
 
 (defstruct allocation-state
   (local-registers (vector) :type (vector t *)) ; todo should this be a (vector symbol) instead?
-  (stack-registers (make-array 1) :type (simple-array symbol (*)))
+  (stack-registers nil :type list)
   (permanent-variables nil :type list)
   (anonymous-variables nil :type list)
   (reserved-variables nil :type list)
@@ -656,15 +656,14 @@
        (local-registers (make-array 64
                           :fill-pointer (or reserved-arity actual-arity)
                           :adjustable t
-                          :initial-element nil))
+                          :initial-element 0))
        ;; We essentially "preallocate" all the permanent variables up front
        ;; because we need them to always be in the same stack registers across
        ;; all the terms of our clause.
        ;;
        ;; The ones that won't get used in this term will end up getting
        ;; flattened away anyway.
-       (stack-registers (make-array (length permanent-variables)
-                          :initial-contents permanent-variables))
+       (stack-registers permanent-variables)
        (allocation-state
          (make-allocation-state
            :local-registers local-registers
