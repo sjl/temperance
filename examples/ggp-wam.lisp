@@ -221,13 +221,21 @@
   (pop-logic-frame))
 
 
+(defun perform-move (joint-move)
+  (prog2
+    (apply-moves joint-move)
+    (next-state)
+    (clear-moves)))
+
+
 (defvar *count* 0)
+(defvar *role* nil)
 
 
-; (declaim (optimize (speed 0) (debug 3)))
 ;; nodes: (state . path)
 (defun depth-first-search (&key exhaust)
   (let ((*count* 0)
+        (*role* (first (roles)))
         (nodes (make-queue)))
     (enqueue (cons (initial-state) nil) nodes)
     (pprint
@@ -237,18 +245,16 @@
             (dequeue nodes)
           (apply-state state)
           ; (format t "Searching: ~S (~D remaining)~%" state (length remaining))
-          (if (and (not exhaust) (eql 'num100 (goal-value 'robot)))
-            (progn
-              (clear-state)
-              (return (list state (reverse path))))
+          (if (terminalp)
+            (prog1
+                (if (and (not exhaust) (eq 'num100 (goal-value *role*)))
+                  (list state (reverse path))
+                  nil)
+              (clear-state))
             (let ((children
-                    (when (not (terminalp))
-                      (loop :for joint-move :in (legal-moves)
-                            :collect (prog2
-                                       (apply-moves joint-move)
-                                       (cons (next-state)
-                                             (cons joint-move path))
-                                       (clear-moves))))))
+                    (loop :for joint-move :in (legal-moves)
+                          :collect (cons (perform-move joint-move)
+                                         (cons joint-move path)))))
               (clear-state)
               (queue-append nodes children))))))
     (format t "~%Searched ~D nodes.~%" *count*)))
