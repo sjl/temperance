@@ -28,8 +28,8 @@
 ;;; 2. When we see a `:get-structure-* CONSTANT LOCALREG` instruction:
 ;;;   A. Remove it in-place, so the next node will be processed on the next
 ;;;      iteration (remember, we're iterating backwards).
-;;;   B. Search forward for the corresponding `:unify-variable` instruction and
-;;;      replace it in-place with the `:unify-constant` instruction.
+;;;   B. Search forward for the corresponding `:subterm-variable` instruction
+;;;      and replace it in-place with the `:subterm-constant` instruction.
 ;;;
 ;;; Of course you could do all this with immutable data structures, but it'll be
 ;;; pretty slow.  And since one of the primary goals of this project is to be
