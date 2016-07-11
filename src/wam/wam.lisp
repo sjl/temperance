@@ -17,6 +17,7 @@
           wam-number-of-arguments
           wam-subterm
           wam-program-counter
+          wam-heap-pointer
           wam-continuation-pointer
           wam-environment-pointer
           wam-backtrack-pointer
@@ -34,6 +35,21 @@
     :initial-element 0
     :element-type 'code-word))
 
+(defun allocate-wam-store (size)
+  ;; The main WAM store contains three separate blocks of values:
+  ;;
+  ;;     [0, +register-count+)        -> the local X_n registers
+  ;;     [+stack-start+, +stack-end+) -> the stack
+  ;;     [+heap-start+, ...)          -> the heap
+  ;;
+  ;; `+register-count+` and `+stack-start+` are the same number, and
+  ;; `+stack-end+` and `+heap-start+` are the same number as well.
+  (make-array (+ +register-count+
+                 +stack-limit+
+                 size)
+    :initial-element (make-cell-null)
+    :element-type 'cell))
+
 
 (defstruct (wam
              (:print-function
@@ -44,22 +60,8 @@
                   (format stream "an wam"))))
              (:constructor make-wam%))
   (store
-    ;; The main WAM store contains three separate blocks of values:
-    ;;
-    ;;     [0, +register-count+)        -> the local X_n registers
-    ;;     [+stack-start+, +stack-end+) -> the stack
-    ;;     [+heap-start+, ...)          -> the heap
-    ;;
-    ;; `+register-count+` and `+stack-start+` are the same number, and
-    ;; `+stack-end+` and `+heap-start+` are the same number as well.
-    (make-array (+ +register-count+ ; TODO: make all these configurable per-WAM
-                   +stack-limit+
-                   4096)
-      :fill-pointer (1+ +stack-end+)
-      :adjustable t
-      :initial-element (make-cell-null)
-      :element-type 'cell)
-    :type (vector cell)
+    (allocate-wam-store 0)
+    :type store
     :read-only t)
   (code
     (allocate-wam-code 0)
@@ -102,6 +104,7 @@
   (subterm                +heap-start+         :type heap-index)           ; S
   (program-counter        0                    :type code-index)           ; P
   (code-pointer           +maximum-query-size+ :type code-index)           ; CODE
+  (heap-pointer           (1+ +heap-start+)    :type heap-index)           ; H
   (stack-pointer          +stack-start+        :type stack-index)          ; SP
   (continuation-pointer   0                    :type code-index)           ; CP
   (environment-pointer    +stack-start+        :type environment-pointer)  ; E
@@ -115,9 +118,11 @@
   (mode        nil :type (or null (member :read :write))))
 
 
-(defun* make-wam (&key (code-size (* 1024 1024)))
+(defun* make-wam (&key (store-size (megabytes 10))
+                       (code-size (megabytes 1)))
   (:returns wam)
-  (make-wam% :code (allocate-wam-code code-size)))
+  (make-wam% :code (allocate-wam-code code-size)
+             :store (allocate-wam-store store-size)))
 
 
 ;;;; Store
@@ -166,19 +171,9 @@
   Returns the cell and the address it was pushed to.
 
   "
-  (let ((store (wam-store wam)))
-    (if (= +store-limit+ (fill-pointer store))
-      (error "WAM heap exhausted.")
-      (values cell (vector-push-extend cell store)))))
-
-(defun* wam-heap-pointer ((wam wam))
-  (:returns heap-index)
-  "Return the current heap pointer of the WAM."
-  (fill-pointer (wam-store wam)))
-
-(defun* (setf wam-heap-pointer) ((new-value heap-index)
-                                 (wam wam))
-  (setf (fill-pointer (wam-store wam)) new-value))
+  (if (>= (wam-heap-pointer wam) +store-limit+) ; todo: respect actual size...
+    (error "WAM heap exhausted.")
+    (values cell (array-push cell (wam-store wam) (wam-heap-pointer wam)))))
 
 
 (defun* wam-heap-cell ((wam wam) (address heap-index))
@@ -521,8 +516,7 @@
 
 ;;;; Resetting
 (defun* wam-truncate-heap! ((wam wam))
-  (setf (fill-pointer (wam-store wam))
-        (1+ +heap-start+)))
+  (setf (wam-heap-pointer wam) (1+ +heap-start+)))
 
 (defun* wam-truncate-trail! ((wam wam))
   (setf (fill-pointer (wam-trail wam)) 0))

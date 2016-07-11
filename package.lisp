@@ -15,6 +15,7 @@
     #:when-let
     #:unique-items
     #:dis
+    #:megabytes
     #:gethash-or-init
     #:define-lookup
     #:make-queue

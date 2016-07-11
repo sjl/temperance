@@ -136,6 +136,10 @@
                                (safety 0)))
      ,@body))
 
+(defun megabytes (n)
+  "Return the number of 64-bit words in `n` megabytes."
+  (* 1024 1024 1/8 n))
+
 
 ;;;; Queues
 ;;; From PAIP (thanks, Norvig).

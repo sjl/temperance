@@ -10,6 +10,10 @@
   `(unsigned-byte ,+cell-value-width+))
 
 
+(deftype store ()
+  '(simple-array cell (*)))
+
+
 (deftype store-index ()
   `(integer 0 ,(1- +store-limit+)))
 

@@ -42,13 +42,16 @@
                  matching-functor-p
                  functors-match-p
                  constants-match-p))
+
 (defun* bound-reference-p ((wam wam) (address store-index))
+  (:returns boolean)
   "Return whether the cell at `address` is a bound reference."
   (let ((cell (wam-store-cell wam address)))
     (and (cell-reference-p cell)
          (not (= (cell-value cell) address)))))
 
 (defun* unbound-reference-p ((wam wam) (address store-index))
+  (:returns boolean)
   "Return whether the cell at `address` is an unbound reference."
   (let ((cell (wam-store-cell wam address)))
     (and (cell-reference-p cell)
@@ -56,6 +59,7 @@
 
 (defun* matching-functor-p ((cell cell)
                             (functor functor-index))
+  (:returns boolean)
   "Return whether `cell` is a functor cell containing `functor`."
   (and (cell-functor-p cell)
        (= (cell-value cell) functor)))
@@ -91,6 +95,8 @@
 
 
 ;;;; "Ancillary" Functions
+(declaim (inline deref))
+
 (defun* backtrack! ((wam wam))
   (:returns :void)
   "Backtrack after a failure.
@@ -169,9 +175,10 @@
   will be returned.
 
   "
-  (if (bound-reference-p wam address)
-    (deref wam (cell-value (wam-store-cell wam address)))
-    address))
+  ;; SBCL won't inline recursive functions :(
+  (while (bound-reference-p wam address)
+    (setf address (cell-value (wam-store-cell wam address))))
+  address)
 
 (defun* bind! ((wam wam) (address-1 store-index) (address-2 store-index))
   (:returns :void)
@@ -635,6 +642,7 @@
 
 
 ;;;; Constant Instructions
+(declaim (inline %%match-constant))
 (defun* %%match-constant ((wam wam)
                           (constant functor-index)
                           (address store-index))
