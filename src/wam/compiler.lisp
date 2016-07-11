@@ -788,7 +788,6 @@
 
 (defclass cut-token (token) ())
 
-
 (defun make-register-token (register)
   (make-instance 'register-token :register register))
 
@@ -1357,6 +1356,34 @@
 ;;; Rendering is the act of taking the friendly list-of-instructions format and
 ;;; actually converting it to raw-ass bytes and storing it in an array.
 
+(defun check-instruction (opcode arguments)
+  (assert (= (length arguments)
+             (1- (instruction-size opcode)))
+      ()
+    "Cannot push opcode ~A with ~D arguments ~S, it requires exactly ~D."
+    (opcode-name opcode)
+    (length arguments)
+    arguments
+    (1- (instruction-size opcode))))
+
+(defun* code-push-instruction ((store generic-code-store)
+                               (opcode opcode)
+                               (arguments list)
+                               (address code-index))
+  "Push the given instruction into `store` at `address`.
+
+  `arguments` should be a list of `code-word`s.
+
+  Returns how many words were pushed.
+
+  "
+  (:returns instruction-size)
+  (check-instruction opcode arguments)
+  (setf (aref store address) opcode
+        (subseq store (1+ address)) arguments)
+  (instruction-size opcode))
+
+
 (defun render-opcode (opcode)
   (ecase opcode
     (:get-structure        +opcode-get-structure+)
@@ -1402,8 +1429,17 @@
     (register (register-number argument)) ; bytecode just needs register numbers
     (number argument))) ; just a numeric argument, e.g. alloc 0
 
-(defun render-bytecode (code instructions)
-  "Render `instructions` (a circle) into `code` (a bytecode array)."
+(defun* render-bytecode ((code generic-code-store)
+                         (instructions circle)
+                         (start code-index)
+                         (limit code-index))
+  "Render `instructions` (a circle) into `code` starting at `start`.
+
+  Bail if ever pushed beyond `limit`.
+
+  Return the total number of code words rendered.
+
+  "
   (let ((previous-jump nil))
     (flet
         ((fill-previous-jump (address)
@@ -1411,29 +1447,37 @@
              (setf (aref code (1+ previous-jump)) address))
            (setf previous-jump address)))
       (loop
+        :with address = start
+
+        ;; Render the next instruction
         :for (opcode . arguments) :in (circle-to-list instructions)
-        :for address = (code-push-instruction! code
-                           (render-opcode opcode)
-                         (mapcar #'render-argument arguments))
+        :for size = (code-push-instruction code
+                                           (render-opcode opcode)
+                                           (mapcar #'render-argument arguments)
+                                           address)
+        :summing size
+
         ;; We need to fill in the addresses for the choice point jumping
         ;; instructions.  For example, when we have TRY ... TRUST, the TRUST
         ;; needs to patch its address into the TRY instruction.
         ;;
         ;; I know, this is ugly, sorry.
         :when (member opcode '(:try :retry :trust))
-        :do (fill-previous-jump address)))))
+        :do (fill-previous-jump address)
+
+        ;; look, don't judge me, i told you i know its bad
+        :do (incf address size)
+
+        ;; Make sure we don't run past the end of our section.
+        ;;
+        ;; TODO: move this check up higher so we don't accidentally
+        ;; push past the query boundary
+        :when (>= address limit)
+        :do (error "Code store exhausted, game over.")))))
 
 
-(defun make-query-code-store ()
-  (make-array 512
-    :fill-pointer 0
-    :adjustable t
-    :element-type 'code-word))
-
-(defun render-query (instructions)
-  (let ((code (make-query-code-store)))
-    (render-bytecode code instructions)
-    code))
+(defun render-query (wam instructions)
+  (render-bytecode (wam-code wam) instructions 0 +maximum-query-size+))
 
 
 (defun mark-label (wam functor arity address)
@@ -1443,26 +1487,29 @@
 (defun render-rules (wam functor arity instructions)
   ;; Before we render the instructions, make the label point at where they're
   ;; about to go.
-  (mark-label wam functor arity (fill-pointer (wam-code wam)))
-  (render-bytecode (wam-code wam) instructions))
+  (mark-label wam functor arity (wam-code-pointer wam))
+  (incf (wam-code-pointer wam)
+        (render-bytecode (wam-code wam)
+                         instructions
+                         (wam-code-pointer wam)
+                         (array-total-size (wam-code wam)))))
 
 
 ;;;; Compilation
 ;;; The compilation phase wraps everything else up into a sane UI.
 (defun compile-query (wam query)
-  "Compile `query` into a fresh array of bytecode.
+  "Compile `query` into the query section of the WAM's code store.
 
   `query` should be a list of goal terms.
 
-  Returns the fresh code array and the permanent variables.
+  Returns the permanent variables.
 
   "
   (multiple-value-bind (instructions permanent-variables)
       (precompile-query wam query)
     (optimize-instructions wam instructions)
-    (values
-      (render-query instructions)
-      permanent-variables)))
+    (render-query wam instructions)
+    permanent-variables))
 
 (defun compile-rules (wam rules)
   "Compile `rules` into the WAM's code store.

@@ -24,13 +24,25 @@
           wam-heap-backtrack-pointer
           wam-mode))
 
+
+(defun allocate-wam-code (size)
+  ;; The WAM bytecode is all stored in this array.  The first
+  ;; `+maximum-query-size+` words are reserved for query bytecode, which will
+  ;; get loaded in (overwriting the previous query) when making a query.
+  ;; Everything after that is for the actual database.
+  (make-array (+ +maximum-query-size+ size)
+    :initial-element 0
+    :element-type 'code-word))
+
+
 (defstruct (wam
              (:print-function
               (lambda (wam stream depth)
                 (declare (ignore depth))
                 (print-unreadable-object
                   (wam stream :type t :identity t)
-                  (format stream "an wam")))))
+                  (format stream "an wam"))))
+             (:constructor make-wam%))
   (store
     ;; The main WAM store contains three separate blocks of values:
     ;;
@@ -50,16 +62,8 @@
     :type (vector cell)
     :read-only t)
   (code
-    ;; The WAM bytecode is all stored in this array.  The first
-    ;; `+maximum-query-size+` words are reserved for query bytecode, which will
-    ;; get loaded in (overwriting the previous query) when making a query.
-    ;; Everything after that is for the actual database.
-    (make-array (+ +maximum-query-size+ 1024)
-      :adjustable t
-      :fill-pointer +maximum-query-size+
-      :initial-element 0
-      :element-type 'code-word)
-    :type (vector code-word)
+    (allocate-wam-code 0)
+    :type (simple-array code-word (*))
     :read-only t)
   (code-labels
     (make-hash-table)
@@ -94,20 +98,26 @@
     :read-only t)
 
   ;; Unique registers
-  (number-of-arguments    0             :type arity)                ; NARGS
-  (subterm                +heap-start+  :type heap-index)           ; S
-  (program-counter        0             :type code-index)           ; P
-  (stack-pointer          +stack-start+ :type stack-index)          ; SP
-  (continuation-pointer   0             :type code-index)           ; CP
-  (environment-pointer    +stack-start+ :type environment-pointer)  ; E
-  (backtrack-pointer      +stack-start+ :type backtrack-pointer)    ; B
-  (cut-pointer            +stack-start+ :type backtrack-pointer)    ; B0
-  (heap-backtrack-pointer +heap-start+  :type heap-index)           ; HB
+  (number-of-arguments    0                    :type arity)                ; NARGS
+  (subterm                +heap-start+         :type heap-index)           ; S
+  (program-counter        0                    :type code-index)           ; P
+  (code-pointer           +maximum-query-size+ :type code-index)           ; CODE
+  (stack-pointer          +stack-start+        :type stack-index)          ; SP
+  (continuation-pointer   0                    :type code-index)           ; CP
+  (environment-pointer    +stack-start+        :type environment-pointer)  ; E
+  (backtrack-pointer      +stack-start+        :type backtrack-pointer)    ; B
+  (cut-pointer            +stack-start+        :type backtrack-pointer)    ; B0
+  (heap-backtrack-pointer +heap-start+         :type heap-index)           ; HB
 
   ;; Other global "registers"
   (fail        nil :type boolean)
   (backtracked nil :type boolean)
   (mode        nil :type (or null (member :read :write))))
+
+
+(defun* make-wam (&key (code-size (* 1024 1024)))
+  (:returns wam)
+  (make-wam% :code (allocate-wam-code code-size)))
 
 
 ;;;; Store
@@ -552,55 +562,6 @@
     :adjustable nil
     :element-type 'code-word))
 
-
-(defun* wam-code-word ((wam wam) (address code-index))
-  (:returns code-word)
-  "Return the word at the given address in the code store."
-  (aref (wam-code wam) address))
-
-(defun* (setf wam-code-word) ((word code-word)
-                              (wam wam)
-                              (address code-index))
-  (setf (aref (wam-code wam) address) word))
-
-
-(defun* wam-code-instruction ((wam wam) (address code-index))
-  "Return the full instruction at the given address in the code store."
-  (retrieve-instruction (wam-code wam) address))
-
-
-(defun* code-push-word! ((store (array code-word))
-                         (word code-word))
-  "Push the given word into the code store and return its new address."
-  (:returns code-index)
-  (vector-push-extend word store))
-
-(defun* code-push-instruction! ((store (array code-word))
-                                (opcode opcode)
-                                (arguments list))
-  "Push the given instruction into the code store and return its new address.
-
-  The address will be the address of the start of the instruction (i.e. the
-  address of the opcode).
-
-  `arguments` should be a list of `code-word`s.
-
-  "
-  (:returns code-index)
-  (assert (= (length arguments)
-             (1- (instruction-size opcode)))
-          (arguments)
-          "Cannot push opcode ~A with ~D arguments ~S, it requires exactly ~D."
-          (opcode-name opcode)
-          (length arguments)
-          arguments
-          (1- (instruction-size opcode)))
-  (prog1
-      (code-push-word! store opcode)
-    (dolist (arg arguments)
-      (code-push-word! store arg))))
-
-
 (defun* wam-code-label ((wam wam)
                         (functor functor-index))
   (:returns (or null code-index))
@@ -616,15 +577,10 @@
         new-value))
 
 
-(defun* wam-load-query-code! ((wam wam) query-code)
+(defun* wam-load-query-code! ((wam wam)
+                              (query-code query-code-holder))
   (:returns :void)
-  (when (> (length query-code) +maximum-query-size+)
-    (error "WAM query store exhausted."))
-  ;; TODO: there must be a better way to do this
-  (loop :for word :across query-code
-        :for addr :from 0
-        :do (setf (aref (wam-code wam) addr)
-                  word))
+  (setf (subseq (wam-code wam) 0) query-code)
   (values))
 
 
@@ -674,7 +630,7 @@
     "Cannot push logic frame unless the logic stack is closed.")
   (let ((frame (wam-logic-pool-request wam)))
     (setf (logic-frame-start frame)
-          (fill-pointer (wam-code wam)))
+          (wam-code-pointer wam))
     (push frame (wam-logic-stack wam)))
   (values))
 
@@ -686,7 +642,7 @@
     (assert (logic-frame-final (first logic-stack)) ()
       "Cannot pop unfinalized logic frame.")
     (let ((frame (pop logic-stack)))
-      (setf (fill-pointer (wam-code wam))
+      (setf (wam-code-pointer wam)
             (logic-frame-start frame))
       (loop :for label :being :the hash-keys :of (logic-frame-predicates frame)
             :do (remhash label (wam-code-labels wam)))

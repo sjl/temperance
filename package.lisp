@@ -9,6 +9,7 @@
     #:repeat
     #:hex
     #:push-if-new
+    #:array-push
     #:recursively
     #:recur
     #:when-let
@@ -28,6 +29,7 @@
 (defpackage #:bones.circle
   (:use #:cl #:defstar)
   (:export
+    #:circle
     #:make-circle-with
     #:make-empty-circle
     #:circle-to-list

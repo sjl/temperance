@@ -29,6 +29,7 @@
     #:fact
     #:facts
     #:call
+    #:dump-wam-full
     #:?
     #:query
     #:query-all)

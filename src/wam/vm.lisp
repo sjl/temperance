@@ -491,9 +491,11 @@
 
 
 ;;;; Control Instructions
-(define-instruction %call ((wam wam) (functor functor-index)
-                           &optional (program-counter-increment
-                                       (instruction-size +opcode-call+)))
+(define-instruction %call
+    ((wam wam)
+     (functor functor-index)
+     &optional ((program-counter-increment instruction-size)
+                (instruction-size +opcode-call+)))
   (let ((target (wam-code-label wam functor)))
     (if target
       (setf (wam-continuation-pointer wam) ; CP <- next instruction
@@ -737,7 +739,7 @@
     (weave vars results)))
 
 
-(defun run (wam done-thunk)
+(defun* run ((wam wam) (done-thunk function))
   (with-accessors ((pc wam-program-counter)) wam
     (let ((code (wam-code wam)))
       (macrolet ((instruction (inst args)
@@ -746,65 +748,65 @@
           :with increment-pc = t
           :while (and (not (wam-fail wam)) ; failure
                       (not (= pc +code-sentinel+))) ; finished
-          :for opcode = (aref code pc)
+          :for opcode = (aref code pc) ; todo switch this to wam-code-word...
           :do
           (block op
             (when *step*
               (dump) ; todo: make this saner
               (break "About to execute instruction at ~4,'0X" pc))
-            (eswitch (opcode)
+            (ecase opcode
               ;; Query
-              (+opcode-put-structure+        (instruction %put-structure 2))
-              (+opcode-set-variable-local+   (instruction %set-variable-local 1))
-              (+opcode-set-variable-stack+   (instruction %set-variable-stack 1))
-              (+opcode-set-value-local+      (instruction %set-value-local 1))
-              (+opcode-set-value-stack+      (instruction %set-value-stack 1))
-              (+opcode-set-void+             (instruction %set-void 1))
-              (+opcode-put-variable-local+   (instruction %put-variable-local 2))
-              (+opcode-put-variable-stack+   (instruction %put-variable-stack 2))
-              (+opcode-put-value-local+      (instruction %put-value-local 2))
-              (+opcode-put-value-stack+      (instruction %put-value-stack 2))
+              (#.+opcode-put-structure+        (instruction %put-structure 2))
+              (#.+opcode-set-variable-local+   (instruction %set-variable-local 1))
+              (#.+opcode-set-variable-stack+   (instruction %set-variable-stack 1))
+              (#.+opcode-set-value-local+      (instruction %set-value-local 1))
+              (#.+opcode-set-value-stack+      (instruction %set-value-stack 1))
+              (#.+opcode-set-void+             (instruction %set-void 1))
+              (#.+opcode-put-variable-local+   (instruction %put-variable-local 2))
+              (#.+opcode-put-variable-stack+   (instruction %put-variable-stack 2))
+              (#.+opcode-put-value-local+      (instruction %put-value-local 2))
+              (#.+opcode-put-value-stack+      (instruction %put-value-stack 2))
               ;; Program
-              (+opcode-get-structure+        (instruction %get-structure 2))
-              (+opcode-unify-variable-local+ (instruction %unify-variable-local 1))
-              (+opcode-unify-variable-stack+ (instruction %unify-variable-stack 1))
-              (+opcode-unify-value-local+    (instruction %unify-value-local 1))
-              (+opcode-unify-value-stack+    (instruction %unify-value-stack 1))
-              (+opcode-unify-void+           (instruction %unify-void 1))
-              (+opcode-get-variable-local+   (instruction %get-variable-local 2))
-              (+opcode-get-variable-stack+   (instruction %get-variable-stack 2))
-              (+opcode-get-value-local+      (instruction %get-value-local 2))
-              (+opcode-get-value-stack+      (instruction %get-value-stack 2))
+              (#.+opcode-get-structure+        (instruction %get-structure 2))
+              (#.+opcode-unify-variable-local+ (instruction %unify-variable-local 1))
+              (#.+opcode-unify-variable-stack+ (instruction %unify-variable-stack 1))
+              (#.+opcode-unify-value-local+    (instruction %unify-value-local 1))
+              (#.+opcode-unify-value-stack+    (instruction %unify-value-stack 1))
+              (#.+opcode-unify-void+           (instruction %unify-void 1))
+              (#.+opcode-get-variable-local+   (instruction %get-variable-local 2))
+              (#.+opcode-get-variable-stack+   (instruction %get-variable-stack 2))
+              (#.+opcode-get-value-local+      (instruction %get-value-local 2))
+              (#.+opcode-get-value-stack+      (instruction %get-value-stack 2))
               ;; Constant
-              (+opcode-put-constant+         (instruction %put-constant 2))
-              (+opcode-get-constant+         (instruction %get-constant 2))
-              (+opcode-set-constant+         (instruction %set-constant 1))
-              (+opcode-unify-constant+       (instruction %unify-constant 1))
+              (#.+opcode-put-constant+         (instruction %put-constant 2))
+              (#.+opcode-get-constant+         (instruction %get-constant 2))
+              (#.+opcode-set-constant+         (instruction %set-constant 1))
+              (#.+opcode-unify-constant+       (instruction %unify-constant 1))
               ;; List
-              (+opcode-put-list+             (instruction %put-list 1))
-              (+opcode-get-list+             (instruction %get-list 1))
+              (#.+opcode-put-list+             (instruction %put-list 1))
+              (#.+opcode-get-list+             (instruction %get-list 1))
               ;; Choice
-              (+opcode-try+                  (instruction %try 1))
-              (+opcode-retry+                (instruction %retry 1))
-              (+opcode-trust+                (instruction %trust 0))
-              (+opcode-cut+                  (instruction %cut 0))
+              (#.+opcode-try+                  (instruction %try 1))
+              (#.+opcode-retry+                (instruction %retry 1))
+              (#.+opcode-trust+                (instruction %trust 0))
+              (#.+opcode-cut+                  (instruction %cut 0))
               ;; Control
-              (+opcode-allocate+             (instruction %allocate 1))
+              (#.+opcode-allocate+             (instruction %allocate 1))
               ;; need to skip the PC increment for PROC/CALL/DEAL/DONE
               ;; TODO: this is still ugly
-              (+opcode-deallocate+
+              (#.+opcode-deallocate+
                 (instruction %deallocate 0)
                 (setf increment-pc nil))
-              (+opcode-proceed+
+              (#.+opcode-proceed+
                 (instruction %proceed 0)
                 (setf increment-pc nil))
-              (+opcode-call+
+              (#.+opcode-call+
                 (instruction %call 1)
                 (setf increment-pc nil))
-              (+opcode-dynamic-call+
+              (#.+opcode-dynamic-call+
                 (instruction %dynamic-call 0)
                 (setf increment-pc nil))
-              (+opcode-done+
+              (#.+opcode-done+
                 (if (funcall done-thunk)
                   (return-from run)
                   (backtrack! wam))))
@@ -816,14 +818,17 @@
               (incf pc (instruction-size opcode)))
             (setf (wam-backtracked wam) nil
                   increment-pc t)
-            (when (>= pc (fill-pointer code))
+            (when (>= pc (wam-code-pointer wam))
               (error "Fell off the end of the program code store."))))))
     (values)))
 
-(defun run-query (wam term
-                  &key
-                  (result-function (lambda (results) (declare (ignore results))))
-                  (status-function (lambda (failp) (declare (ignore failp)))))
+(defun* run-query ((wam wam)
+                   term
+                   &key
+                   ((result-function function)
+                    (lambda (results) (declare (ignore results))))
+                   ((status-function function)
+                    (lambda (failp) (declare (ignore failp)))))
   "Compile query `term` and run the instructions on the `wam`.
 
   Resets the heap, etc before running.
@@ -832,15 +837,10 @@
   after each instruction.
 
   "
-  (multiple-value-bind (code vars)
-      (compile-query wam term)
+  (let ((vars (compile-query wam term)))
     (wam-reset! wam)
-    (wam-load-query-code! wam code)
     (setf (wam-program-counter wam) 0
           (wam-continuation-pointer wam) +code-sentinel+)
-    (when *step*
-      (format *debug-io* "Built query code:~%")
-      (dump-code-store wam code))
     (run wam (lambda ()
                (funcall result-function
                         (extract-query-results wam vars))))

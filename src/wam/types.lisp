@@ -43,6 +43,15 @@
   ;; either an address or the sentinel
   `(integer 0 ,(1- +code-limit+)))
 
+(deftype generic-code-store ()
+  `(simple-array code-word (*)))
+
+(deftype query-code-holder ()
+  `(simple-array code-word (,+maximum-query-size+)))
+
+(deftype instruction-size ()
+  `(integer 1 ,+maximum-instruction-size+))
+
 
 (deftype opcode ()
   `(integer 0 ,(1- +number-of-opcodes+)))

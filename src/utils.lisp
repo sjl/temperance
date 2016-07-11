@@ -112,6 +112,21 @@
           ,value
           (setf (gethash ,key ,hash-table) ,default-form))))))
 
+(defmacro array-push (value array pointer &environment env)
+  "Push `value` onto `array` at `pointer`, incrementing `pointer` afterword.
+
+  Returns the index the value was pushed to.
+
+  "
+  (multiple-value-bind (temp-vars temp-vals stores store access)
+      (get-setf-expansion pointer env)
+    (with-gensyms (address)
+      `(let* (,@(mapcar #'list temp-vars temp-vals)
+              (,address ,access)
+              (,(car stores) (1+ ,address)))
+        (setf (aref ,array ,address) ,value)
+        ,store
+        ,address))))
 
 (defmacro yolo (&body body)
   `(locally

@@ -1,6 +1,6 @@
 (in-package #:bones.wam)
 
-(define-constant +cell-width+ 16
+(define-constant +cell-width+ 60
   :documentation "Number of bits in each cell.")
 
 (define-constant +cell-tag-width+ 3
@@ -13,10 +13,10 @@
   :documentation "Bitmask for masking the cell type tags.")
 
 
-(define-constant +code-word-size+ 16
+(define-constant +code-word-size+ 60
   :documentation "Size (in bits) of each word in the code store.")
 
-(define-constant +code-limit+ (expt 2 +code-word-size+)
+(define-constant +code-limit+ (expt 2 +cell-width+)
   :documentation "Maximum size of the WAM code store.")
 
 (define-constant +code-sentinel+ (1- +code-limit+)
@@ -53,6 +53,10 @@
 (define-constant +maximum-query-size+ 1024
   :documentation
   "The maximum size (in bytes of bytecode) a query may compile to.")
+
+(define-constant +maximum-instruction-size+ 3
+  :documentation
+  "The maximum number of code words an instruction (including opcode) might be.")
 
 
 (define-constant +stack-limit+ 2048

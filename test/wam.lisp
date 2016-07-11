@@ -443,3 +443,8 @@
     (should-return
       ((foo (s ?x ?y ?z))
        (?x a ?y b ?z c)))))
+
+(test dump
+  (is (not (string= ""
+                    (with-output-to-string (*standard-output*)
+                      (dump-wam-full *test-database*))))))
