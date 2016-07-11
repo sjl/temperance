@@ -127,6 +127,8 @@
 
 ;;;; Store
 (declaim (inline wam-store-cell (setf wam-store-cell)))
+
+
 (defun* wam-store-cell ((wam wam) (address store-index))
   (:returns cell)
   "Return the cell at the given address.
@@ -157,6 +159,7 @@
                  wam-heap-pointer
                  (setf wam-heap-pointer)
                  wam-heap-push!))
+
 
 (defun* wam-heap-pointer-unset-p ((wam wam) (address heap-index))
   (:returns boolean)
@@ -192,6 +195,9 @@
 
 
 ;;;; Trail
+(declaim (inline wam-trail-pointer (setf wam-trail-pointer)))
+
+
 (defun* wam-trail-pointer ((wam wam))
   (:returns trail-index)
   "Return the current trail pointer of the WAM."
