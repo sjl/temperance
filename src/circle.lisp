@@ -42,20 +42,19 @@
 ;;; TODO: explain further
 ;;; TODO: docstrings below
 
-(defparameter *circle-sentinel* 'circle-sentinel)
+(defconstant +circle-sentinel+ 'circle-sentinel)
 
 
-(declaim (inline circle-prev circle-value circle-next make-circle))
+(declaim (inline circle-prev circle-value circle-next
+                 make-circle make-circle-between
+                 circle-tie circle-sentinel-p))
 
 (defstruct circle prev value next)
 
 
-(declaim (inline circle-tie))
 (defun* circle-tie ((c1 circle) (c2 circle))
-  (:returns :void)
   (setf (circle-next c1) c2
-        (circle-prev c2) c1)
-  (values))
+        (circle-prev c2) c1))
 
 
 (defun* make-empty-circle ()
@@ -65,7 +64,7 @@
   It will still contain a sentinel.
 
   "
-  (let ((circle (make-circle :value *circle-sentinel*)))
+  (let ((circle (make-circle :value +circle-sentinel+)))
     (setf (slot-value circle 'prev) circle
           (slot-value circle 'next) circle)
     circle))
@@ -84,11 +83,20 @@
                      (circle-tie current sentinel)))
     sentinel))
 
+(defun* make-circle-between ((left circle) value (right circle))
+  ;; L new R
+  (let ((c (make-circle :prev left
+                        :value value
+                        :next right)))
+    (setf (circle-next left) c
+          (circle-prev right) c)
+    c))
+
 
 (defun* circle-sentinel-p ((circle circle))
   (:returns boolean)
   "Return whether this circle node is the sentinel."
-  (eql (circle-value circle) *circle-sentinel*))
+  (eq (circle-value circle) +circle-sentinel+))
 
 (defun* circle-empty-p ((circle circle))
   (:returns boolean)
@@ -106,8 +114,8 @@
 
 (defun* circle-nth ((circle circle) (n integer))
   (:returns circle)
-  (assert (circle-sentinel-p circle) ()
-    "Can only call circle-nth on the sentinel.")
+  (when (not (circle-sentinel-p circle))
+    (error "Can only call circle-nth on the sentinel."))
   (circle-rotate circle
                  (if (< n 0)
                    n
@@ -115,80 +123,59 @@
 
 
 (defun* circle-insert-before ((circle circle) value)
-  (:returns :void)
   ;; L new old R
   (let ((old circle)
-        (l (circle-prev circle))
-        ; (r (circle-next circle))
-        (new (make-circle :value value)))
-    (circle-tie l new)
-    (circle-tie new old))
-  (values))
+        (l (circle-prev circle)))
+    (make-circle-between l value old)))
 
 (defun* circle-insert-after ((circle circle) value)
-  (:returns :void)
   ;; L old new R
   (let ((old circle)
-        ; (l (circle-prev circle))
-        (r (circle-next circle))
-        (new (make-circle :value value)))
-    (circle-tie old new)
-    (circle-tie new r))
-  (values)
-  )
+        (r (circle-next circle)))
+    (make-circle-between old value r)))
 
 
 (defun* circle-insert-beginning ((circle circle) value)
-  (:returns :void)
-  (assert (circle-sentinel-p circle) ()
-    "Can only insert-beginning at the sentinel.")
+  (when (not (circle-sentinel-p circle))
+    (error "Can only insert-beginning at the sentinel."))
   (circle-insert-after circle value))
 
 (defun* circle-insert-end ((circle circle) value)
-  (:returns :void)
-  (assert (circle-sentinel-p circle) ()
+  (when (not (circle-sentinel-p circle))
     "Can only insert-end at the sentinel.")
   (circle-insert-before circle value))
 
 
 (defun* circle-prepend-circle ((circle circle) (other circle))
-  (:returns :void)
-  (assert (circle-sentinel-p circle) ()
-    "Can only prepend to the sentinel.")
-  (assert (circle-sentinel-p other) ()
-    "Can only prepend from the sentinel.")
+  (when (not (circle-sentinel-p circle))
+    (error "Can only prepend to the sentinel."))
+  (when (not (circle-sentinel-p other))
+    (error "Can only prepend from the sentinel."))
   ;; S new-first ... new-last R
   (let ((s circle)
         (r (circle-next circle)))
     (circle-tie s (circle-next other))
-    (circle-tie (circle-prev other) r))
-  (values))
+    (circle-tie (circle-prev other) r)))
 
 (defun* circle-prepend ((circle circle) values)
-  (:returns :void)
   (unless (null values)
-    (circle-prepend-circle circle (make-circle-with values)))
-  (values))
+    (circle-prepend-circle circle (make-circle-with values))))
 
 
 (defun* circle-append-circle ((circle circle) (other circle))
-  (:returns :void)
-  (assert (circle-sentinel-p circle) ()
-    "Can only append to the sentinel.")
-  (assert (circle-sentinel-p other) ()
-    "Can only append from the sentinel.")
+  (when (not (circle-sentinel-p circle))
+    (error "Can only append to the sentinel."))
+  (when (not (circle-sentinel-p other))
+    (error "Can only append from the sentinel."))
   ;; L new-first ... new-last S
   (let ((s circle)
         (l (circle-prev circle)))
     (circle-tie l (circle-next other))
-    (circle-tie (circle-prev other) s))
-  (values))
+    (circle-tie (circle-prev other) s)))
 
 (defun* circle-append ((circle circle) values)
-  (:returns :void)
   (unless (null values)
-    (circle-append-circle circle (make-circle-with values)))
-  (values))
+    (circle-append-circle circle (make-circle-with values))))
 
 
 (defun* circle-forward ((circle circle))
@@ -205,13 +192,12 @@
 
 
 (defun* circle-remove ((circle circle))
-  (:returns :void)
   ;; L rem R
-  (assert (not (circle-sentinel-p circle)) () "Cannot remove sentinel.")
+  (when (circle-sentinel-p circle)
+    (error "Cannot remove sentinel."))
   (let ((l (circle-prev circle))
         (r (circle-next circle)))
-    (circle-tie l r))
-  (values))
+    (circle-tie l r)))
 
 (defun* circle-backward-remove ((circle circle))
   (:returns (or circle null))
@@ -228,15 +214,12 @@
 
 (defun* circle-replace ((circle circle) value)
   (:returns circle)
-  (assert (not (circle-sentinel-p circle)) ()
-    "Cannot replace sentinel.")
+  (when (circle-sentinel-p circle)
+    (error "Cannot replace sentinel."))
   ;; L new R
   (let ((l (circle-prev circle))
-        (r (circle-next circle))
-        (new (make-circle :value value)))
-    (circle-tie l new)
-    (circle-tie new r)
-    new))
+        (r (circle-next circle)))
+    (make-circle-between l value r)))
 
 (defun* circle-backward-replace ((circle circle) value)
   (:returns (or circle null))
@@ -252,19 +235,17 @@
 
 
 (defun* circle-splice ((circle circle) values)
-  (:returns :void)
   (if (null values)
     (circle-remove circle)
     (progn
-      (assert (not (circle-sentinel-p circle)) ()
-        "Cannot splice sentinel.")
+      (when (circle-sentinel-p circle)
+        (error "Cannot splice sentinel."))
       ;; L new-first ... new-last R
       (let ((l (circle-prev circle))
             (r (circle-next circle))
             (new (make-circle-with values)))
         (circle-tie l (circle-next new))
-        (circle-tie (circle-prev new) r))))
-  (values))
+        (circle-tie (circle-prev new) r)))))
 
 (defun* circle-backward-splice ((circle circle) values)
   (:returns (or circle null))
@@ -292,5 +273,5 @@
 
 (defmethod print-object ((object circle) stream)
   (print-unreadable-object (object stream :type t :identity nil)
-    (format stream "~S" (subst '%%% *circle-sentinel* (circle-to-list object t)))))
+    (format stream "~S" (subst '%%% +circle-sentinel+ (circle-to-list object t)))))
 
