@@ -819,9 +819,7 @@
 
 ;;;; Unification Stack
 (defun* wam-unification-stack-push! ((wam wam) (address store-index))
-  (:returns :void)
-  (vector-push-extend address (wam-unification-stack wam))
-  (values))
+  (vector-push-extend address (wam-unification-stack wam)))
 
 (defun* wam-unification-stack-pop! ((wam wam))
   (:returns store-index)

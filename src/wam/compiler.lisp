@@ -1520,7 +1520,6 @@
 
 
 (defun* render-query ((wam wam) (instructions circle))
-  (:returns :void)
   (render-bytecode (wam-code wam) instructions 0 +maximum-query-size+))
 
 

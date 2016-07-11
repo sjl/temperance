@@ -1,7 +1,6 @@
 (in-package #:bones.wam)
 
 ;;;; Config
-(defparameter *break-on-fail* nil)
 (defparameter *step* nil)
 
 
@@ -95,32 +94,21 @@
 
 
 ;;;; "Ancillary" Functions
-(declaim (inline deref))
+(declaim (inline deref unbind!))
 
 (defun* backtrack! ((wam wam))
-  (:returns :void)
-  "Backtrack after a failure.
-
-  If `*break-on-fail*` is true, the debugger will be invoked.
-
-  "
-  (when *break-on-fail*
-    (break "Backtracked."))
+  "Backtrack after a failure."
   (if (wam-backtrack-pointer-unset-p wam)
     (setf (wam-fail wam) t)
     (setf (wam-program-counter wam) (wam-stack-choice-bp wam)
-          (wam-backtracked wam) t))
-  (values))
+          (wam-backtracked wam) t)))
 
 (defun* trail! ((wam wam) (address store-index))
-  (:returns :void)
   "Push the given address onto the trail (but only if necessary)."
   (when (< address (wam-heap-backtrack-pointer wam))
-    (wam-trail-push! wam address))
-  (values))
+    (wam-trail-push! wam address)))
 
 (defun* unbind! ((wam wam) (address store-index))
-  (:returns :void)
   "Unbind the reference cell at `address`.
 
   No error checking is done, so please don't try to unbind something that's not
@@ -128,18 +116,15 @@
 
   "
   (setf (wam-store-cell wam address)
-        (make-cell-reference address))
-  (values))
+        (make-cell-reference address)))
 
 (defun* unwind-trail! ((wam wam)
                        (trail-start trail-index)
                        (trail-end trail-index))
-  (:returns :void)
   "Unbind all the things in the given range of the trail."
   ;; TODO: seriously can't we just pop back to a certain place?
   (loop :for i :from trail-start :below trail-end :do
-        (unbind! wam (wam-trail-value wam i)))
-  (values))
+        (unbind! wam (wam-trail-value wam i))))
 
 (defun* tidy-trail! ((wam wam))
   (with-accessors ((tr wam-trail-pointer)
@@ -181,7 +166,6 @@
   address)
 
 (defun* bind! ((wam wam) (address-1 store-index) (address-2 store-index))
-  (:returns :void)
   "Bind the unbound reference cell to the other.
 
   `bind!` takes two addresses as arguments.  You are expected to have `deref`ed
@@ -207,7 +191,7 @@
         (cell-2 (wam-store-cell wam address-2)))
     (cond
       ;; Bind (a1 <- a2) if:
-      ;; 
+      ;;
       ;; * A1 is a REF and A2 is something else, or...
       ;; * They're both REFs but A2 has a lower address than A1.
       ((and (cell-reference-p cell-1)
@@ -221,8 +205,7 @@
        (trail! wam address-2))
       ;; wut
       (t
-       (error "At least one cell must be an unbound reference when binding."))))
-  (values))
+       (error "At least one cell must be an unbound reference when binding.")))))
 
 (defun* unify! ((wam wam) (a1 store-index) (a2 store-index))
   (wam-unification-stack-push! wam a1)
@@ -317,16 +300,11 @@
 (defmacro define-instruction (name lambda-list &body body)
   "Define an instruction function.
 
-  This is just syntactic sugar over `defun*` that will add the `(returns :void)`
-  declaration for you, and also append a `(values)` to the end of the body to
-  make sure it actually does return void.
+  This is just sugar over `defun*`.
 
   "
-  `(progn
-    (defun* ,name ,lambda-list
-      (:returns :void)
-      ,@body
-      (values))))
+  `(defun* ,name ,lambda-list
+      ,@body))
 
 (defmacro define-instructions ((local-name stack-name) lambda-list &body body)
   "Define a local/stack pair of instructions."
@@ -562,6 +540,8 @@
 
 
 ;;;; Choice Instructions
+(declaim (inline reset-choice-point!))
+
 (defun* reset-choice-point! ((wam wam)
                              (b backtrack-pointer))
   (setf (wam-backtrack-pointer wam) b
@@ -637,6 +617,7 @@
 
 ;;;; Constant Instructions
 (declaim (inline %%match-constant))
+
 (defun* %%match-constant ((wam wam)
                           (constant functor-index)
                           (address store-index))
