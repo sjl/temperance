@@ -42,19 +42,6 @@
   `(let ((,symbol ,value))
      (when ,symbol ,@body)))
 
-(defun unique-items (list)
-  "Return a list of the items that appear exactly once in `list`."
-  (loop
-    :with once = nil
-    :with seen = nil
-    :for item :in list
-    :do (if (member item seen)
-          (when (member item once)
-            (setf once (delete item once)))
-          (progn (push item seen)
-                 (push item once)))
-    :finally (return once)))
-
 (defmacro dis (arglist &body body)
   "Disassemble the code generated for a `lambda*` with `arglist` and `body`.
 

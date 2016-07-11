@@ -364,7 +364,19 @@
   Anonymous variables are variables that are only ever used once.
 
   "
-  (unique-items (tree-collect #'variablep clause)))
+  (let ((seen nil)
+        (once nil))
+    (recursively ((term clause))
+      (cond
+        ((variablep term)
+         (if (member term seen)
+           (when (member term once)
+             (setf once (delete term once)))
+           (progn (push term seen)
+                  (push term once))))
+        ((consp term) (recur (car term))
+                      (recur (cdr term)))))
+    once))
 
 
 (defun* determine-clause-properties (head body)
