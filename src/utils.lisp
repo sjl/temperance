@@ -115,7 +115,10 @@
 
 (defmacro yolo (&body body)
   `(locally
-     #+sbcl (declare (optimize (sb-c::insert-array-bounds-checks 0)))
+     #+sbcl (declare (optimize (sb-c::insert-array-bounds-checks 0)
+                               (speed 3)
+                               (debug 0)
+                               (safety 0)))
      ,@body))
 
 
