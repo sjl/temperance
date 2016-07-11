@@ -297,30 +297,34 @@
 ;;; `(wam-{local/argument}-register wam register)` you just use
 ;;; `(%wam-register% wam register)` and it'll do the right thing.
 
-(defmacro define-instruction (name lambda-list &body body)
+(defmacro define-instruction
+    ((name &optional should-inline) lambda-list &body body)
   "Define an instruction function.
 
   This is just sugar over `defun*`.
 
   "
-  `(defun* ,name ,lambda-list
-      ,@body))
+  `(progn
+    (declaim (,(if should-inline 'inline 'notinline) ,name))
+    (defun* ,name ,lambda-list
+      ,@body)))
 
-(defmacro define-instructions ((local-name stack-name) lambda-list &body body)
+(defmacro define-instructions
+    ((local-name stack-name &optional should-inline) lambda-list &body body)
   "Define a local/stack pair of instructions."
   `(progn
     (macrolet ((%wam-register% (wam register)
                  `(wam-local-register ,wam ,register)))
-      (define-instruction ,local-name ,lambda-list
+      (define-instruction (,local-name ,should-inline) ,lambda-list
         ,@body))
     (macrolet ((%wam-register% (wam register)
                  `(wam-stack-register ,wam ,register)))
-      (define-instruction ,stack-name ,lambda-list
+      (define-instruction (,stack-name ,should-inline) ,lambda-list
         ,@body))))
 
 
 ;;;; Query Instructions
-(define-instruction %put-structure
+(define-instruction (%put-structure)
     ((wam wam)
      (functor functor-index)
      (register register-index))
@@ -331,7 +335,7 @@
         (wam-mode wam)
         :write))
 
-(define-instruction %put-list
+(define-instruction (%put-list t)
     ((wam wam)
      (register register-index))
   (setf (wam-local-register wam register)
@@ -349,7 +353,7 @@
           (wam-local-register wam argument) new-reference
           (wam-mode wam) :write)))
 
-(define-instructions (%put-value-local %put-value-stack)
+(define-instructions (%put-value-local %put-value-stack t)
     ((wam wam)
      (register register-index)
      (argument register-index))
@@ -358,9 +362,9 @@
 
 
 ;;;; Program Instructions
-(define-instruction %get-structure ((wam wam)
-                                    (functor functor-index)
-                                    (register register-index))
+(define-instruction (%get-structure) ((wam wam)
+                                      (functor functor-index)
+                                      (register register-index))
   (with-accessors ((mode wam-mode) (s wam-subterm)) wam
     (with-cell (addr cell) wam register
       (cond
@@ -412,8 +416,8 @@
 
         (t (backtrack! wam))))))
 
-(define-instruction %get-list ((wam wam)
-                               (register register-index))
+(define-instruction (%get-list) ((wam wam)
+                                 (register register-index))
   (with-cell (addr cell) wam register
     (cond
       ;; If the register points at a reference (unbound, because we deref'ed) we
@@ -430,7 +434,7 @@
 
       (t (backtrack! wam)))))
 
-(define-instructions (%get-variable-local %get-variable-stack)
+(define-instructions (%get-variable-local %get-variable-stack t)
     ((wam wam)
      (register register-index)
      (argument register-index))
@@ -462,7 +466,7 @@
     (:write (wam-heap-push! wam (%wam-register% wam register))))
   (incf (wam-subterm wam)))
 
-(define-instruction %subterm-void ((wam wam) (n arity))
+(define-instruction (%subterm-void) ((wam wam) (n arity))
   (ecase (wam-mode wam)
     (:read (incf (wam-subterm wam) n))
     (:write (repeat n
@@ -470,7 +474,7 @@
 
 
 ;;;; Control Instructions
-(define-instruction %call
+(define-instruction (%call)
     ((wam wam)
      (functor functor-index)
      &optional ((program-counter-increment instruction-size)
@@ -491,7 +495,7 @@
       ;; Trying to call an unknown procedure.
       (backtrack! wam))))
 
-(define-instruction %dynamic-call ((wam wam))
+(define-instruction (%dynamic-call) ((wam wam))
   ;; It's assumed that whatever we want to dynamically call has been put in
   ;; argument register zero.
   (with-cell (addr cell) wam 0 ; A_0
@@ -519,11 +523,11 @@
       (t ; You can't (call) anything else.
        (error "Cannot dynamically call something other than a structure.")))))
 
-(define-instruction %proceed ((wam wam))
+(define-instruction (%proceed t) ((wam wam))
   (setf (wam-program-counter wam) ; P <- CP
         (wam-continuation-pointer wam)))
 
-(define-instruction %allocate ((wam wam) (n stack-frame-argcount))
+(define-instruction (%allocate) ((wam wam) (n stack-frame-argcount))
   (let ((old-e (wam-environment-pointer wam))
         (new-e (wam-stack-top wam)))
     (wam-stack-ensure-size wam (+ new-e 4 n))
@@ -533,7 +537,7 @@
           (wam-stack-word wam (+ new-e 3)) n ; N
           (wam-environment-pointer wam) new-e))) ; E <- new-e
 
-(define-instruction %deallocate ((wam wam))
+(define-instruction (%deallocate) ((wam wam))
   (setf (wam-program-counter wam) (wam-stack-frame-cp wam)
         (wam-environment-pointer wam) (wam-stack-frame-ce wam)
         (wam-cut-pointer wam) (wam-stack-frame-cut wam)))
@@ -561,7 +565,7 @@
           +heap-start+
           (wam-stack-choice-h wam b))))
 
-(define-instruction %try ((wam wam) (next-clause code-index))
+(define-instruction (%try) ((wam wam) (next-clause code-index))
   (let ((new-b (wam-stack-top wam))
         (nargs (wam-number-of-arguments wam)))
     (wam-stack-ensure-size wam (+ new-b 7 nargs))
@@ -578,7 +582,7 @@
           (setf (wam-stack-choice-arg wam i new-b)
                 (wam-local-register wam i)))))
 
-(define-instruction %retry ((wam wam) (next-clause code-index))
+(define-instruction (%retry) ((wam wam) (next-clause code-index))
   (let ((b (wam-backtrack-pointer wam)))
     ;; Restore argument registers
     (loop :for i :from 0 :below (wam-stack-choice-n wam b) :do
@@ -593,7 +597,7 @@
           (wam-heap-pointer wam) (wam-stack-choice-h wam b)
           (wam-heap-backtrack-pointer wam) (wam-heap-pointer wam))))
 
-(define-instruction %trust ((wam wam))
+(define-instruction (%trust) ((wam wam))
   (let* ((b (wam-backtrack-pointer wam))
          (old-b (wam-stack-choice-cb wam b)))
     ;; Restore argument registers
@@ -607,7 +611,7 @@
           (wam-heap-pointer wam) (wam-stack-choice-h wam b))
     (reset-choice-point! wam old-b)))
 
-(define-instruction %cut ((wam wam))
+(define-instruction (%cut) ((wam wam))
   (let ((current-choice-point (wam-backtrack-pointer wam))
         (previous-choice-point (wam-stack-frame-cut wam)))
     (when (< previous-choice-point current-choice-point)
@@ -635,19 +639,20 @@
       (t
        (backtrack! wam)))))
 
-(define-instruction %put-constant ((wam wam)
-                                   (constant functor-index)
-                                   (register register-index))
+(define-instruction (%put-constant t)
+    ((wam wam)
+     (constant functor-index)
+     (register register-index))
   (setf (wam-local-register wam register) (make-cell-constant constant)
         (wam-mode wam) :write))
 
-(define-instruction %get-constant ((wam wam)
-                                   (constant functor-index)
-                                   (register register-index))
+(define-instruction (%get-constant) ((wam wam)
+                                     (constant functor-index)
+                                     (register register-index))
   (%%match-constant wam constant register))
 
-(define-instruction %subterm-constant ((wam wam)
-                                     (constant functor-index))
+(define-instruction (%subterm-constant) ((wam wam)
+                                         (constant functor-index))
   (ecase (wam-mode wam)
     (:read (%%match-constant wam constant (wam-subterm wam)))
     (:write (wam-heap-push! wam (make-cell-constant constant))))
