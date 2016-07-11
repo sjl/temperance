@@ -1,4 +1,3 @@
-
 (defpackage #:bones.utils
   (:use
     #:cl
@@ -16,6 +15,7 @@
     #:unique-items
     #:dis
     #:gethash-or-init
+    #:define-lookup
     #:make-queue
     #:enqueue
     #:dequeue
@@ -143,8 +143,6 @@
     #:query
     #:query-one
     #:query-all))
-
-
 
 
 (defpackage #:bones
