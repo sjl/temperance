@@ -17,6 +17,7 @@
     #:megabytes
     #:gethash-or-init
     #:define-lookup
+    #:queue
     #:make-queue
     #:enqueue
     #:dequeue

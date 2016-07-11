@@ -129,48 +129,45 @@
 
 
 ;;;; Queues
-;;; From PAIP (thanks, Norvig).
+;;; Based on the PAIP queues (thanks, Norvig), but beefed up a little bit to add
+;;; tracking of the queue size.
 
-(deftype queue () '(cons list list))
-(declaim (inline queue-contents make-queue
-                 enqueue dequeue
-                 queue-empty-p queue-append))
+(declaim (inline make-queue enqueue dequeue queue-empty-p))
 
+(defstruct (queue (:constructor make-queue%))
+  (contents nil :type list)
+  (last nil :type list)
+  (size 0 :type fixnum))
 
-(defun* queue-contents ((q queue))
-  (:returns list)
-  (cdr q))
 
 (defun* make-queue ()
   (:returns queue)
-  (let ((q (cons nil nil)))
-    (setf (car q) q)))
-
-(defun* enqueue ((item t) (q queue))
-  (:returns queue)
-  (setf (car q)
-        (setf (rest (car q))
-              (cons item nil)))
-  q)
-
-(defun* dequeue ((q queue))
-  (:returns t)
-  (prog1
-      (pop (cdr q))
-    (if (null (cdr q))
-      (setf (car q) q))))
+  (make-queue%))
 
 (defun* queue-empty-p ((q queue))
   (:returns boolean)
-  (null (queue-contents q)))
+  (zerop (queue-size q)))
+
+(defun* enqueue ((item t) (q queue))
+  (:returns fixnum)
+  (let ((cell (cons item nil)))
+    (setf (queue-last q)
+          (if (queue-empty-p q)
+            (setf (queue-contents q) cell)
+            (setf (cdr (queue-last q)) cell))))
+  (incf (queue-size q)))
+
+(defun* dequeue ((q queue))
+  (:returns t)
+  (when (zerop (decf (queue-size q)))
+    (setf (queue-last q) nil))
+  (pop (queue-contents q)))
 
 (defun* queue-append ((q queue) (l list))
-  (:returns queue)
-  (when l
-    (setf (car q)
-          (last (setf (rest (car q))
-                      l))))
-  q)
+  (:returns fixnum) ; todo make a structure sharing version of this
+  (loop :for item :in l
+        :for size = (enqueue item q)
+        :finally (return size)))
 
 
 ;;;; Lookup Tables

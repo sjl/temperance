@@ -541,7 +541,7 @@
 ;;; We now return you to your regularly scheduled Lisp code.
 
 (defstruct allocation-state
-  (local-registers (vector) :type (vector t *)) ; todo should this be a (vector symbol) instead?
+  (local-registers (make-queue) :type queue)
   (stack-registers nil :type list)
   (permanent-variables nil :type list)
   (anonymous-variables nil :type list)
@@ -553,9 +553,12 @@
 (defun* find-variable ((state allocation-state) (variable symbol))
   (:returns (or register null))
   "Return the register that already contains this variable, or `nil` otherwise."
-  (or (when-let (r (position variable (allocation-state-local-registers state)))
+  (or (when-let (r (position variable
+                             (queue-contents
+                               (allocation-state-local-registers state))))
         (make-temporary-register r (allocation-state-actual-arity state)))
-      (when-let (s (position variable (allocation-state-stack-registers state)))
+      (when-let (s (position variable
+                             (allocation-state-stack-registers state)))
         (make-permanent-register s))
       nil))
 
@@ -572,7 +575,7 @@
   "
   (make-register
     :local
-    (vector-push-extend variable (allocation-state-local-registers state))))
+    (1- (enqueue variable (allocation-state-local-registers state)))))
 
 (defun* ensure-variable ((state allocation-state) (variable symbol))
   (:returns register)
@@ -605,7 +608,7 @@
   ;; never need to look them up later (like we do with variables), so we'll just
   ;; shove a nil into the local registers array as a placeholder.
   (make-temporary-register
-    (vector-push-extend nil (allocation-state-local-registers state))
+    (enqueue nil (allocation-state-local-registers state))
     (allocation-state-actual-arity state)))
 
 
@@ -650,13 +653,7 @@
        (reserved-variables (when nead
                              (clause-nead-vars clause-props)))
        (permanent-variables (clause-permanent-vars clause-props))
-       ;; Preallocate enough registers for all of the arguments.  We'll fill
-       ;; them in later.  Note that things are more complicated in the head and
-       ;; first body term of a clause (see above).
-       (local-registers (make-array 64
-                          :fill-pointer (or reserved-arity actual-arity)
-                          :adjustable t
-                          :initial-element 0))
+       (local-registers (make-queue))
        ;; We essentially "preallocate" all the permanent variables up front
        ;; because we need them to always be in the same stack registers across
        ;; all the terms of our clause.
@@ -673,10 +670,15 @@
            :reserved-variables reserved-variables
            :reserved-arity reserved-arity
            :actual-arity actual-arity)))
+    ;; Preallocate enough registers for all of the arguments.  We'll fill
+    ;; them in later.  Note that things are more complicated in the head and
+    ;; first body term of a clause (see above).
+    (loop :repeat (or reserved-arity actual-arity)
+          :do (enqueue nil local-registers))
     ;; Actually reserve the reserved (but non-permanent, see above) variables.
     ;; They need to live in consistent spots for the head and first body term.
     (loop :for variable :in reserved-variables
-          :do (vector-push-extend variable local-registers))
+          :do (enqueue variable local-registers))
     (recursively ((remaining (list node)))
       (when remaining
         (destructuring-bind (node . remaining) remaining
