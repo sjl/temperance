@@ -1241,8 +1241,14 @@
           (variable-count (length (clause-permanent-vars clause-props))))
       ;; We need to compile facts and rules differently.  Facts end with
       ;; a PROCEED and rules are wrapped in ALOC/DEAL.
-      (case clause-type
-        ((:chain :rule) ; a full-ass rule
+      (ecase clause-type
+        (:chain
+         ;; Chain rules don't need anything at all.  They just unify, set up
+         ;; the next predicate's arguments, and JUMP.  By definition, in a chain
+         ;; rule all variables must be temporary, so we don't need a stack frame
+         ;; at all!
+         nil)
+        (:rule ; a full-ass rule
          ;; Non-chain rules need an ALLOC at the head and a DEALLOC right before
          ;; the tail call:
          ;;
@@ -1253,10 +1259,10 @@
          (circle-insert-beginning instructions `(:allocate ,variable-count))
          (circle-insert-before (circle-backward instructions) `(:deallocate)))
 
-        ((:fact)
+        (:fact
          (circle-insert-end instructions `(:proceed)))
 
-        ((:query)
+        (:query
          ;; The book doesn't have this ALOC here, but we do it to aid in result
          ;; extraction.  Basically, to make extracting th results of a query
          ;; easier we allocate all of its variables on the stack, so we need
