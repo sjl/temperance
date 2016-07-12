@@ -1,6 +1,5 @@
 (in-package #:bones.wam)
 
-
 ;;;; WAM
 (defun allocate-wam-code (size)
   ;; The WAM bytecode is all stored in this array.  The first
@@ -573,6 +572,16 @@
 
 
 ;;;; Logic Stack
+;;; The logic stack is stored as a simple list in the WAM.  `logic-frame`
+;;; structs are pushed and popped from this list as requested.
+;;;
+;;; There's one small problem: logic frames need to keep track of which
+;;; predicates are awaiting compilation, and the best data structure for that is
+;;; a hash table.  But hash tables are quite expensive to allocate when you're
+;;; pushing and popping tons of frames per second.  So the WAM also keeps a pool
+;;; of logic frames to reuse, which lets us simply `clrhash` in between instead
+;;; of having to allocate a brand new hash table.
+
 (defstruct logic-frame
   (start 0 :type code-index)
   (final nil :type boolean)
