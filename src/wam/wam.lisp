@@ -2,30 +2,6 @@
 
 
 ;;;; WAM
-(declaim
-  ;; Inline all these struct accessors, otherwise things get REAL slow.
-  (inline wam-store
-          wam-code
-          wam-code-labels
-          wam-logic-stack
-          wam-logic-pool
-          wam-functors
-          wam-fail
-          wam-backtracked
-          wam-unification-stack
-          wam-trail
-          wam-number-of-arguments
-          wam-subterm
-          wam-program-counter
-          wam-heap-pointer
-          wam-continuation-pointer
-          wam-environment-pointer
-          wam-backtrack-pointer
-          wam-cut-pointer
-          wam-heap-backtrack-pointer
-          wam-mode))
-
-
 (defun allocate-wam-code (size)
   ;; The WAM bytecode is all stored in this array.  The first
   ;; `+maximum-query-size+` words are reserved for query bytecode, which will
