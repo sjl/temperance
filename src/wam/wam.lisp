@@ -390,22 +390,27 @@
 ;;; Choice point frames are laid out like so:
 ;;;
 ;;;         |PREV|
-;;;       0 | N  | <-- backtrack-pointer
-;;;       1 | CE |
-;;;       2 | CP | This is a bit different than the book.  We stick the
-;;;       3 | CB | arguments at the end of the frame instead of the beginning,
-;;;       4 | BP | so it's easier to retrieve the other values.
-;;;       5 | TR |
-;;;       6 | H  |
-;;;       7 | A0 |
+;;;       0 | N  | number of arguments          <-- backtrack-pointer
+;;;       1 | CE | continuation environment
+;;;       2 | CP | continuation pointer
+;;;       3 | CB | previous choice point
+;;;       4 | BP | next clause
+;;;       5 | TR | trail pointer
+;;;       6 | H  | heap pointer
+;;;       7 | CC | saved cut pointer
+;;;       8 | A0 |
 ;;;         | .. |
-;;;     7+n | An |
-;;;         |NEXT| <-- fill-pointer
+;;;     8+n | An |
+;;;         |NEXT| <-- environment-pointer
+;;;
+;;; This is a bit different than the book.  We stick the args at the end of the
+;;; frame instead of the beginning so it's easier to retrieve the other values.
 
 (declaim (inline wam-stack-choice-n
                  wam-stack-choice-ce
                  wam-stack-choice-cp
                  wam-stack-choice-cb
+                 wam-stack-choice-cc
                  wam-stack-choice-bp
                  wam-stack-choice-tr
                  wam-stack-choice-h
@@ -469,6 +474,14 @@
   (:returns heap-index)
   (wam-stack-word wam (+ b 6)))
 
+(defun* wam-stack-choice-cc
+    ((wam wam)
+     &optional
+     ((b backtrack-pointer)
+      (wam-backtrack-pointer wam)))
+  (:returns backtrack-pointer)
+  (wam-stack-word wam (+ b 7)))
+
 
 (defun* wam-stack-choice-arg
     ((wam wam)
@@ -477,14 +490,14 @@
      ((b backtrack-pointer)
       (wam-backtrack-pointer wam)))
   (:returns cell)
-  (wam-stack-word wam (+ b 7 n)))
+  (wam-stack-word wam (+ b 8 n)))
 
 (defun* (setf wam-stack-choice-arg) ((new-value cell)
                                      (wam wam)
                                      (n arity)
                                      &optional ((b backtrack-pointer)
                                                 (wam-backtrack-pointer wam)))
-  (setf (wam-stack-word wam (+ b 7 n))
+  (setf (wam-stack-word wam (+ b 8 n))
         new-value))
 
 
@@ -495,7 +508,7 @@
       (wam-backtrack-pointer wam)))
   (:returns stack-choice-size)
   "Return the size of the choice frame starting at backtrack pointer `b`."
-  (+ (wam-stack-choice-n wam b) 7))
+  (+ (wam-stack-choice-n wam b) 8))
 
 
 (defun* wam-stack-top ((wam wam))
@@ -531,8 +544,7 @@
   (setf (fill-pointer (wam-unification-stack wam)) 0))
 
 (defun* wam-reset-local-registers! ((wam wam))
-  (loop :for i :from 0 :below +register-count+ :do
-        (setf (wam-local-register wam i) (make-cell-null))))
+  (fill (wam-store wam) (make-cell-null) :start 0 :end +register-count+))
 
 (defun* wam-reset! ((wam wam))
   (wam-truncate-heap! wam)

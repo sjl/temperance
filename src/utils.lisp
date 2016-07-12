@@ -37,6 +37,9 @@
 (defun hex (d)
   (format nil "~X" d))
 
+(defun symbolize (&rest args)
+  (intern (format nil "~{~A~}" args)))
+
 (defmacro when-let ((symbol value) &body body)
   "Bind `value` to `symbol` and execute `body` if the value was not `nil`."
   `(let ((,symbol ,value))

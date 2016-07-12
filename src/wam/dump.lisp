@@ -33,14 +33,14 @@
   ;; This code is awful, sorry.
   (let ((store (wam-store wam)))
     (format t "HEAP~%")
-    (format t "  +------+-----+----------+--------------------------------------+~%")
-    (format t "  | ADDR | TYP |    VALUE | DEBUG                                |~%")
-    (format t "  +------+-----+----------+--------------------------------------+~%")
+    (format t "  +------+-----+------------------+--------------------------------------+~%")
+    (format t "  | ADDR | TYP |            VALUE | DEBUG                                |~%")
+    (format t "  +------+-----+------------------+--------------------------------------+~%")
     (when (> from +heap-start+)
-      (format t "  |    ⋮ |  ⋮  |        ⋮ |                                      |~%"))
+      (format t "  |    ⋮ |  ⋮  |                ⋮ |                                      |~%"))
     (flet ((print-cell (i cell indent)
              (let ((hi (= i highlight)))
-               (format t "~A ~4,'0X | ~A | ~8,'0X | ~36A ~A~%"
+               (format t "~A ~4,'0X | ~A | ~16,'0X | ~36A ~A~%"
                        (if hi "==>" "  |")
                        i
                        (cell-type-short-name cell)
@@ -58,16 +58,16 @@
                 (when (not (zerop indent))
                   (decf indent))))))
     (when (< to (wam-heap-pointer wam))
-      (format t "  |    ⋮ |  ⋮  |        ⋮ |                                      |~%"))
-    (format t "  +------+-----+----------+--------------------------------------+~%")
+      (format t "  |    ⋮ |  ⋮  |                ⋮ |                                      |~%"))
+    (format t "  +------+-----+------------------+--------------------------------------+~%")
     (values)))
 
 
 (defun dump-stack (wam)
   (format t "STACK~%")
-  (format t "  +------+----------+-------------------------------+~%")
-  (format t "  | ADDR |    VALUE |                               |~%")
-  (format t "  +------+----------+-------------------------------+~%")
+  (format t "  +------+------------------+-------------------------------+~%")
+  (format t "  | ADDR |            VALUE |                               |~%")
+  (format t "  +------+------------------+-------------------------------+~%")
   (with-accessors ((e wam-environment-pointer)
                    (b wam-backtrack-pointer))
       wam
@@ -84,7 +84,7 @@
           (switch (addr :test #'=)
             (e (setf currently-in :frame offset 0 arg 0))
             (b (setf currently-in :choice offset 0 arg 0))))
-        (format t "  | ~4,'0X | ~8,'0X | ~30A|~A~A~%"
+        (format t "  | ~4,'0X | ~16,'0X | ~30A|~A~A~%"
                 addr
                 cell
                 (case currently-in ; jesus christ this needs to get fixed
@@ -134,7 +134,7 @@
                   (t ""))
                 (if (= addr e) " <- E" "")
                 (if (= addr b) " <- B" "")))))
-  (format t "  +------+----------+-------------------------------+~%"))
+  (format t "  +------+------------------+-------------------------------+~%"))
 
 
 (defun pretty-functor (functor-index functor-list)
@@ -144,7 +144,7 @@
       (format nil "~A/~D" symbol arity))))
 
 (defun pretty-arguments (arguments)
-  (format nil "~{ ~4,'0X~}" arguments))
+  (format nil "~10<~{ ~4,'0X~}~;~>" arguments))
 
 
 (defgeneric instruction-details (opcode arguments functor-list))
@@ -216,9 +216,22 @@
           (first arguments)))
 
 (defmethod instruction-details ((opcode (eql +opcode-call+)) arguments functor-list)
-  (format nil "CALL~A      ; ~A"
+  (format nil "CALL~A ; call ~A"
           (pretty-arguments arguments)
           (pretty-functor (first arguments) functor-list)))
+
+(defmethod instruction-details ((opcode (eql +opcode-jump+)) arguments functor-list)
+  (format nil "JUMP~A ; jump ~A"
+          (pretty-arguments arguments)
+          (pretty-functor (first arguments) functor-list)))
+
+(defmethod instruction-details ((opcode (eql +opcode-dynamic-call+)) arguments functor-list)
+  (format nil "DYCL~A ; dynamic call"
+          (pretty-arguments arguments)))
+
+(defmethod instruction-details ((opcode (eql +opcode-dynamic-jump+)) arguments functor-list)
+  (format nil "DYJP~A ; dynamic jump"
+          (pretty-arguments arguments)))
 
 (defmethod instruction-details ((opcode (eql +opcode-get-constant+)) arguments functor-list)
   (format nil "GCON~A ; X~A = CONSTANT ~A"
@@ -233,17 +246,17 @@
           (pretty-functor (first arguments) functor-list)))
 
 (defmethod instruction-details ((opcode (eql +opcode-subterm-constant+)) arguments functor-list)
-  (format nil "SCON~A      ; SUBTERM CONSTANT ~A"
+  (format nil "SCON~A ; SUBTERM CONSTANT ~A"
           (pretty-arguments arguments)
           (pretty-functor (first arguments) functor-list)))
 
 (defmethod instruction-details ((opcode (eql +opcode-get-list+)) arguments functor-list)
-  (format nil "GLST~A      ; X~A = [vvv | vvv]"
+  (format nil "GLST~A ; X~A = [vvv | vvv]"
           (pretty-arguments arguments)
           (first arguments)))
 
 (defmethod instruction-details ((opcode (eql +opcode-put-list+)) arguments functor-list)
-  (format nil "PLST~A      ; X~A = [vvv | vvv]"
+  (format nil "PLST~A ; X~A = [vvv | vvv]"
           (pretty-arguments arguments)
           (first arguments)))
 
@@ -261,18 +274,20 @@
     (while (< addr to)
       (let ((instruction (retrieve-instruction code-store addr)))
         (when (>= addr from)
-          (let ((lbl (gethash addr lbls))) ; forgive me
-            (when lbl
-              (format t ";;;; BEGIN ~A~%"
-                      (pretty-functor lbl (wam-functors wam)))))
-          (format t ";~A~4,'0X: "
-                  (if (= (wam-program-counter wam) addr)
-                    ">>"
-                    "  ")
-                  addr)
-          (format t "~A~%" (instruction-details (aref instruction 0)
-                                                (rest (coerce instruction 'list))
-                                                (wam-functors wam))))
+          (when (not (= +opcode-noop+ (aref instruction 0)))
+
+            (let ((lbl (gethash addr lbls))) ; forgive me
+              (when lbl
+                (format t ";;;; BEGIN ~A~%"
+                        (pretty-functor lbl (wam-functors wam)))))
+            (format t ";~A~4,'0X: "
+                    (if (= (wam-program-counter wam) addr)
+                      ">>"
+                      "  ")
+                    addr)
+            (format t "~A~%" (instruction-details (aref instruction 0)
+                                                  (rest (coerce instruction 'list))
+                                                  (wam-functors wam)))))
         (incf addr (length instruction))))))
 
 (defun dump-code

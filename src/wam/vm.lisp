@@ -101,6 +101,7 @@
   (if (wam-backtrack-pointer-unset-p wam)
     (setf (wam-fail wam) t)
     (setf (wam-program-counter wam) (wam-stack-choice-bp wam)
+          (wam-cut-pointer wam) (wam-stack-choice-cc wam)
           (wam-backtracked wam) t)))
 
 (defun* trail! ((wam wam) (address store-index))
@@ -474,54 +475,76 @@
 
 
 ;;;; Control Instructions
-(define-instruction (%call)
-    ((wam wam)
-     (functor functor-index)
-     &optional ((program-counter-increment instruction-size)
-                (instruction-size +opcode-call+)))
+(declaim (inline %%procedure-call %%dynamic-procedure-call))
+
+
+(defun* %%procedure-call ((wam wam)
+                          (functor functor-index)
+                          (program-counter-increment instruction-size)
+                          (is-tail boolean))
   (let ((target (wam-code-label wam functor)))
-    (if target
-      (setf (wam-continuation-pointer wam) ; CP <- next instruction
-            (+ (wam-program-counter wam) program-counter-increment)
-
-            (wam-number-of-arguments wam) ; set NARGS
-            (wam-functor-arity wam functor)
-
-            (wam-cut-pointer wam) ; set B0 in case we have a cut
-            (wam-backtrack-pointer wam)
-
-            (wam-program-counter wam) ; jump
-            target)
+    (if (not target)
       ;; Trying to call an unknown procedure.
-      (backtrack! wam))))
+      (backtrack! wam)
+      (progn
+        (when (not is-tail)
+          (setf (wam-continuation-pointer wam) ; CP <- next instruction
+                (+ (wam-program-counter wam) program-counter-increment)))
+        (setf (wam-number-of-arguments wam) ; set NARGS
+              (wam-functor-arity wam functor)
+
+              (wam-cut-pointer wam) ; set B0 in case we have a cut
+              (wam-backtrack-pointer wam)
+
+              (wam-program-counter wam) ; jump
+              target)))))
+
+(defun* %%dynamic-procedure-call ((wam wam) (is-tail boolean))
+  (flet ((%go (functor)
+           (if is-tail
+             (%%procedure-call
+               wam functor (instruction-size +opcode-dynamic-jump+) t)
+             (%%procedure-call
+               wam functor (instruction-size +opcode-dynamic-call+) nil))))
+    (with-cell (addr cell) wam 0 ; A_0
+      (cond
+        ((cell-structure-p cell)
+         (with-cell (functor-address functor-cell) wam (cell-value cell)
+           (let ((functor (cell-value functor-cell)))
+             ;; If we have a non-zero-arity structure, we need to set up the
+             ;; argument registers before we call it.  Luckily all the arguments
+             ;; conveniently live contiguously right after the functor cell.
+             (loop :with arity = (wam-functor-arity wam functor)
+                   :for argument-register :from 0 :below arity
+                   :for argument-address :from (1+ functor-address)
+                   :do (setf (wam-local-register wam argument-register)
+                             (wam-heap-cell wam argument-address)))
+             (%go functor))))
+        ((cell-constant-p cell)
+         ;; Zero-arity functors don't need to set up anything at all -- we can
+         ;; just call them immediately.
+         (%go (cell-value cell)))
+        ((cell-reference-p cell)
+         ;; It's okay to do (call :var), but :var has to be bound by the time you
+         ;; actually reach it at runtime.
+         (error "Cannot dynamically call an unbound variable."))
+        (t ; You can't (call) anything else.
+         (error "Cannot dynamically call something other than a structure."))))))
+
+
+(define-instruction (%jump) ((wam wam) (functor functor-index))
+  (%%procedure-call wam functor (instruction-size +opcode-jump+) t))
+
+(define-instruction (%call) ((wam wam) (functor functor-index))
+  (%%procedure-call wam functor (instruction-size +opcode-call+) nil))
+
 
 (define-instruction (%dynamic-call) ((wam wam))
-  ;; It's assumed that whatever we want to dynamically call has been put in
-  ;; argument register zero.
-  (with-cell (addr cell) wam 0 ; A_0
-    (cond
-      ((cell-structure-p cell)
-       (with-cell (functor-address functor-cell) wam (cell-value cell)
-         (let ((functor (cell-value functor-cell)))
-           ;; If we have a non-zero-arity structure, we need to set up the
-           ;; argument registers before we call it.  Luckily all the arguments
-           ;; conveniently live contiguously right after the functor cell.
-           (loop :with arity = (wam-functor-arity wam functor)
-                 :for argument-register :from 0 :below arity
-                 :for argument-address :from (1+ functor-address)
-                 :do (setf (wam-local-register wam argument-register)
-                           (wam-heap-cell wam argument-address)))
-           (%call wam functor (instruction-size +opcode-dynamic-call+)))))
-      ((cell-constant-p cell)
-       ;; Zero-arity functors don't need to set up anything at all -- we can
-       ;; just call them immediately.
-       (%call wam (cell-value cell) (instruction-size +opcode-dynamic-call+)))
-      ((cell-reference-p cell)
-       ;; It's okay to do (call :var), but :var has to be bound by the time you
-       ;; actually reach it at runtime.
-       (error "Cannot dynamically call an unbound variable."))
-      (t ; You can't (call) anything else.
-       (error "Cannot dynamically call something other than a structure.")))))
+  (%%dynamic-procedure-call wam nil))
+
+(define-instruction (%dynamic-jump) ((wam wam))
+  (%%dynamic-procedure-call wam t))
+
 
 (define-instruction (%proceed t) ((wam wam))
   (setf (wam-program-counter wam) ; P <- CP
@@ -538,13 +561,14 @@
           (wam-environment-pointer wam) new-e))) ; E <- new-e
 
 (define-instruction (%deallocate) ((wam wam))
-  (setf (wam-program-counter wam) (wam-stack-frame-cp wam)
+  (setf (wam-continuation-pointer wam) (wam-stack-frame-cp wam)
         (wam-environment-pointer wam) (wam-stack-frame-ce wam)
         (wam-cut-pointer wam) (wam-stack-frame-cut wam)))
 
 
 ;;;; Choice Instructions
 (declaim (inline reset-choice-point!))
+
 
 (defun* reset-choice-point! ((wam wam)
                              (b backtrack-pointer))
@@ -565,10 +589,11 @@
           +heap-start+
           (wam-stack-choice-h wam b))))
 
+
 (define-instruction (%try) ((wam wam) (next-clause code-index))
   (let ((new-b (wam-stack-top wam))
         (nargs (wam-number-of-arguments wam)))
-    (wam-stack-ensure-size wam (+ new-b 7 nargs))
+    (wam-stack-ensure-size wam (+ new-b 8 nargs))
     (setf (wam-stack-word wam new-b) nargs ; N
           (wam-stack-word wam (+ new-b 1)) (wam-environment-pointer wam) ; CE
           (wam-stack-word wam (+ new-b 2)) (wam-continuation-pointer wam) ; CP
@@ -576,6 +601,7 @@
           (wam-stack-word wam (+ new-b 4)) next-clause ; BP
           (wam-stack-word wam (+ new-b 5)) (wam-trail-pointer wam) ; TR
           (wam-stack-word wam (+ new-b 6)) (wam-heap-pointer wam) ; H
+          (wam-stack-word wam (+ new-b 7)) (wam-cut-pointer wam) ; CC
           (wam-heap-backtrack-pointer wam) (wam-heap-pointer wam) ; HB
           (wam-backtrack-pointer wam) new-b) ; B
     (loop :for i :from 0 :below nargs :do ; A_i
@@ -622,6 +648,7 @@
 ;;;; Constant Instructions
 (declaim (inline %%match-constant))
 
+
 (defun* %%match-constant ((wam wam)
                           (constant functor-index)
                           (address store-index))
@@ -638,6 +665,7 @@
 
       (t
        (backtrack! wam)))))
+
 
 (define-instruction (%put-constant t)
     ((wam wam)
@@ -770,24 +798,28 @@
               (#.+opcode-cut+                    (instruction %cut 0))
               ;; Control
               (#.+opcode-allocate+               (instruction %allocate 1))
-              ;; need to skip the PC increment for PROC/CALL/DEAL/DONE
-              ;; TODO: this is still ugly
-              (#.+opcode-deallocate+
-                (instruction %deallocate 0)
-                (setf increment-pc nil))
+              (#.+opcode-deallocate+             (instruction %deallocate 0))
+              ;; need to skip the PC increment for PROC/CALL/JUMP/DONE
+              ;; TODO: this is (still) still ugly
               (#.+opcode-proceed+
-                (instruction %proceed 0)
-                (setf increment-pc nil))
+               (instruction %proceed 0)
+               (setf increment-pc nil))
+              (#.+opcode-jump+
+               (instruction %jump 1)
+               (setf increment-pc nil))
               (#.+opcode-call+
-                (instruction %call 1)
-                (setf increment-pc nil))
+               (instruction %call 1)
+               (setf increment-pc nil))
+              (#.+opcode-dynamic-jump+
+               (instruction %dynamic-jump 0)
+               (setf increment-pc nil))
               (#.+opcode-dynamic-call+
-                (instruction %dynamic-call 0)
-                (setf increment-pc nil))
+               (instruction %dynamic-call 0)
+               (setf increment-pc nil))
               (#.+opcode-done+
-                (if (funcall done-thunk)
-                  (return-from run)
-                  (backtrack! wam))))
+               (if (funcall done-thunk)
+                 (return-from run)
+                 (backtrack! wam))))
             ;; Only increment the PC when we didn't backtrack.
             ;;
             ;; If we backtracked, the PC will have been filled in from the

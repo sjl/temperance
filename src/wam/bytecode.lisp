@@ -26,7 +26,9 @@
   (#.+opcode-subterm-value-stack+ 2)
   (#.+opcode-subterm-void+ 2)
 
+  (#.+opcode-jump+ 2)
   (#.+opcode-call+ 2)
+  (#.+opcode-dynamic-jump+ 1)
   (#.+opcode-dynamic-call+ 1)
   (#.+opcode-proceed+ 1)
   (#.+opcode-allocate+ 2)
@@ -70,7 +72,9 @@
     (+opcode-subterm-value-stack+ "SUBTERM-VALUE")
     (+opcode-subterm-void+ "SUBTERM-VOID")
 
+    (+opcode-jump+ "JUMP")
     (+opcode-call+ "CALL")
+    (+opcode-dynamic-jump+ "DYNAMIC-JUMP")
     (+opcode-dynamic-call+ "DYNAMIC-CALL")
     (+opcode-proceed+ "PROCEED")
     (+opcode-allocate+ "ALLOCATE")
@@ -111,7 +115,9 @@
     (+opcode-subterm-value-stack+ "SVLU")
     (+opcode-subterm-void+ "SVOI")
 
+    (+opcode-jump+ "JUMP")
     (+opcode-call+ "CALL")
+    (+opcode-dynamic-jump+ "DYJP")
     (+opcode-dynamic-call+ "DYCL")
     (+opcode-proceed+ "PROC")
     (+opcode-allocate+ "ALOC")

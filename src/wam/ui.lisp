@@ -167,6 +167,9 @@
 
 (defmacro bytecode (&body body)
   `(with-fresh-database
-     (push-logic-frame-with ,@body)
-     (dump-wam-code *database*)))
+    (push-logic-frame-with ,@body)
+    (format t ";;;; PROGRAM CODE =======================~%")
+    (dump-wam-code *database*)
+    (format t "~%;;;; QUERY CODE =========================~%")
+    (dump-wam-query-code *database*)))
 

@@ -13,6 +13,7 @@
     #:recursively
     #:recur
     #:when-let
+    #:symbolize
     #:dis
     #:megabytes
     #:gethash-or-init

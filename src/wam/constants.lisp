@@ -1,5 +1,13 @@
 (in-package #:bones.wam)
 
+(defmacro define-constants (count-symbol &rest symbols)
+  `(progn
+     ,@(loop :for c :from 0
+             :for s :in symbols
+             :collect `(define-constant ,s ,c))
+     (define-constant ,count-symbol ,(length symbols))))
+
+
 (define-constant +cell-width+ 60
   :documentation "Number of bits in each cell.")
 
@@ -59,7 +67,7 @@
   "The maximum number of code words an instruction (including opcode) might be.")
 
 
-(define-constant +stack-limit+ 2048
+(define-constant +stack-limit+ 4096
   :documentation "Maximum size of the WAM stack.")
 
 (define-constant +stack-frame-size-limit+ (+ 7 +register-count+)
@@ -107,14 +115,7 @@
 
 
 ;;;; Opcodes
-(defmacro define-opcodes (&rest symbols)
-  `(progn
-     ,@(loop :for c :from 0
-             :for s :in symbols
-             :collect `(define-constant ,s ,c))
-     (define-constant +number-of-opcodes+ ,(length symbols))))
-
-(define-opcodes
+(define-constants +number-of-opcodes+
   +opcode-noop+
 
   ;; Program
@@ -139,7 +140,9 @@
   +opcode-subterm-void+
 
   ;; Control
+  +opcode-jump+
   +opcode-call+
+  +opcode-dynamic-jump+
   +opcode-dynamic-call+
   +opcode-proceed+
   +opcode-allocate+

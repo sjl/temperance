@@ -833,9 +833,14 @@
 
 (defclass list-token (register-token) ())
 
-(defclass call-token (token)
+
+(defclass procedure-call-token ()
   ((functor :accessor token-functor :type symbol :initarg :functor)
    (arity :accessor token-arity :type arity :initarg :arity)))
+
+(defclass call-token (procedure-call-token) ())
+
+(defclass jump-token (procedure-call-token) ())
 
 (defclass cut-token (token) ())
 
@@ -868,6 +873,12 @@
 (defmethod print-object ((token call-token) stream)
   (print-unreadable-object (token stream :identity nil :type nil)
     (format stream "CALL ~A/~D"
+            (token-functor token)
+            (token-arity token))))
+
+(defmethod print-object ((token jump-token) stream)
+  (print-unreadable-object (token stream :identity nil :type nil)
+    (format stream "JUMP ~A/~D"
             (token-functor token)
             (token-arity token))))
 
@@ -911,16 +922,18 @@
     (allocate-registers tree clause-props :nead t)
     (-> tree flatten-program tokenize-assignments)))
 
-(defun* tokenize-query-term (term (clause-props clause-properties) &key nead)
+(defun* tokenize-query-term (term
+                             (clause-props clause-properties)
+                             &key in-nead is-tail)
   (:returns list)
   "Tokenize `term` as a query term, returning its tokens."
   (let ((tree (parse-top-level term)))
-    (allocate-registers tree clause-props :nead nead)
+    (allocate-registers tree clause-props :nead in-nead)
     (-<> tree
       flatten-query
       tokenize-assignments
-      ;; We need to shove a CALL token onto the end.
-      (append <> (list (make-instance 'call-token
+      ;; We need to shove a CALL/JUMP token onto the end.
+      (append <> (list (make-instance (if is-tail 'jump-token 'call-token)
                                       :functor (node-functor tree)
                                       :arity (node-arity tree)))))))
 
@@ -1121,14 +1134,14 @@
                              register))
          (handle-cut ()
            (push-instruction :cut))
-         (handle-call (functor arity)
+         (handle-procedure-call (functor arity is-jump)
            (if (and (eq functor 'call)
                     (= arity 1))
-             ;; DYNAMIC-CALL
-             (push-instruction :dynamic-call)
-             ;; CALL functor
+             ;; DYNAMIC-[CALL/JUMP]
+             (push-instruction (if is-jump :dynamic-jump :dynamic-call))
+             ;; [CALL/JUMP] functor
              (push-instruction
-               :call
+               (if is-jump :jump :call)
                (wam-ensure-functor-index wam (cons functor arity))))
            ;; This is a little janky, but at this point the body goals have been
            ;; turned into one single stream of tokens, so we don't have a nice
@@ -1162,9 +1175,14 @@
                (handle-list (token-register token)))
              (cut-token
                (handle-cut))
+             (jump-token
+               (handle-procedure-call (token-functor token)
+                                      (token-arity token)
+                                      t))
              (call-token
-               (handle-call (token-functor token)
-                            (token-arity token)))
+               (handle-procedure-call (token-functor token)
+                                      (token-arity token)
+                                      nil))
              (register-token
                (handle-register (token-register token)))))
          (handle-stream (tokens)
@@ -1194,36 +1212,51 @@
          (head-tokens
            (when head
              (tokenize-program-term head clause-props)))
+         (clause-type
+           (cond ((null head) :query)
+                 ((null body) :fact)
+                 ((null (rest body)) :chain)
+                 (t :rule)))
          (body-tokens
            (when body
              (loop
                :with first = t
-               :for goal :in body
+               :for (goal . remaining) :on body
                :append
-               (cond
+               (if (eq goal '!) ; gross
                  ;; cut just gets emitted straight, but DOESN'T flip `first`...
                  ;; TODO: fix the cut layering violation here...
-                 ((eql goal '!) ; gross
-                  (list (make-instance 'cut-token)))
-                 (first
-                  (setf first nil)
-                  (tokenize-query-term goal clause-props
-                                       :nead t))
-                 (t
-                  (tokenize-query-term goal clause-props)))))))
+                 (list (make-instance 'cut-token))
+                 (prog1
+                     (tokenize-query-term
+                       goal clause-props
+                       :in-nead first
+                       ;; For actual WAM queries we're running, we don't want to
+                       ;; LCO the final CALL because we need that stack frame
+                       ;; (for storing the results).
+                       :is-tail (and (not (eq clause-type :query))
+                                     (null remaining)))
+                   (setf first nil)))))))
     (let ((instructions (precompile-tokens wam head-tokens body-tokens))
           (variable-count (length (clause-permanent-vars clause-props))))
       ;; We need to compile facts and rules differently.  Facts end with
       ;; a PROCEED and rules are wrapped in ALOC/DEAL.
-      (cond
-        ((and head body) ; a full-ass rule
+      (case clause-type
+        ((:chain :rule) ; a full-ass rule
+         ;; Non-chain rules need an ALLOC at the head and a DEALLOC right before
+         ;; the tail call:
+         ;;
+         ;;     ALLOC n
+         ;;     ...
+         ;;     DEAL
+         ;;     JUMP
          (circle-insert-beginning instructions `(:allocate ,variable-count))
-         (circle-insert-end instructions `(:deallocate)))
+         (circle-insert-before (circle-backward instructions) `(:deallocate)))
 
-        ((and head (null body)) ; a bare fact
+        ((:fact)
          (circle-insert-end instructions `(:proceed)))
 
-        (t ; a query
+        ((:query)
          ;; The book doesn't have this ALOC here, but we do it to aid in result
          ;; extraction.  Basically, to make extracting th results of a query
          ;; easier we allocate all of its variables on the stack, so we need
@@ -1467,7 +1500,9 @@
     (:get-list               +opcode-get-list+)
     (:put-list               +opcode-put-list+)
     (:subterm-constant       +opcode-subterm-constant+)
+    (:jump                   +opcode-jump+)
     (:call                   +opcode-call+)
+    (:dynamic-jump           +opcode-dynamic-jump+)
     (:dynamic-call           +opcode-dynamic-call+)
     (:proceed                +opcode-proceed+)
     (:allocate               +opcode-allocate+)

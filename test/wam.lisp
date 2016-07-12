@@ -448,3 +448,31 @@
   (is (not (string= ""
                     (with-output-to-string (*standard-output*)
                       (dump-wam-full *test-database*))))))
+
+(test last-call-optimization
+  (let* ((big-ass-list (loop :repeat 1000 :collect 'a))
+         (big-ass-result (reverse (cons 'x big-ass-list))))
+    (with-fresh-database
+      (push-logic-frame-with
+        (invoke-fact `(big-ass-list (list ,@big-ass-list)))
+
+        (fact (append nil ?l ?l))
+        (rule (append (list* ?i ?tail) ?other (list* ?i ?l))
+          (append ?tail ?other ?l)))
+
+      (is (results= `((?bal ,big-ass-list ?bar ,big-ass-result))
+                    (query-all (big-ass-list ?bal)
+                               (append ?bal (list x) ?bar)))))))
+
+; (test hanoi
+;   (with-fresh-database
+;     (push-logic-frame-with
+;       (fact (append nil ?l ?l))
+;       (rule (append (list* ?i ?tail) ?other (list* ?i ?l))
+;         (append ?tail ?other ?l))
+
+;       (fact (hanoi zero ?a ?b ?c (list (move ?a ?b))))
+;       (rule (hanoi (s ?n) ?a ?b ?c ?moves)
+;         (hanoi ?n ?a ?c ?b ?moves1)
+;         (hanoi ?n ?c ?b ?a ?moves2)
+;         (append ?moves1 (list* (move ?a ?b) ?moves2) ?moves)))))

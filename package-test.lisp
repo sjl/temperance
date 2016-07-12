@@ -33,6 +33,8 @@
     #:?
     #:query
     #:query-all)
+  (:import-from #:bones.utils
+    #:symbolize)
   (:shadowing-import-from #:bones.wam
     #:!))
 
