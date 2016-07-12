@@ -464,15 +464,27 @@
                     (query-all (big-ass-list ?bal)
                                (append ?bal (list x) ?bar)))))))
 
-; (test hanoi
-;   (with-fresh-database
-;     (push-logic-frame-with
-;       (fact (append nil ?l ?l))
-;       (rule (append (list* ?i ?tail) ?other (list* ?i ?l))
-;         (append ?tail ?other ?l))
+(test hanoi
+  ;; From The Art of Prolog
+  (with-fresh-database
+    (push-logic-frame-with
+      (fact (append nil ?l ?l))
+      (rule (append (list* ?i ?tail) ?other (list* ?i ?l))
+        (append ?tail ?other ?l))
 
-;       (fact (hanoi zero ?a ?b ?c (list (move ?a ?b))))
-;       (rule (hanoi (s ?n) ?a ?b ?c ?moves)
-;         (hanoi ?n ?a ?c ?b ?moves1)
-;         (hanoi ?n ?c ?b ?a ?moves2)
-;         (append ?moves1 (list* (move ?a ?b) ?moves2) ?moves)))))
+      (fact (hanoi zero ?a ?b ?c nil))
+      (rule (hanoi (s ?n) ?a ?b ?c ?moves)
+        (hanoi ?n ?a ?c ?b ?moves1)
+        (hanoi ?n ?c ?b ?a ?moves2)
+        (append ?moves1 (list* (move ?a ?b) ?moves2) ?moves)))
+    (should-return
+      ((hanoi zero a b c ?what)
+       (?what nil))
+      ((hanoi (s zero) a b c ?what)
+       (?what ((move a b))))
+      ((hanoi (s (s zero)) a b c ?what)
+       (?what ((move a c) (move a b) (move c b))))
+      ((hanoi (s (s (s zero))) a b c ?what)
+       (?what ((move a b) (move a c) (move b c)
+               (move a b)
+               (move c a) (move c b) (move a b)))))))
