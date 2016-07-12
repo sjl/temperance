@@ -40,12 +40,13 @@
   '(cons symbol arity))
 
 
-(deftype code-word ()
-  `(unsigned-byte ,+code-word-size+))
-
 (deftype code-index ()
   ;; either an address or the sentinel
   `(integer 0 ,(1- +code-limit+)))
+
+(deftype code-word ()
+  t)
+
 
 (deftype generic-code-store ()
   `(simple-array code-word (*)))

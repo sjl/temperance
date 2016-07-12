@@ -1,7 +1,7 @@
 (in-package #:bones.wam)
 
 ;;;; Config
-(defparameter *step* nil)
+(defvar *step* nil)
 
 
 ;;;; Utilities
@@ -479,10 +479,11 @@
 
 
 (defun* %%procedure-call ((wam wam)
-                          (functor functor-index)
+                          (functor functor)
                           (program-counter-increment instruction-size)
                           (is-tail boolean))
-  (let ((target (wam-code-label wam functor)))
+  (let* ((findex (wam-ensure-functor-index wam functor))
+         (target (wam-code-label wam findex)))
     (if (not target)
       ;; Trying to call an unknown procedure.
       (backtrack! wam)
@@ -491,7 +492,7 @@
           (setf (wam-continuation-pointer wam) ; CP <- next instruction
                 (+ (wam-program-counter wam) program-counter-increment)))
         (setf (wam-number-of-arguments wam) ; set NARGS
-              (wam-functor-arity wam functor)
+              (wam-functor-arity wam findex)
 
               (wam-cut-pointer wam) ; set B0 in case we have a cut
               (wam-backtrack-pointer wam)
@@ -519,11 +520,11 @@
                    :for argument-address :from (1+ functor-address)
                    :do (setf (wam-local-register wam argument-register)
                              (wam-heap-cell wam argument-address)))
-             (%go functor))))
+             (%go (wam-functor-lookup wam functor)))))
         ((cell-constant-p cell)
          ;; Zero-arity functors don't need to set up anything at all -- we can
          ;; just call them immediately.
-         (%go (cell-value cell)))
+         (%go (wam-functor-lookup wam (cell-value cell))))
         ((cell-reference-p cell)
          ;; It's okay to do (call :var), but :var has to be bound by the time you
          ;; actually reach it at runtime.
@@ -532,10 +533,10 @@
          (error "Cannot dynamically call something other than a structure."))))))
 
 
-(define-instruction (%jump) ((wam wam) (functor functor-index))
+(define-instruction (%jump) ((wam wam) (functor functor))
   (%%procedure-call wam functor (instruction-size +opcode-jump+) t))
 
-(define-instruction (%call) ((wam wam) (functor functor-index))
+(define-instruction (%call) ((wam wam) (functor functor))
   (%%procedure-call wam functor (instruction-size +opcode-call+) nil))
 
 
@@ -761,7 +762,7 @@
                       (not (= pc +code-sentinel+))) ; finished
           :for opcode = (aref code pc) ; todo switch this to wam-code-word...
           :do
-          (block op
+          (progn
             (when *step*
               (dump) ; todo: make this saner
               (break "About to execute instruction at ~4,'0X" pc))

@@ -143,8 +143,13 @@
         (elt functor-list functor-index)
       (format nil "~A/~D" symbol arity))))
 
+(defun pretty-argument (argument)
+  (typecase argument
+    (fixnum (format nil "~4,'0X" argument))
+    (t (format nil "#<*>"))))
+
 (defun pretty-arguments (arguments)
-  (format nil "~10<~{ ~4,'0X~}~;~>" arguments))
+  (format nil "~10<~{ ~A~}~;~>" (mapcar #'pretty-argument arguments)))
 
 
 (defgeneric instruction-details (opcode arguments functor-list))
@@ -218,12 +223,12 @@
 (defmethod instruction-details ((opcode (eql +opcode-call+)) arguments functor-list)
   (format nil "CALL~A ; call ~A"
           (pretty-arguments arguments)
-          (pretty-functor (first arguments) functor-list)))
+          (first arguments)))
 
 (defmethod instruction-details ((opcode (eql +opcode-jump+)) arguments functor-list)
   (format nil "JUMP~A ; jump ~A"
           (pretty-arguments arguments)
-          (pretty-functor (first arguments) functor-list)))
+          (first arguments)))
 
 (defmethod instruction-details ((opcode (eql +opcode-dynamic-call+)) arguments functor-list)
   (format nil "DYCL~A ; dynamic call"

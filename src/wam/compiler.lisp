@@ -1142,7 +1142,7 @@
              ;; [CALL/JUMP] functor
              (push-instruction
                (if is-jump :jump :call)
-               (wam-ensure-functor-index wam (cons functor arity))))
+               (cons functor arity)))
            ;; This is a little janky, but at this point the body goals have been
            ;; turned into one single stream of tokens, so we don't have a nice
            ;; clean way to tell when one ends.  But in practice, a body goal is
@@ -1522,15 +1522,17 @@
 (defun* render-argument (argument)
   (:returns code-word)
   (etypecase argument
+    ;; todo: simplify this to a single `if` once the store is fully split
     (null 0) ; ugly choice point args that'll be filled later...
     (register (register-number argument)) ; bytecode just needs register numbers
+    (functor argument) ; functor for a CALL/JUMP
     (number argument))) ; just a numeric argument, e.g. alloc 0
 
-(defun* render-bytecode ((code generic-code-store)
+(defun* render-bytecode ((store generic-code-store)
                          (instructions circle)
                          (start code-index)
                          (limit code-index))
-  "Render `instructions` (a circle) into `code` starting at `start`.
+  "Render `instructions` (a circle) into `store` starting at `start`.
 
   Bail if ever pushed beyond `limit`.
 
@@ -1541,36 +1543,36 @@
     (flet
         ((fill-previous-jump (address)
            (when previous-jump
-             (setf (aref code (1+ previous-jump)) address))
+             (setf (aref store (1+ previous-jump)) address))
            (setf previous-jump address)))
       (loop
         :with address = start
 
         ;; Render the next instruction
-        :for (opcode . arguments) :in (circle-to-list instructions)
-        :for size = (code-push-instruction code
-                                           (render-opcode opcode)
-                                           (mapcar #'render-argument arguments)
-                                           address)
+        :for (opcode-designator . arguments) :in (circle-to-list instructions)
+        :for opcode = (render-opcode opcode-designator)
+        :for size = (instruction-size opcode)
         :summing size
+
+        ;; Make sure we don't run past the end of our section.
+        :when (>= (+ size address) limit)
+        :do (error "Code store exhausted, game over.")
+
+        :do (code-push-instruction store
+                                   opcode
+                                   (mapcar #'render-argument arguments)
+                                   address)
 
         ;; We need to fill in the addresses for the choice point jumping
         ;; instructions.  For example, when we have TRY ... TRUST, the TRUST
         ;; needs to patch its address into the TRY instruction.
         ;;
         ;; I know, this is ugly, sorry.
-        :when (member opcode '(:try :retry :trust))
+        :when (member opcode-designator '(:try :retry :trust))
         :do (fill-previous-jump address)
 
         ;; look, don't judge me, i told you i know its bad
-        :do (incf address size)
-
-        ;; Make sure we don't run past the end of our section.
-        ;;
-        ;; TODO: move this check up higher so we don't accidentally
-        ;; push past the query boundary
-        :when (>= address limit)
-        :do (error "Code store exhausted, game over.")))))
+        :do (incf address size)))))
 
 
 (defun* render-query ((wam wam) (instructions circle))
