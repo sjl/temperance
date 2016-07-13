@@ -134,6 +134,7 @@
    (tail :accessor node-tail :type node :initarg :tail)))
 
 
+; todo functor -> fname
 (defun* make-top-level-node ((functor symbol) (arity arity) (arguments list))
   (:returns top-level-node)
   (values (make-instance 'top-level-node
@@ -1126,7 +1127,7 @@
            ;; OP functor reg
            (push destination-register seen)
            (push-instruction (find-opcode-structure mode)
-                             (wam-ensure-functor-index wam (cons functor arity))
+                             (wam-unique-functor wam (cons functor arity))
                              destination-register))
          (handle-list (register)
            (push register seen)
@@ -1142,7 +1143,7 @@
              ;; [CALL/JUMP] functor
              (push-instruction
                (if is-jump :jump :call)
-               (cons functor arity)))
+               (wam-unique-functor wam (cons functor arity))))
            ;; This is a little janky, but at this point the body goals have been
            ;; turned into one single stream of tokens, so we don't have a nice
            ;; clean way to tell when one ends.  But in practice, a body goal is
@@ -1392,10 +1393,11 @@
 
 (defun* optimize-constants ((wam wam) (instructions circle))
   (:returns circle)
+  (declare (ignore wam))
   ;; From the book and the erratum, there are four optimizations we can do for
   ;; constants (0-arity structures).
   (flet ((constant-p (functor)
-           (zerop (wam-functor-arity wam functor))))
+           (zerop (cdr functor))))
     (loop :for node = (circle-forward instructions) :then (circle-forward node)
           :while node
           :for (opcode . arguments) = (circle-value node)
@@ -1525,7 +1527,7 @@
     ;; todo: simplify this to a single `if` once the store is fully split
     (null 0) ; ugly choice point args that'll be filled later...
     (register (register-number argument)) ; bytecode just needs register numbers
-    (functor argument) ; functor for a CALL/JUMP
+    (functor argument) ; functors just get literally included
     (number argument))) ; just a numeric argument, e.g. alloc 0
 
 (defun* render-bytecode ((store generic-code-store)
@@ -1584,7 +1586,8 @@
                     (arity arity)
                     (address code-index))
   "Set the code label `functor`/`arity` to point at `address`."
-  (setf (wam-code-label wam functor arity) address))
+  (setf (wam-code-label wam functor arity)
+        address))
 
 (defun* render-rules ((wam wam)
                       (functor symbol)

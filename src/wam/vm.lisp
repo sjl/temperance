@@ -34,28 +34,28 @@
   "
   (wam-heap-push! wam +cell-type-list+ (1+ (wam-heap-pointer wam))))
 
-(defun* push-new-functor! ((wam wam) (functor functor-index))
+(defun* push-new-functor! ((wam wam) (functor functor))
   (:returns heap-index)
   "Push a new functor cell onto the heap, returning its address."
   (wam-heap-push! wam +cell-type-functor+ functor))
 
-(defun* push-new-constant! ((wam wam) (constant functor-index))
+(defun* push-new-constant! ((wam wam) (constant functor))
   (:returns heap-index)
   "Push a new constant cell onto the heap, returning its address."
   (wam-heap-push! wam +cell-type-constant+ constant))
 
 
-(defun* functors-match-p ((f1 functor-index)
-                          (f2 functor-index))
+(defun* functors-match-p ((f1 functor)
+                          (f2 functor))
   (:returns boolean)
   "Return whether the two functor cell values represent the same functor."
-  (= f1 f2))
+  (eq f1 f2))
 
-(defun* constants-match-p ((c1 functor-index)
-                           (c2 functor-index))
+(defun* constants-match-p ((c1 functor)
+                           (c2 functor))
   (:returns boolean)
   "Return whether the two constant cells represent the same functor."
-  (= c1 c2))
+  (eq c1 c2))
 
 
 ;;;; "Ancillary" Functions
@@ -222,7 +222,7 @@
              (if (functors-match-p f1 f2)
                ;; If the functors match, push their pairs of arguments onto
                ;; the stack to be unified.
-               (loop :with arity = (wam-functor-arity wam f1)
+               (loop :with arity = (cdr f1)
                      :for i :from 1 :to arity :do
                      (wam-unification-stack-push! wam (+ s1 i))
                      (wam-unification-stack-push! wam (+ s2 i)))
@@ -324,7 +324,7 @@
 ;;;; Query Instructions
 (define-instruction (%put-structure)
     ((wam wam)
-     (functor functor-index)
+     (functor functor)
      (register register-index))
   (wam-set-local-register! wam register
                            +cell-type-structure+
@@ -358,7 +358,7 @@
 
 ;;;; Program Instructions
 (define-instruction (%get-structure) ((wam wam)
-                                      (functor functor-index)
+                                      (functor functor)
                                       (register register-index))
   (cell-typecase (wam (deref wam register) address)
     ;; If the register points at an unbound reference cell, we push two new
@@ -476,8 +476,7 @@
                           (functor functor)
                           (program-counter-increment instruction-size)
                           (is-tail boolean))
-  (let* ((findex (wam-ensure-functor-index wam functor)) ; todo unfuck this once we finish splitting
-         (target (wam-code-label wam findex)))
+  (let* ((target (wam-code-label wam functor)))
     (if (not target)
       ;; Trying to call an unknown procedure.
       (backtrack! wam)
@@ -486,7 +485,7 @@
           (setf (wam-continuation-pointer wam) ; CP <- next instruction
                 (+ (wam-program-counter wam) program-counter-increment)))
         (setf (wam-number-of-arguments wam) ; set NARGS
-              (wam-functor-arity wam findex)
+              (cdr functor)
 
               (wam-cut-pointer wam) ; set B0 in case we have a cut
               (wam-backtrack-pointer wam)
@@ -512,18 +511,19 @@
        ;; conveniently live contiguously right after the functor cell.
        (cell-typecase (wam functor-address)
          ((:functor f)
-          (load-arguments (wam-functor-arity wam f) (1+ functor-address))
-          (%go (wam-functor-lookup wam f)))))
-      ((:constant c)
-       ;; Zero-arity functors don't need to set up anything at all -- we can
-       ;; just call them immediately.
-       (%go (wam-functor-lookup wam c)))
-      (:reference
-       ;; It's okay to do (call :var), but :var has to be bound by the time you
-       ;; actually reach it at runtime.
-       (error "Cannot dynamically call an unbound variable."))
-      (t ; You can't call/1 anything else.
-       (error "Cannot dynamically call something other than a structure.")))))
+          (load-arguments (cdr f) (1+ functor-address))
+          (%go f))))
+
+      ;; Zero-arity functors don't need to set up anything at all -- we can
+      ;; just call them immediately.
+      ((:constant c) (%go c))
+
+      ;; It's okay to do (call :var), but :var has to be bound by the time you
+      ;; actually reach it at runtime.
+      (:reference (error "Cannot dynamically call an unbound variable."))
+
+      ; You can't call/1 anything else.
+      (t (error "Cannot dynamically call something other than a structure.")))))
 
 
 (define-instruction (%jump) ((wam wam) (functor functor))
@@ -645,7 +645,7 @@
 
 (defun* %%match-constant
     ((wam wam)
-     (constant functor-index)
+     (constant functor)
      (address store-index))
   (cell-typecase (wam (deref wam address) address)
     (:reference
@@ -653,7 +653,7 @@
      (trail! wam address))
 
     ((:constant c)
-     (when (not (= constant c))
+     (when (not (eq constant c))
        (backtrack! wam)))
 
     (t (backtrack! wam))))
@@ -661,7 +661,7 @@
 
 (define-instruction (%put-constant)
     ((wam wam)
-     (constant functor-index)
+     (constant functor)
      (register register-index))
   (wam-set-local-register! wam register +cell-type-constant+ constant)
   ; todo we can probably elide this because constants never have subterms...
@@ -669,13 +669,13 @@
 
 (define-instruction (%get-constant)
     ((wam wam)
-     (constant functor-index)
+     (constant functor)
      (register register-index))
   (%%match-constant wam constant register))
 
 (define-instruction (%subterm-constant)
     ((wam wam)
-     (constant functor-index))
+     (constant functor))
   (ecase (wam-mode wam)
     (:read (%%match-constant wam constant (wam-subterm wam)))
     (:write (push-new-constant! wam constant)))
@@ -722,10 +722,9 @@
              ((:reference r) (extract-var r))
              ((:structure s) (recur s))
              ((:list l) (cons (recur l) (recur (1+ l))))
-             ((:constant c) (wam-functor-symbol wam c))
+             ((:constant c) (car c))
              ((:functor f)
-              (destructuring-bind (functor . arity)
-                  (wam-functor-lookup wam f)
+              (destructuring-bind (functor . arity) f
                 (list* functor
                        (loop :repeat arity
                              :for subterm :from (+ address 1)

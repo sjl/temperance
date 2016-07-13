@@ -130,8 +130,7 @@
 ;;; value is bound to.  Unbound variables contain their own store index as
 ;;; a value.
 ;;;
-;;; FUNCTOR cell values are an index into the WAM's functor array where the
-;;; `(symbol . arity)` cons lives.
+;;; FUNCTOR cell values are a pointer to a `(fname . arity)` cons.
 ;;;
 ;;; CONSTANT cells are the same as functor cells, except that they always happen
 ;;; to refer to functors with an arity of zero.
@@ -193,8 +192,8 @@
   (define-unsafe %unsafe-null-value (eql 0))
   (define-unsafe %unsafe-structure-value store-index)
   (define-unsafe %unsafe-reference-value store-index)
-  (define-unsafe %unsafe-functor-value store-index)
-  (define-unsafe %unsafe-constant-value store-index)
+  (define-unsafe %unsafe-functor-value functor)
+  (define-unsafe %unsafe-constant-value functor)
   (define-unsafe %unsafe-list-value store-index)
   (define-unsafe %unsafe-stack-value stack-word))
 
@@ -721,17 +720,16 @@
     :adjustable nil
     :element-type 'code-word))
 
-(defun* wam-code-label ((wam wam)
-                        (functor functor-index))
+(defun* wam-code-label ((wam wam) (functor functor))
   (:returns (or null code-index))
   (gethash functor (wam-code-labels wam)))
 
 (defun* (setf wam-code-label) ((new-value code-index)
                                (wam wam)
-                               (functor symbol)
+                               (functor fname)
                                (arity arity))
   ;; Note that this takes a functor/arity and not a cons.
-  (setf (gethash (wam-ensure-functor-index wam (cons functor arity))
+  (setf (gethash (wam-unique-functor wam (cons functor arity))
                  (wam-code-labels wam))
         new-value))
 
@@ -830,7 +828,7 @@
     "Cannot add clause ~S without an open logic stack frame."
     clause)
   (multiple-value-bind (functor arity) (find-predicate clause)
-    (let ((label (wam-ensure-functor-index wam (cons functor arity))))
+    (let ((label (wam-unique-functor wam (cons functor arity))))
       (assert-label-not-already-compiled wam clause label)
       (with-slots (predicates)
           (wam-current-logic-frame wam)
@@ -980,39 +978,19 @@
 
 
 ;;;; Functors
-;;; Functors are stored in an adjustable array.  Cells refer to a functor using
-;;; the functor's address in this array.
+;;; Functors are stored in an adjustable array to uniquify them... for now.
 
-(declaim (inline wam-functor-lookup
-                 wam-functor-symbol
-                 wam-functor-arity))
-
-
-(defun* wam-ensure-functor-index ((wam wam) (functor functor))
-  (:returns functor-index)
-  "Return the index of the functor in the WAM's functor table.
+(defun* wam-unique-functor ((wam wam) (functor functor))
+  (:returns functor)
+  "Return a unique version of the functor cons.
 
   If the functor is not already in the table it will be added.
 
   "
-  (let ((functors (wam-functors wam)))
-    (or (position functor functors :test #'equal)
-        (vector-push-extend functor functors))))
-
-(defun* wam-functor-lookup ((wam wam) (functor-index functor-index))
-  (:returns functor)
-  "Return the functor with the given index in the WAM."
-  (aref (wam-functors wam) functor-index))
-
-(defun* wam-functor-symbol ((wam wam) (functor-index functor-index))
-  (:returns symbol)
-  "Return the symbol of the functor with the given index in the WAM."
-  (car (wam-functor-lookup wam functor-index)))
-
-(defun* wam-functor-arity ((wam wam) (functor-index functor-index))
-  (:returns arity)
-  "Return the arity of the functor with the given index in the WAM."
-  (cdr (wam-functor-lookup wam functor-index)))
+  (or (find functor (wam-functors wam) :test #'equal)
+      (progn
+        (vector-push-extend functor (wam-functors wam))
+        functor)))
 
 
 ;;;; Unification Stack

@@ -77,8 +77,7 @@
   :documentation "Maximum size of the WAM heap.")
 
 (define-constant +functor-limit+ array-total-size-limit
-  ;; Functors are referred to by their index into the functor array.  This index
-  ;; is stored in the value part of functor cells.
+  ;; Functors are stored in a functor table.
   :documentation "The maximum number of functors the WAM can keep track of.")
 
 

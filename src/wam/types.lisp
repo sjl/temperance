@@ -1,10 +1,13 @@
 (in-package #:bones.wam)
 
+; (deftype cell-type () ; todo: pick one of these...
+;   `(integer 0 ,(1- +number-of-cell-types+)))
+
 (deftype cell-type ()
-  `(integer 0 ,(1- +number-of-cell-types+)))
+  'fixnum)
 
 (deftype cell-value ()
-  `(unsigned-byte 60)); soon...
+  '(or fixnum t))
 
 
 (deftype type-store ()
@@ -29,15 +32,15 @@
 (deftype register-index ()
   `(integer 0 ,(1- +register-count+)))
 
-(deftype functor-index ()
-  `(integer 0 ,(1- +functor-limit+)))
 
+(deftype fname ()
+  'symbol)
 
 (deftype arity ()
   `(integer 0 ,+maximum-arity+))
 
 (deftype functor ()
-  '(cons symbol arity))
+  '(cons fname arity))
 
 
 (deftype code-index ()

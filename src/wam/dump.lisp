@@ -11,10 +11,9 @@
                         "unbound variable "
                         (format nil "var pointer to ~8,'0X " r)))
       ((:structure s) (format nil "struct pointer to ~8,'0X " s))
-      ((:functor f) (destructuring-bind (functor . arity)
-                        (wam-functor-lookup wam f)
+      ((:functor f) (destructuring-bind (functor . arity) f
                       (format nil "~A/~D " functor arity)))
-      ((:constant c) (format nil "~A/0 " (wam-functor-symbol wam c)))
+      ((:constant c) (format nil "~A/0 " (car c)))
       (t ""))))
 
 
@@ -22,7 +21,7 @@
   ;; todo flesh this out
   (typecase value
     (fixnum (format nil "~16,'0X" value))
-    (t "~16{#<lisp object>~;~}")))
+    (t (format nil "~16<#<lisp object>~;~>"))))
 
 
 (defun dump-heap (wam from to)
@@ -44,7 +43,7 @@
           :do (progn
                 (print-cell address indent)
                 (cell-typecase (wam address)
-                  ((:functor f) (setf indent (wam-functor-arity wam f)))
+                  ((:functor f) (setf indent (cdr f)))
                   (t (when (not (zerop indent))
                        (decf indent)))))))
   (when (< to (wam-heap-pointer wam))
@@ -140,11 +139,9 @@
   (format t "  +----------+------------------+-------------------------------+~%"))
 
 
-(defun pretty-functor (functor-index functor-list)
-  (when functor-list
-    (destructuring-bind (symbol . arity)
-        (elt functor-list functor-index)
-      (format nil "~A/~D" symbol arity))))
+(defun pretty-functor (functor)
+  (destructuring-bind (symbol . arity) functor
+    (format nil "~A/~D" symbol arity)))
 
 (defun pretty-argument (argument)
   (typecase argument
@@ -155,115 +152,115 @@
   (format nil "~10<~{ ~A~}~;~>" (mapcar #'pretty-argument arguments)))
 
 
-(defgeneric instruction-details (opcode arguments functor-list))
+(defgeneric instruction-details (opcode arguments))
 
-(defmethod instruction-details ((opcode t) arguments functor-list)
+(defmethod instruction-details ((opcode t) arguments)
   (format nil "~A~A"
           (opcode-short-name opcode)
           (pretty-arguments arguments)))
 
 
-(defmethod instruction-details ((opcode (eql +opcode-get-structure+)) arguments functor-list)
+(defmethod instruction-details ((opcode (eql +opcode-get-structure+)) arguments)
   (format nil "GETS~A ; X~A = ~A"
           (pretty-arguments arguments)
           (second arguments)
-          (pretty-functor (first arguments) functor-list)))
+          (pretty-functor (first arguments))))
 
-(defmethod instruction-details ((opcode (eql +opcode-put-structure+)) arguments functor-list)
+(defmethod instruction-details ((opcode (eql +opcode-put-structure+)) arguments)
   (format nil "PUTS~A ; X~A <- new ~A"
           (pretty-arguments arguments)
           (second arguments)
-          (pretty-functor (first arguments) functor-list)))
+          (pretty-functor (first arguments))))
 
-(defmethod instruction-details ((opcode (eql +opcode-get-variable-local+)) arguments functor-list)
+(defmethod instruction-details ((opcode (eql +opcode-get-variable-local+)) arguments)
   (format nil "GVAR~A ; X~A <- A~A"
           (pretty-arguments arguments)
           (first arguments)
           (second arguments)))
 
-(defmethod instruction-details ((opcode (eql +opcode-get-variable-stack+)) arguments functor-list)
+(defmethod instruction-details ((opcode (eql +opcode-get-variable-stack+)) arguments)
   (format nil "GVAR~A ; Y~A <- A~A"
           (pretty-arguments arguments)
           (first arguments)
           (second arguments)))
 
-(defmethod instruction-details ((opcode (eql +opcode-get-value-local+)) arguments functor-list)
+(defmethod instruction-details ((opcode (eql +opcode-get-value-local+)) arguments)
   (format nil "GVLU~A ; X~A = A~A"
           (pretty-arguments arguments)
           (first arguments)
           (second arguments)))
 
-(defmethod instruction-details ((opcode (eql +opcode-get-value-stack+)) arguments functor-list)
+(defmethod instruction-details ((opcode (eql +opcode-get-value-stack+)) arguments)
   (format nil "GVLU~A ; Y~A = A~A"
           (pretty-arguments arguments)
           (first arguments)
           (second arguments)))
 
-(defmethod instruction-details ((opcode (eql +opcode-put-variable-local+)) arguments functor-list)
+(defmethod instruction-details ((opcode (eql +opcode-put-variable-local+)) arguments)
   (format nil "PVAR~A ; X~A <- A~A <- new unbound REF"
           (pretty-arguments arguments)
           (first arguments)
           (second arguments)))
 
-(defmethod instruction-details ((opcode (eql +opcode-put-variable-stack+)) arguments functor-list)
+(defmethod instruction-details ((opcode (eql +opcode-put-variable-stack+)) arguments)
   (format nil "PVAR~A ; Y~A <- A~A <- new unbound REF"
           (pretty-arguments arguments)
           (first arguments)
           (second arguments)))
 
-(defmethod instruction-details ((opcode (eql +opcode-put-value-local+)) arguments functor-list)
+(defmethod instruction-details ((opcode (eql +opcode-put-value-local+)) arguments)
   (format nil "PVLU~A ; A~A <- X~A"
           (pretty-arguments arguments)
           (second arguments)
           (first arguments)))
 
-(defmethod instruction-details ((opcode (eql +opcode-put-value-stack+)) arguments functor-list)
+(defmethod instruction-details ((opcode (eql +opcode-put-value-stack+)) arguments)
   (format nil "PVLU~A ; A~A <- Y~A"
           (pretty-arguments arguments)
           (second arguments)
           (first arguments)))
 
-(defmethod instruction-details ((opcode (eql +opcode-call+)) arguments functor-list)
+(defmethod instruction-details ((opcode (eql +opcode-call+)) arguments)
   (format nil "CALL~A ; call ~A"
           (pretty-arguments arguments)
           (first arguments)))
 
-(defmethod instruction-details ((opcode (eql +opcode-jump+)) arguments functor-list)
+(defmethod instruction-details ((opcode (eql +opcode-jump+)) arguments)
   (format nil "JUMP~A ; jump ~A"
           (pretty-arguments arguments)
           (first arguments)))
 
-(defmethod instruction-details ((opcode (eql +opcode-dynamic-call+)) arguments functor-list)
+(defmethod instruction-details ((opcode (eql +opcode-dynamic-call+)) arguments)
   (format nil "DYCL~A ; dynamic call"
           (pretty-arguments arguments)))
 
-(defmethod instruction-details ((opcode (eql +opcode-dynamic-jump+)) arguments functor-list)
+(defmethod instruction-details ((opcode (eql +opcode-dynamic-jump+)) arguments)
   (format nil "DYJP~A ; dynamic jump"
           (pretty-arguments arguments)))
 
-(defmethod instruction-details ((opcode (eql +opcode-get-constant+)) arguments functor-list)
+(defmethod instruction-details ((opcode (eql +opcode-get-constant+)) arguments)
   (format nil "GCON~A ; X~A = CONSTANT ~A"
           (pretty-arguments arguments)
           (second arguments)
-          (pretty-functor (first arguments) functor-list)))
+          (pretty-functor (first arguments))))
 
-(defmethod instruction-details ((opcode (eql +opcode-put-constant+)) arguments functor-list)
+(defmethod instruction-details ((opcode (eql +opcode-put-constant+)) arguments)
   (format nil "PCON~A ; X~A <- CONSTANT ~A"
           (pretty-arguments arguments)
           (second arguments)
-          (pretty-functor (first arguments) functor-list)))
+          (pretty-functor (first arguments))))
 
-(defmethod instruction-details ((opcode (eql +opcode-subterm-constant+)) arguments functor-list)
+(defmethod instruction-details ((opcode (eql +opcode-subterm-constant+)) arguments)
   (format nil "SCON~A ; SUBTERM CONSTANT ~A"
           (pretty-arguments arguments)
-          (pretty-functor (first arguments) functor-list)))
+          (pretty-functor (first arguments))))
 
-(defmethod instruction-details ((opcode (eql +opcode-get-list+)) arguments functor-list)
+(defmethod instruction-details ((opcode (eql +opcode-get-list+)) arguments)
   (format nil "GLST~A ; X~A = [vvv | vvv]"
           (pretty-arguments arguments)
           (first arguments)))
 
-(defmethod instruction-details ((opcode (eql +opcode-put-list+)) arguments functor-list)
+(defmethod instruction-details ((opcode (eql +opcode-put-list+)) arguments)
   (format nil "PLST~A ; X~A = [vvv | vvv]"
           (pretty-arguments arguments)
           (first arguments)))
@@ -287,15 +284,14 @@
             (let ((lbl (gethash addr lbls))) ; forgive me
               (when lbl
                 (format t ";;;; BEGIN ~A~%"
-                        (pretty-functor lbl (wam-functors wam)))))
+                        (pretty-functor lbl))))
             (format t ";~A~4,'0X: "
                     (if (= (wam-program-counter wam) addr)
                       ">>"
                       "  ")
                     addr)
             (format t "~A~%" (instruction-details (aref instruction 0)
-                                                  (rest (coerce instruction 'list))
-                                                  (wam-functors wam)))))
+                                                  (rest (coerce instruction 'list))))))
         (incf addr (length instruction))))))
 
 (defun dump-code
@@ -335,12 +331,10 @@
 
 (defun dump-labels (wam)
   (format t "LABELS:~%~{  ~A -> ~4,'0X~^~%~}~%"
-          (loop :for functor-index
+          (loop :for functor
                 :being :the :hash-keys :of (wam-code-labels wam)
                 :using (hash-value address)
-                :nconc (list (pretty-functor functor-index
-                                             (wam-functors wam))
-                             address))))
+                :nconc (list (pretty-functor functor) address))))
 
 
 (defun dump-wam (wam from to)
