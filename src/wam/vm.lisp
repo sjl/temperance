@@ -88,7 +88,6 @@
                        (trail-start trail-index)
                        (trail-end trail-index))
   "Unbind all the things in the given range of the trail."
-  ;; TODO: seriously can't we just pop back to a certain place?
   (loop :for i :from trail-start :below trail-end :do
         (unbind! wam (wam-trail-value wam i))))
 
@@ -561,7 +560,7 @@
 
 
 ;;;; Choice Instructions
-(declaim (inline reset-choice-point!))
+(declaim (inline reset-choice-point! restore-registers-from-choice-point!))
 
 
 (defun* reset-choice-point! ((wam wam)

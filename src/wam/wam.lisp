@@ -54,7 +54,7 @@
     :type (simple-array code-word (*))
     :read-only t)
   (code-labels
-    (make-hash-table)
+    (make-hash-table :test 'eq)
     :read-only t)
   (logic-stack
     nil
