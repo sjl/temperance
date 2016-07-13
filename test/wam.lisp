@@ -407,11 +407,13 @@
 (test anonymous-variables
   (with-fresh-database
     (push-logic-frame-with
+      (fact (following (s ? ? ? a)))
       (fact (foo x))
       (rule (bar (baz ?x ?y ?z ?thing))
         (foo ?thing))
       (fact (wild ? ? ?)))
     (should-return
+      ((following (s x x x a)) empty)
       ((bar (baz a b c no)) fail)
       ((bar (baz a b c ?what)) (?what x))
       ((wild a b c) empty))))

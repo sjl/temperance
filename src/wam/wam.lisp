@@ -10,8 +10,8 @@
     :initial-element 0
     :element-type 'code-word))
 
-(defun allocate-wam-store (size)
-  ;; The main WAM store contains three separate blocks of values:
+(defun allocate-wam-type-store (size)
+  ;; The main WAM store(s) contain three separate blocks of values:
   ;;
   ;;     [0, +register-count+)        -> the local X_n registers
   ;;     [+stack-start+, +stack-end+) -> the stack
@@ -21,9 +21,16 @@
   ;; `+stack-end+` and `+heap-start+` are the same number as well.
   (make-array (+ +register-count+
                  +stack-limit+
+                 size) ; type array
+    :initial-element +cell-type-null+
+    :element-type 'cell-type))
+
+(defun allocate-wam-value-store (size)
+  (make-array (+ +register-count+
+                 +stack-limit+
                  size)
-    :initial-element (make-cell-null)
-    :element-type 'cell))
+    :initial-element 0
+    :element-type 'cell-value))
 
 
 (defstruct (wam
@@ -34,9 +41,13 @@
                   (wam stream :type t :identity t)
                   (format stream "an wam"))))
              (:constructor make-wam%))
-  (store
-    (allocate-wam-store 0)
-    :type store
+  (type-store
+    (allocate-wam-type-store 0)
+    :type type-store
+    :read-only t)
+  (value-store
+    (allocate-wam-value-store 0)
+    :type value-store
     :read-only t)
   (code
     (allocate-wam-code 0)
@@ -93,31 +104,180 @@
   (mode        nil :type (or null (member :read :write))))
 
 
-(defun* make-wam (&key (store-size (megabytes 10))
-                       (code-size (megabytes 1)))
+(defun* make-wam (&key
+                  (store-size (megabytes 10))
+                  (code-size (megabytes 1)))
   (:returns wam)
   (make-wam% :code (allocate-wam-code code-size)
-             :store (allocate-wam-store store-size)))
+             :type-store (allocate-wam-type-store store-size)
+             :value-store (allocate-wam-value-store store-size)))
 
 
 ;;;; Store
-(declaim (inline wam-store-cell (setf wam-store-cell)))
+;;; The main store of the WAM is split into two separate arrays:
+;;;
+;;; * An array of cell types, packed into 4-bit bytes.
+;;; * An array of cell values, each being a fixnum or a normal Lisp pointer.
+;;;
+;;; The contents of the value depend on the type of cell.
+;;;
+;;; NULL cells always have a value of zero.
+;;;
+;;; STRUCTURE cell values are an index into the store, describing where the
+;;; structure starts.
+;;;
+;;; REFERENCE cell values are an index into the store, pointing at whatever the
+;;; value is bound to.  Unbound variables contain their own store index as
+;;; a value.
+;;;
+;;; FUNCTOR cell values are an index into the WAM's functor array where the
+;;; `(symbol . arity)` cons lives.
+;;;
+;;; CONSTANT cells are the same as functor cells, except that they always happen
+;;; to refer to functors with an arity of zero.
+;;;
+;;; LIST cell values are an index into the store, pointing at the first of two
+;;; consecutive cells.  The first cell is the car of the list, the second one is
+;;; the cdr.
+;;;
+;;; STACK cell values are special cases.  The WAM's main store is a combination
+;;; of the heap, the stack, and registers.  Heap cells (and registers) are those
+;;; detailed above, but stack cells can also hold numbers like the continuation
+;;; pointer.  We lump all the extra things together into one kind of cell.
+
+(declaim (inline wam-store-type
+                 wam-store-value
+                 wam-set-store-cell!
+                 wam-copy-store-cell!))
 
 
-(defun* wam-store-cell ((wam wam) (address store-index))
-  (:returns cell)
-  "Return the cell at the given address.
+(defun* wam-store-type ((wam wam) (address store-index))
+  (:returns cell-type)
+  "Return the type of the cell at the given address."
+  (aref (wam-type-store wam) address))
 
-  Please don't use this unless you absolutely have to.  Prefer something more
-  specific like `wam-heap-cell` else so you've got some extra sanity checking...
+(defun* wam-store-value ((wam wam) (address store-index))
+  (:returns cell-value)
+  "Return the value of the cell at the given address."
+  (aref (wam-value-store wam) address))
+
+
+(defun* wam-set-store-cell! ((wam wam)
+                             (address store-index)
+                             (type cell-type)
+                             (value cell-value))
+  (setf (aref (wam-type-store wam) address) type
+        (aref (wam-value-store wam) address) value))
+
+(defun* wam-copy-store-cell! ((wam wam)
+                              (destination store-index)
+                              (source store-index))
+  (wam-set-store-cell! wam
+                       destination
+                       (wam-store-type wam source)
+                       (wam-store-value wam source)))
+
+
+(defun* wam-sanity-check-store-read ((wam wam) (address store-index))
+  (declare (ignore wam))
+  (when (= address +heap-start+)
+    (error "Cannot read from heap address zero.")))
+
+
+(macrolet ((define-unsafe (name return-type)
+             `(progn
+               (declaim (inline ,name))
+               (defun* ,name ((wam wam) (address store-index))
+                 (:returns ,return-type)
+                 (aref (wam-value-store wam) address)))))
+  (define-unsafe %unsafe-null-value (eql 0))
+  (define-unsafe %unsafe-structure-value store-index)
+  (define-unsafe %unsafe-reference-value store-index)
+  (define-unsafe %unsafe-functor-value store-index)
+  (define-unsafe %unsafe-constant-value store-index)
+  (define-unsafe %unsafe-list-value store-index)
+  (define-unsafe %unsafe-stack-value stack-word))
+
+
+(defun %type-designator-constant (designator)
+  (ecase designator
+    (:null +cell-type-null+)
+    (:structure +cell-type-structure+)
+    (:reference +cell-type-reference+)
+    (:functor +cell-type-functor+)
+    (:constant +cell-type-constant+)
+    (:list +cell-type-list+)
+    ((t) t)))
+
+(defun %type-designator-accessor (designator)
+  (ecase designator
+    (:null '%unsafe-null-value)
+    (:structure '%unsafe-structure-value)
+    (:reference '%unsafe-reference-value)
+    (:functor '%unsafe-functor-value)
+    (:constant '%unsafe-constant-value)
+    (:list '%unsafe-list-value)))
+
+
+(defmacro cell-typecase ((wam address &optional address-symbol) &rest clauses)
+  "Dispatch on the type of the cell at `address` in the WAM store.
+
+  If `address-symbol` is given it will be bound to the result of evaluating
+  `address` in the remainder of the form.
+
+  The type of the cell will be matched against `clauses` much like `typecase`.
+
+  Each clause should be of the form `(binding forms)`.
+
+  Each binding can be either a simple cell type designator like `:reference`, or
+  a list of this designator and a symbol to bind the cell's value to.  The
+  symbol is bound with `let` around the `forms` and type-hinted appropriately
+  (at least on SBCL).
+
+  Example:
+
+    (cell-typecase (wam (deref wam address) final-address)
+      (:reference (bind final-address foo)
+                  'it-is-a-reference)
+      ((:constant c) (list 'it-is-the-constant c))
+      (t 'unknown))
 
   "
-  (aref (wam-store wam) address))
+  (once-only (wam address)
+    (labels
+        ((normalize-binding (binding)
+           (cond
+             ((symbolp binding) (list binding nil))
+             ((= 1 (length binding)) (list (car binding) nil))
+             (t binding)))
+         (parse-clause (clause)
+           (destructuring-bind (binding . body) clause
+             (destructuring-bind (type-designator value-symbol)
+                 (normalize-binding binding)
+               `(,(%type-designator-constant type-designator)
+                 (let (,@(when value-symbol
+                           (list
+                             `(,value-symbol
+                               (,(%type-designator-accessor type-designator)
+                                ,wam ,address)))))
+                   ,@body))))))
+      `(progn
+        (policy-cond:policy-if (or (= safety 3) (= debug 3))
+          (wam-sanity-check-store-read ,wam ,address)
+          nil)
+        (let (,@(when address-symbol
+                  (list `(,address-symbol ,address))))
+          (case (wam-store-type ,wam ,address)
+            ,@(mapcar #'parse-clause clauses)))))))
 
-(defun* (setf wam-store-cell) ((new-value cell)
-                               (wam wam)
-                               (address store-index))
-  (setf (aref (wam-store wam) address) new-value))
+
+(defmacro cell-type= (type type-designator)
+  `(= ,type ,(%type-designator-constant type-designator)))
+
+(defmacro cell-type-p ((wam address) type-designator)
+  `(cell-type=
+    (wam-store-type ,wam ,address)
+    ,type-designator))
 
 
 ;;;; Heap
@@ -128,12 +288,7 @@
 ;;; We reserve the first address in the heap as a sentinel, as an "unset" value
 ;;; for various pointers into the heap.
 
-(declaim (inline wam-heap-pointer-unset-p
-                 wam-heap-cell
-                 (setf wam-heap-cell)
-                 wam-heap-pointer
-                 (setf wam-heap-pointer)
-                 wam-heap-push!))
+(declaim (inline wam-heap-pointer-unset-p wam-heap-push!))
 
 
 (defun* wam-heap-pointer-unset-p ((wam wam) (address heap-index))
@@ -141,36 +296,27 @@
   (declare (ignore wam))
   (= address +heap-start+))
 
-
-(defun* wam-heap-push! ((wam wam) (cell cell))
-  (:returns (values cell heap-index))
+(defun* wam-heap-push! ((wam wam) (type cell-type) (value cell-value))
+  (:returns heap-index)
   "Push the cell onto the WAM heap and increment the heap pointer.
 
-  Returns the cell and the address it was pushed to.
+  Returns the address it was pushed to.
 
   "
-  (if (>= (wam-heap-pointer wam) +store-limit+) ; todo: respect actual size...
-    (error "WAM heap exhausted.")
-    (values cell (array-push cell (wam-store wam) (wam-heap-pointer wam)))))
-
-
-(defun* wam-heap-cell ((wam wam) (address heap-index))
-  (:returns cell)
-  "Return the heap cell at the given address."
-  (when (wam-heap-pointer-unset-p wam address)
-    (error "Cannot read from heap address zero."))
-  (aref (wam-store wam) address))
-
-(defun* (setf wam-heap-cell) ((new-value cell)
-                              (wam wam)
-                              (address heap-index))
-  (when (wam-heap-pointer-unset-p wam address)
-    (error "Cannot write to heap address zero."))
-  (setf (aref (wam-store wam) address) new-value))
+  (let ((heap-pointer (wam-heap-pointer wam)))
+    (if (>= heap-pointer +store-limit+) ; todo: respect actual size...
+      (error "WAM heap exhausted.")
+      (progn
+        (wam-set-store-cell! wam heap-pointer type value)
+        (incf (wam-heap-pointer wam))
+        heap-pointer))))
 
 
 ;;;; Trail
-(declaim (inline wam-trail-pointer (setf wam-trail-pointer)))
+(declaim (inline wam-trail-pointer
+                 (setf wam-trail-pointer)
+                 wam-trail-value
+                 (setf wam-trail-value)))
 
 
 (defun* wam-trail-pointer ((wam wam))
@@ -255,13 +401,13 @@
   (:returns stack-word)
   "Return the stack word at the given address."
   (assert-inside-stack wam address)
-  (aref (wam-store wam) address))
+  (%unsafe-stack-value wam address))
 
 (defun* (setf wam-stack-word) ((new-value stack-word)
                                (wam wam)
                                (address stack-index))
   (assert-inside-stack wam address)
-  (setf (aref (wam-store wam) address) new-value))
+  (wam-set-store-cell! wam address +cell-type-stack+ new-value))
 
 
 (defun* wam-backtrack-pointer-unset-p
@@ -297,9 +443,10 @@
                  wam-stack-frame-cp
                  wam-stack-frame-cut
                  wam-stack-frame-n
-                 wam-stack-frame-arg
-                 (setf wam-stack-frame-arg)
-                 wam-stack-frame-size))
+                 wam-stack-frame-size
+                 wam-stack-frame-argument-address
+                 wam-set-stack-frame-argument!))
+
 
 (defun* wam-stack-frame-ce
     ((wam wam)
@@ -334,22 +481,33 @@
   (wam-stack-word wam (+ 3 e)))
 
 
-(defun* wam-stack-frame-arg
+(defun* wam-stack-frame-argument-address
     ((wam wam)
      (n register-index)
      &optional
      ((e environment-pointer)
       (wam-environment-pointer wam)))
-  (:returns cell)
-  (wam-stack-word wam (+ 4 n e)))
+  (:returns stack-index)
+  (+ 4 n e))
 
-(defun* (setf wam-stack-frame-arg) ((new-value cell)
-                                    (wam wam)
-                                    (n register-index)
-                                    &optional ((e environment-pointer)
-                                               (wam-environment-pointer wam)))
-  (setf (wam-stack-word wam (+ e 4 n))
-        new-value))
+(defun* wam-set-stack-frame-argument!
+    ((wam wam)
+     (n register-index)
+     (type cell-type)
+     (value cell-value)
+     &optional ((e environment-pointer)
+                (wam-environment-pointer wam)))
+  (wam-set-store-cell! wam (wam-stack-frame-argument-address wam n e)
+                       type value))
+
+(defun* wam-copy-to-stack-frame-argument!
+    ((wam wam)
+     (n register-index)
+     (source store-index)
+     &optional ((e environment-pointer)
+                (wam-environment-pointer wam)))
+  (wam-copy-store-cell! wam (wam-stack-frame-argument-address wam n e)
+                        source))
 
 
 (defun* wam-stack-frame-size
@@ -389,9 +547,11 @@
                  wam-stack-choice-bp
                  wam-stack-choice-tr
                  wam-stack-choice-h
-                 wam-stack-choice-arg
-                 (setf wam-stack-choice-arg)
-                 wam-stack-choice-size))
+                 wam-stack-choice-size
+                 wam-stack-choice-argument-address
+                 wam-set-stack-choice-argument!
+                 wam-copy-to-stack-choice-argument!))
+
 
 (defun* wam-stack-choice-n
     ((wam wam)
@@ -458,29 +618,38 @@
   (wam-stack-word wam (+ b 7)))
 
 
-(defun* wam-stack-choice-arg
+(defun* wam-stack-choice-argument-address
     ((wam wam)
-     (n arity)
-     &optional
-     ((b backtrack-pointer)
-      (wam-backtrack-pointer wam)))
-  (:returns cell)
-  (wam-stack-word wam (+ b 8 n)))
+     (n register-index)
+     &optional ((b backtrack-pointer)
+                (wam-backtrack-pointer wam)))
+  (:returns stack-index)
+  (+ 8 n b))
 
-(defun* (setf wam-stack-choice-arg) ((new-value cell)
-                                     (wam wam)
-                                     (n arity)
-                                     &optional ((b backtrack-pointer)
-                                                (wam-backtrack-pointer wam)))
-  (setf (wam-stack-word wam (+ b 8 n))
-        new-value))
+(defun* wam-set-stack-choice-argument!
+    ((wam wam)
+     (n register-index)
+     (type cell-type)
+     (value cell-value)
+     &optional ((b backtrack-pointer)
+                (wam-backtrack-pointer wam)))
+  (wam-set-store-cell! wam (wam-stack-choice-argument-address wam n b)
+                       type value))
+
+(defun* wam-copy-to-stack-choice-argument!
+    ((wam wam)
+     (n register-index)
+     (source store-index)
+     &optional ((b backtrack-pointer)
+                (wam-backtrack-pointer wam)))
+  (wam-copy-store-cell! wam (wam-stack-choice-argument-address wam n b)
+                        source))
 
 
 (defun* wam-stack-choice-size
     ((wam wam)
-     &optional
-     ((b backtrack-pointer)
-      (wam-backtrack-pointer wam)))
+     &optional ((b backtrack-pointer)
+                (wam-backtrack-pointer wam)))
   (:returns stack-choice-size)
   "Return the size of the choice frame starting at backtrack pointer `b`."
   (+ (wam-stack-choice-n wam b) 8))
@@ -510,6 +679,7 @@
 
 ;;;; Resetting
 (defun* wam-truncate-heap! ((wam wam))
+  ;; todo: null out the heap once we're storing live objects
   (setf (wam-heap-pointer wam) (1+ +heap-start+)))
 
 (defun* wam-truncate-trail! ((wam wam))
@@ -519,13 +689,15 @@
   (setf (fill-pointer (wam-unification-stack wam)) 0))
 
 (defun* wam-reset-local-registers! ((wam wam))
-  (fill (wam-store wam) (make-cell-null) :start 0 :end +register-count+))
+  (fill (wam-type-store wam) +cell-type-null+ :start 0 :end +register-count+)
+  (fill (wam-value-store wam) 0 :start 0 :end +register-count+))
 
 (defun* wam-reset! ((wam wam))
   (wam-truncate-heap! wam)
   (wam-truncate-trail! wam)
   (wam-truncate-unification-stack! wam)
   (policy-cond:policy-if (>= debug 2)
+    ;; todo we can't elide this once we start storing live objects... :(
     (wam-reset-local-registers! wam)
     nil) ; fuck it
   (setf (wam-program-counter wam) 0
@@ -740,43 +912,71 @@
 ;;;  / _, _/ /___/ /_/ // / ___/ // / / /___/ _, _/___/ /  / ___ |/ _, _/ /___   / /___/ /___/ /___/ /______/ /
 ;;; /_/ |_/_____/\____/___//____//_/ /_____/_/ |_|/____/  /_/  |_/_/ |_/_____/   \____/_____/_____/_____/____/
 
-(declaim (inline wam-local-register
-                 (setf wam-local-register)
-                 wam-stack-register
-                 (setf wam-stack-register)))
-
-(defun* wam-local-register ((wam wam) (register register-index))
-  (:returns cell)
-  "Return the value stored in the WAM local register with the given index."
-  (aref (wam-store wam) register))
-
-(defun* (setf wam-local-register) ((new-value cell)
-                                   (wam wam)
-                                   (register register-index))
-  (setf (aref (wam-store wam) register) new-value))
+(declaim (inline wam-set-local-register!
+                 wam-set-stack-register!
+                 wam-local-register-address
+                 wam-stack-register-address
+                 wam-local-register-type
+                 wam-stack-register-type
+                 wam-local-register-value
+                 wam-stack-register-value
+                 wam-copy-to-local-register!
+                 wam-copy-to-stack-register!
+                 wam-local-register-address
+                 wam-stack-register-address))
 
 
-(defun* wam-stack-register ((wam wam) (register register-index))
-  (:returns cell)
-  "Return the value stored in the WAM stack register with the given index."
-  (wam-stack-frame-arg wam register))
+(defun* wam-local-register-address ((wam wam) (register register-index))
+  (:returns store-index)
+  (declare (ignore wam))
+  register)
 
-(defun* (setf wam-stack-register) ((new-value cell)
-                                   (wam wam)
-                                   (register register-index))
-  (setf (wam-stack-frame-arg wam register) new-value))
+(defun* wam-stack-register-address ((wam wam) (register register-index))
+  (:returns store-index)
+  (wam-stack-frame-argument-address wam register))
 
 
-(defun* wam-s-cell ((wam wam))
-  "Retrieve the cell the S register is pointing at.
+(defun* wam-local-register-type ((wam wam) (register register-index))
+  (:returns cell-type)
+  (wam-store-type wam (wam-local-register-address wam register)))
 
-  If S is unbound, throws an error.
+(defun* wam-stack-register-type ((wam wam) (register register-index))
+  (:returns cell-type)
+  (wam-store-type wam (wam-stack-register-address wam register)))
 
-  "
-  (let ((s (wam-subterm wam)))
-    (if (wam-heap-pointer-unset-p wam s)
-      (error "Cannot dereference unbound S register.")
-      (wam-heap-cell wam s))))
+
+(defun* wam-local-register-value ((wam wam) (register register-index))
+  (:returns cell-value)
+  (wam-store-value wam (wam-local-register-address wam register)))
+
+(defun* wam-stack-register-value ((wam wam) (register register-index))
+  (:returns cell-value)
+  (wam-store-value wam (wam-stack-register-address wam register)))
+
+
+(defun* wam-set-local-register! ((wam wam)
+                                 (address register-index)
+                                 (type cell-type)
+                                 (value cell-value))
+  (wam-set-store-cell! wam (wam-local-register-address wam address)
+                       type value))
+
+(defun* wam-set-stack-register! ((wam wam)
+                                 (address register-index)
+                                 (type cell-type)
+                                 (value cell-value))
+  (wam-set-stack-frame-argument! wam address type value))
+
+
+(defun* wam-copy-to-local-register! ((wam wam)
+                                     (destination register-index)
+                                     (source store-index))
+  (wam-copy-store-cell! wam (wam-local-register-address wam destination) source))
+
+(defun* wam-copy-to-stack-register! ((wam wam)
+                                     (destination register-index)
+                                     (source store-index))
+  (wam-copy-store-cell! wam (wam-stack-register-address wam destination) source))
 
 
 ;;;; Functors
@@ -786,6 +986,7 @@
 (declaim (inline wam-functor-lookup
                  wam-functor-symbol
                  wam-functor-arity))
+
 
 (defun* wam-ensure-functor-index ((wam wam) (functor functor))
   (:returns functor-index)
@@ -815,6 +1016,11 @@
 
 
 ;;;; Unification Stack
+(declaim (inline wam-unification-stack-push!
+                 wam-unification-stack-pop!
+                 wam-unification-stack-empty-p))
+
+
 (defun* wam-unification-stack-push! ((wam wam) (address store-index))
   (vector-push-extend address (wam-unification-stack wam)))
 

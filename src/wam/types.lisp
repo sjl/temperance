@@ -1,17 +1,17 @@
 (in-package #:bones.wam)
 
-(deftype cell ()
-  `(unsigned-byte ,+cell-width+))
-
-(deftype cell-tag ()
-  `(unsigned-byte ,+cell-tag-width+))
+(deftype cell-type ()
+  `(integer 0 ,(1- +number-of-cell-types+)))
 
 (deftype cell-value ()
-  `(unsigned-byte ,+cell-value-width+))
+  `(unsigned-byte 60)); soon...
 
 
-(deftype store ()
-  '(simple-array cell (*)))
+(deftype type-store ()
+  '(simple-array cell-type (*)))
+
+(deftype value-store ()
+  '(simple-array cell-value (*)))
 
 
 (deftype store-index ()
@@ -68,7 +68,7 @@
 (deftype stack-choice-size ()
   ;; TODO: is this actually right?  check on frame size limit vs choice point
   ;; size limit...
-  `(integer 7 ,+stack-frame-size-limit+))
+  `(integer 8 ,+stack-frame-size-limit+))
 
 (deftype stack-frame-argcount ()
   'arity)
@@ -87,18 +87,16 @@
   '(or
     environment-pointer ; CE
     continuation-pointer ; CP
-    stack-frame-argcount ; N
-    cell)) ; Yn
+    stack-frame-argcount)) ; N
 
 (deftype stack-choice-word ()
   '(or
     environment-pointer ; CE
-    backtrack-pointer ; B
+    backtrack-pointer ; B, CC
     continuation-pointer ; CP, BP
     stack-frame-argcount ; N
     trail-index ; TR
-    heap-index ; H
-    cell)) ; An
+    heap-index)) ; H
 
 (deftype stack-word ()
   '(or stack-frame-word stack-choice-word))
@@ -109,12 +107,12 @@
 ;;; is defined as an array of cells, but certain things on the stack aren't
 ;;; actually cells (e.g. the stored continuation pointer).
 ;;;
-;;; This shouldn't be a problem (aside from being ugly) as long as our `cell`
-;;; type is big enough to hold the values of these non-cell things.  So let's
-;;; just make sure that's the case...
+;;; This shouldn't be a problem (aside from being ugly) as long as they all fit
+;;; inside fixnums... so let's just make sure that's the case.
+
 (defun sanity-check-stack-type (type)
-  (assert (subtypep type 'cell) ()
-    "Type ~A is too large to fit into a cell!"
+  (assert (subtypep type 'fixnum) ()
+    "Type ~A is too large!"
     type)
   (values))
 
@@ -124,5 +122,3 @@
 (sanity-check-stack-type 'backtrack-pointer)
 (sanity-check-stack-type 'trail-index)
 (sanity-check-stack-type 'stack-word)
-
-

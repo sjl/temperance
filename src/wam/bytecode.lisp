@@ -1,54 +1,7 @@
 (in-package #:bones.wam)
 
-(define-lookup instruction-size (opcode opcode instruction-size 0)
-  "Return the size of an instruction for the given opcode.
-
-  The size includes one word for the opcode itself and one for each argument.
-
-  "
-  (#.+opcode-noop+ 1)
-
-  (#.+opcode-get-structure+ 3)
-  (#.+opcode-get-variable-local+ 3)
-  (#.+opcode-get-variable-stack+ 3)
-  (#.+opcode-get-value-local+ 3)
-  (#.+opcode-get-value-stack+ 3)
-
-  (#.+opcode-put-structure+ 3)
-  (#.+opcode-put-variable-local+ 3)
-  (#.+opcode-put-variable-stack+ 3)
-  (#.+opcode-put-value-local+ 3)
-  (#.+opcode-put-value-stack+ 3)
-
-  (#.+opcode-subterm-variable-local+ 2)
-  (#.+opcode-subterm-variable-stack+ 2)
-  (#.+opcode-subterm-value-local+ 2)
-  (#.+opcode-subterm-value-stack+ 2)
-  (#.+opcode-subterm-void+ 2)
-
-  (#.+opcode-jump+ 2)
-  (#.+opcode-call+ 2)
-  (#.+opcode-dynamic-jump+ 1)
-  (#.+opcode-dynamic-call+ 1)
-  (#.+opcode-proceed+ 1)
-  (#.+opcode-allocate+ 2)
-  (#.+opcode-deallocate+ 1)
-  (#.+opcode-done+ 1)
-  (#.+opcode-try+ 2)
-  (#.+opcode-retry+ 2)
-  (#.+opcode-trust+ 1)
-  (#.+opcode-cut+ 1)
-
-  (#.+opcode-get-constant+ 3)
-  (#.+opcode-put-constant+ 3)
-  (#.+opcode-subterm-constant+ 2)
-
-  (#.+opcode-get-list+ 2)
-  (#.+opcode-put-list+ 2))
-
 
 ;;;; Opcodes
-
 (defun* opcode-name ((opcode opcode))
   (:returns string)
   (eswitch (opcode)
@@ -134,4 +87,74 @@
 
     (+opcode-get-list+ "GLST")
     (+opcode-put-list+ "PLST")))
+
+
+;;;; Instructions
+(define-lookup instruction-size (opcode opcode instruction-size 0)
+  "Return the size of an instruction for the given opcode.
+
+  The size includes one word for the opcode itself and one for each argument.
+
+  "
+  (#.+opcode-noop+ 1)
+
+  (#.+opcode-get-structure+ 3)
+  (#.+opcode-get-variable-local+ 3)
+  (#.+opcode-get-variable-stack+ 3)
+  (#.+opcode-get-value-local+ 3)
+  (#.+opcode-get-value-stack+ 3)
+
+  (#.+opcode-put-structure+ 3)
+  (#.+opcode-put-variable-local+ 3)
+  (#.+opcode-put-variable-stack+ 3)
+  (#.+opcode-put-value-local+ 3)
+  (#.+opcode-put-value-stack+ 3)
+
+  (#.+opcode-subterm-variable-local+ 2)
+  (#.+opcode-subterm-variable-stack+ 2)
+  (#.+opcode-subterm-value-local+ 2)
+  (#.+opcode-subterm-value-stack+ 2)
+  (#.+opcode-subterm-void+ 2)
+
+  (#.+opcode-jump+ 2)
+  (#.+opcode-call+ 2)
+  (#.+opcode-dynamic-jump+ 1)
+  (#.+opcode-dynamic-call+ 1)
+  (#.+opcode-proceed+ 1)
+  (#.+opcode-allocate+ 2)
+  (#.+opcode-deallocate+ 1)
+  (#.+opcode-done+ 1)
+  (#.+opcode-try+ 2)
+  (#.+opcode-retry+ 2)
+  (#.+opcode-trust+ 1)
+  (#.+opcode-cut+ 1)
+
+  (#.+opcode-get-constant+ 3)
+  (#.+opcode-put-constant+ 3)
+  (#.+opcode-subterm-constant+ 2)
+
+  (#.+opcode-get-list+ 2)
+  (#.+opcode-put-list+ 2))
+
+
+;;;; Cells
+(define-lookup cell-type-name (type cell-type string "")
+  "Return the full name of a cell type."
+  (#.+cell-type-null+ "NULL")
+  (#.+cell-type-structure+ "STRUCTURE")
+  (#.+cell-type-reference+ "REFERENCE")
+  (#.+cell-type-functor+ "FUNCTOR")
+  (#.+cell-type-constant+ "CONSTANT")
+  (#.+cell-type-list+ "LIST")
+  (#.+cell-type-stack+ "STACK"))
+
+(define-lookup cell-type-short-name (type cell-type string "")
+  "Return the short name of a cell type."
+  (#.+cell-type-null+ "NUL")
+  (#.+cell-type-structure+ "STR")
+  (#.+cell-type-reference+ "REF")
+  (#.+cell-type-functor+ "FUN")
+  (#.+cell-type-constant+ "CON")
+  (#.+cell-type-list+ "LIS")
+  (#.+cell-type-stack+ "STK"))
 

@@ -1,140 +1,143 @@
 (in-package #:bones.wam)
 
-(defun registers-pointing-to (wam addr)
-  (loop
-    :for r :from 0 :below +register-count+
-    :for reg = (wam-local-register wam r)
-    :when (= reg addr)
-    :collect r))
-
-(defun heap-debug (wam addr cell indent-p)
+(defun heap-debug (wam address indent-p)
   (format
-    nil "~A~A~{<-X~A ~}"
+    nil "~A~A"
     (if indent-p
       "  "
       "")
-    (switch ((cell-type cell))
-      (+tag-reference+
-        (if (= addr (cell-value cell))
-          "unbound variable "
-          (format nil "var pointer to ~4,'0X " (cell-value cell))))
-      (+tag-structure+
-        (format nil "structure pointer to ~4,'0X " (cell-value cell)))
-      (+tag-functor+
-        (destructuring-bind (functor . arity)
-            (wam-functor-lookup wam (cell-value cell))
-          (format nil "~A/~D " functor arity)))
-      (+tag-constant+
-        (format nil "~A/0 " (wam-functor-symbol wam (cell-value cell))))
-      (t ""))
-    (registers-pointing-to wam addr)))
+    (cell-typecase (wam address)
+      ((:reference r) (if (= address r)
+                        "unbound variable "
+                        (format nil "var pointer to ~8,'0X " r)))
+      ((:structure s) (format nil "struct pointer to ~8,'0X " s))
+      ((:functor f) (destructuring-bind (functor . arity)
+                        (wam-functor-lookup wam f)
+                      (format nil "~A/~D " functor arity)))
+      ((:constant c) (format nil "~A/0 " (wam-functor-symbol wam c)))
+      (t ""))))
 
-(defun dump-heap (wam from to highlight)
+
+(defun dump-cell-value (value)
+  ;; todo flesh this out
+  (typecase value
+    (fixnum (format nil "~16,'0X" value))
+    (t "~16{#<lisp object>~;~}")))
+
+
+(defun dump-heap (wam from to)
   ;; This code is awful, sorry.
-  (let ((store (wam-store wam)))
-    (format t "HEAP~%")
-    (format t "  +------+-----+------------------+--------------------------------------+~%")
-    (format t "  | ADDR | TYP |            VALUE | DEBUG                                |~%")
-    (format t "  +------+-----+------------------+--------------------------------------+~%")
-    (when (> from +heap-start+)
-      (format t "  |    ⋮ |  ⋮  |                ⋮ |                                      |~%"))
-    (flet ((print-cell (i cell indent)
-             (let ((hi (= i highlight)))
-               (format t "~A ~4,'0X | ~A | ~16,'0X | ~36A ~A~%"
-                       (if hi "==>" "  |")
-                       i
-                       (cell-type-short-name cell)
-                       (cell-value cell)
-                       (heap-debug wam i cell (> indent 0))
-                       (if hi "<===" "|")))))
-      (loop :for i :from from :below to
-            :with indent = 0
-            :for cell = (aref store i)
-            :do
-            (progn
-              (print-cell i cell indent)
-              (if (cell-functor-p cell)
-                (setf indent (wam-functor-arity wam (cell-value cell)))
-                (when (not (zerop indent))
-                  (decf indent))))))
-    (when (< to (wam-heap-pointer wam))
-      (format t "  |    ⋮ |  ⋮  |                ⋮ |                                      |~%"))
-    (format t "  +------+-----+------------------+--------------------------------------+~%")
-    (values)))
+  (format t "HEAP~%")
+  (format t "  +----------+-----+------------------+--------------------------------------+~%")
+  (format t "  | ADDR     | TYP |            VALUE | DEBUG                                |~%")
+  (format t "  +----------+-----+------------------+--------------------------------------+~%")
+  (when (> from (1+ +heap-start+))
+    (format t "  | ⋮        |  ⋮  |                ⋮ |                                      |~%"))
+  (flet ((print-cell (address indent)
+           (format t "  | ~8,'0X | ~A | ~16,'0X | ~36A |~%"
+                   address
+                   (cell-type-short-name (wam-store-type wam address))
+                   (dump-cell-value (wam-store-value wam address))
+                   (heap-debug wam address (plusp indent)))))
+    (loop :with indent = 0
+          :for address :from from :below to
+          :do (progn
+                (print-cell address indent)
+                (cell-typecase (wam address)
+                  ((:functor f) (setf indent (wam-functor-arity wam f)))
+                  (t (when (not (zerop indent))
+                       (decf indent)))))))
+  (when (< to (wam-heap-pointer wam))
+    (format t "  | ⋮        |  ⋮  |                ⋮ |                                      |~%"))
+  (format t "  +----------+-----+------------------+--------------------------------------+~%")
+  (values))
 
+
+(defun dump-stack-frame (wam start-address)
+  (loop :with remaining = nil
+        :with arg-number = nil
+        :for address :from start-address
+        :for offset :from 0
+        :for type = (wam-store-type wam address)
+        :for value = (wam-store-value wam address)
+        :while (or (null remaining) (plusp remaining))
+        :do (format
+              t "  | ~8,'0X | ~A | ~30A|~A~A~A~%"
+              address
+              (dump-cell-value value)
+              (cond
+                ((= address +stack-start+) "")
+                ((= offset 0) "CE ===========================")
+                ((= offset 1) "CP")
+                ((= offset 2) "CUT")
+                ((= offset 3) (progn
+                                (setf remaining value
+                                      arg-number 0)
+                                (format nil "N: ~D" value)))
+                (t (prog1
+                       (format nil " Y~D: ~A ~A"
+                               arg-number
+                               (cell-type-short-name type)
+                               (dump-cell-value value))
+                       (decf remaining)
+                       (incf arg-number))))
+              (if (= address (wam-environment-pointer wam)) " <- E" "")
+              (if (= address (wam-backtrack-pointer wam)) " <- B" "")
+              (if (= address (wam-cut-pointer wam)) " <- CUT" ""))
+        :finally (return address)))
+
+(defun dump-stack-choice (wam start-address)
+  (loop :with remaining = nil
+        :with arg-number = nil
+        :for address :from start-address
+        :for offset :from 0
+        :for type = (wam-store-type wam address)
+        :for value = (wam-store-value wam address)
+        :while (or (null remaining) (plusp remaining))
+        :do (format
+              t "  | ~8,'0X | ~A | ~30A|~A~A~A~%"
+              address
+              (dump-cell-value value)
+              (cond
+                ((= address +stack-start+) "")
+                ((= offset 0) (progn
+                                (setf remaining value
+                                      arg-number 0)
+                                (format nil "N: ~D =============" value)))
+                ((= offset 1) "CE saved env pointer")
+                ((= offset 2) "CP saved cont pointer")
+                ((= offset 3) "CB previous choice")
+                ((= offset 4) "BP next clause")
+                ((= offset 5) "TR saved trail pointer")
+                ((= offset 6) "H  saved heap pointer")
+                (t (prog1
+                       (format nil " A~D: ~A ~A"
+                               arg-number
+                               (cell-type-short-name type)
+                               (dump-cell-value value))
+                     (decf remaining)
+                     (incf arg-number))))
+              (if (= address (wam-environment-pointer wam)) " <- E" "")
+              (if (= address (wam-backtrack-pointer wam)) " <- B" "")
+              (if (= address (wam-cut-pointer wam)) " <- CUT" ""))
+        :finally (return address)))
 
 (defun dump-stack (wam)
   (format t "STACK~%")
-  (format t "  +------+------------------+-------------------------------+~%")
-  (format t "  | ADDR |            VALUE |                               |~%")
-  (format t "  +------+------------------+-------------------------------+~%")
-  (with-accessors ((e wam-environment-pointer)
-                   (b wam-backtrack-pointer))
-      wam
+  (format t "  +----------+------------------+-------------------------------+~%")
+  (format t "  | ADDR     |            VALUE |                               |~%")
+  (format t "  +----------+------------------+-------------------------------+~%")
+  (with-accessors ((e wam-environment-pointer) (b wam-backtrack-pointer)) wam
     (when (not (= +stack-start+ e b))
-      (loop
-        :with nargs = nil
-        :with arg = 0
-        :with currently-in = nil
-        :for addr :from (1+ +stack-start+) :below (wam-stack-top wam)
-        :for cell = (wam-stack-word wam addr)
-        :for offset = 0 :then (1+ offset)
-        :do
-        (when (not (zerop addr))
-          (switch (addr :test #'=)
-            (e (setf currently-in :frame offset 0 arg 0))
-            (b (setf currently-in :choice offset 0 arg 0))))
-        (format t "  | ~4,'0X | ~16,'0X | ~30A|~A~A~%"
-                addr
-                cell
-                (case currently-in ; jesus christ this needs to get fixed
-                  (:frame
-                   (cond
-                     ((= addr +stack-start+) "")
-                     ((= offset 0) "CE ===========================")
-                     ((= offset 1) "CP")
-                     ((= offset 2) "CUT")
-                     ((= offset 3)
-                      (if (zerop cell)
-                        (progn
-                          (setf currently-in nil)
-                          "N: EMPTY")
-                        (progn
-                          (setf nargs cell)
-                          (format nil "N: ~D" cell))))
-                     ((< arg nargs)
-                      (prog1
-                          (format nil " Y~D: ~8,'0X ~A"
-                                  arg cell (cell-aesthetic cell))
-                        (when (= nargs (incf arg))
-                          (setf currently-in nil))))))
-                  (:choice ; sweet lord make it stop
-                   (cond
-                     ((= addr +stack-start+) "")
-                     ((= offset 0)
-                      (if (zerop cell)
-                        (progn
-                          (setf currently-in nil)
-                          "N: EMPTY =================")
-                        (progn
-                          (setf nargs cell)
-                          (format nil "N: ~D =============" cell))))
-                     ((= offset 1) "CE saved env pointer")
-                     ((= offset 2) "CP saved cont pointer")
-                     ((= offset 3) "CB previous choice")
-                     ((= offset 4) "BP next clause")
-                     ((= offset 5) "TR saved trail pointer")
-                     ((= offset 6) "H  saved heap pointer")
-                     ((< arg nargs)
-                      (prog1
-                          (format nil " A~D: ~8,'0X ~A"
-                                  arg cell (cell-aesthetic cell))
-                        (when (= nargs (incf arg))
-                          (setf currently-in nil))))))
-                  (t ""))
-                (if (= addr e) " <- E" "")
-                (if (= addr b) " <- B" "")))))
-  (format t "  +------+------------------+-------------------------------+~%"))
+      (loop :with address = (1+ +stack-start+)
+            :while (< address (wam-stack-top wam))
+            :do (cond
+                  ((= address e) (setf address (dump-stack-frame wam address)))
+                  ((= address b) (setf address (dump-stack-choice wam address)))
+                  (t
+                   (format t "  | ~8,'0X | | |~%" address)
+                   (incf address))))))
+  (format t "  +----------+------------------+-------------------------------+~%"))
 
 
 (defun pretty-functor (functor-index functor-list)
@@ -312,24 +315,22 @@
   (format t "REGISTERS:~%")
   (format t  "~5@A -> ~8X~%" "S" (wam-subterm wam))
   (loop :for register :from 0 :to +register-count+
-        :for contents :across (wam-store wam)
-        :when (not (cell-null-p contents))
-        :do
-        (format t "~5@A -> ~8,'0X ~10A ~A~%"
-                (format nil "X~D" register)
-                contents
-                (cell-aesthetic contents)
-                (format nil "; ~A" (first (extract-things wam (list register)))))))
+        :for type = (wam-store-type wam register)
+        :for value = (wam-store-value wam register)
+        :when (not (cell-type-p (wam register) :null))
+        :do (format t "~5@A -> ~A ~A ~A~%"
+                    (format nil "X~D" register)
+                    (cell-type-short-name type)
+                    (dump-cell-value value)
+                    (format nil "; ~A" (first (extract-things wam (list register)))))))
 
 (defun dump-wam-functors (wam)
   (format t "        FUNCTORS: ~S~%" (wam-functors wam)))
 
 (defun dump-wam-trail (wam)
   (format t "    TRAIL: ")
-  (loop :for addr :across (wam-trail wam) :do
-        (format t "~4,'0X ~A //"
-                addr
-                (cell-aesthetic (wam-store-cell wam addr))))
+  (loop :for address :across (wam-trail wam) :do
+        (format t "~8,'0X //" address))
   (format t "~%"))
 
 (defun dump-labels (wam)
@@ -342,7 +343,7 @@
                              address))))
 
 
-(defun dump-wam (wam from to highlight)
+(defun dump-wam (wam from to)
   (format t "            FAIL: ~A~%" (wam-fail wam))
   (format t "    BACKTRACKED?: ~A~%" (wam-backtracked wam))
   (format t "            MODE: ~S~%" (wam-mode wam))
@@ -357,7 +358,7 @@
   (dump-wam-trail wam)
   (dump-wam-registers wam)
   (format t "~%")
-  (dump-heap wam from to highlight)
+  (dump-heap wam from to)
   (format t "~%")
   (dump-stack wam)
   (format t "~%")
@@ -373,13 +374,5 @@
     (dump-code-store wam code +maximum-query-size+ (length code))))
 
 (defun dump-wam-full (wam)
-  (dump-wam wam +heap-start+ (wam-heap-pointer wam) -1))
-
-(defun dump-wam-around (wam addr width)
-  (dump-wam wam
-            (max +heap-start+ (- addr width))
-            (min (wam-heap-pointer wam)
-                 (+ addr width 1))
-            addr))
-
+  (dump-wam wam (1+ +heap-start+) (wam-heap-pointer wam)))
 

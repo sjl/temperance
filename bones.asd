@@ -28,7 +28,6 @@
                               :serial t
                               :components ((:file "constants")
                                            (:file "types")
-                                           (:file "cells")
                                            (:file "bytecode")
                                            (:file "wam")
                                            (:file "compiler")

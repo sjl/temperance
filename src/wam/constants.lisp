@@ -8,23 +8,10 @@
      (define-constant ,count-symbol ,(length symbols))))
 
 
-(define-constant +cell-width+ 60
-  :documentation "Number of bits in each cell.")
-
-(define-constant +cell-tag-width+ 3
-  :documentation "Number of bits reserved for cell type tags.")
-
-(define-constant +cell-value-width+ (- +cell-width+ +cell-tag-width+)
-  :documentation "Number of bits reserved for cell values.")
-
-(define-constant +cell-tag-bitmask+ #b111
-  :documentation "Bitmask for masking the cell type tags.")
-
-
 (define-constant +code-word-size+ 60
   :documentation "Size (in bits) of each word in the code store.")
 
-(define-constant +code-limit+ (expt 2 +cell-width+)
+(define-constant +code-limit+ (expt 2 +code-word-size+)
   :documentation "Maximum size of the WAM code store.")
 
 (define-constant +code-sentinel+ (1- +code-limit+)
@@ -32,23 +19,14 @@
   :documentation "Sentinel value used in the PC and CP.")
 
 
-(define-constant +tag-null+      #b000
-  :documentation "An empty cell.")
-
-(define-constant +tag-structure+ #b001
-  :documentation "A structure cell.")
-
-(define-constant +tag-reference+ #b010
-  :documentation "A pointer to a cell.")
-
-(define-constant +tag-functor+   #b011
-  :documentation "A functor.")
-
-(define-constant +tag-constant+  #b100
-  :documentation "A constant (i.e. a 0-arity functor).")
-
-(define-constant +tag-list+  #b101
-  :documentation "A Prolog list.")
+(define-constants +number-of-cell-types+
+  +cell-type-null+
+  +cell-type-structure+
+  +cell-type-reference+
+  +cell-type-functor+
+  +cell-type-constant+
+  +cell-type-list+
+  +cell-type-stack+)
 
 
 (define-constant +register-count+ 2048
@@ -67,6 +45,7 @@
   "The maximum number of code words an instruction (including opcode) might be.")
 
 
+;; TODO Make all this shit configurable at runtime
 (define-constant +stack-limit+ 4096
   :documentation "Maximum size of the WAM stack.")
 
@@ -84,19 +63,12 @@
 (define-constant +heap-start+ +stack-end+
   :documentation "The address in the store of the first cell of the heap.")
 
-(define-constant +trail-limit+ (expt 2 +cell-width+)
-  ;; The trail's fill pointer is stored inside choice frames on the stack, so it
-  ;; needs to be able to fit inside a stack word.  We don't tag it, though, so
-  ;; we can technically use all of the cell bits if we want.
-  ;;
+
+(define-constant +trail-limit+ array-total-size-limit
   ;; TODO: should probably limit this to something more reasonable
   :documentation "The maximum number of variables that may exist in the trail.")
 
-
-(define-constant +store-limit+ (expt 2 +cell-value-width+)
-  ;; Reference cells need to be able to store a heap address in their value
-  ;; bits, so that limits the amount of addressable space we've got to work
-  ;; with.
+(define-constant +store-limit+ array-total-size-limit
   :documentation "Maximum size of the WAM store.")
 
 (define-constant +heap-limit+ (- +store-limit+ +register-count+ +stack-limit+)
@@ -104,8 +76,7 @@
   ;; their chunk of memory.
   :documentation "Maximum size of the WAM heap.")
 
-
-(define-constant +functor-limit+ (expt 2 +cell-value-width+)
+(define-constant +functor-limit+ array-total-size-limit
   ;; Functors are referred to by their index into the functor array.  This index
   ;; is stored in the value part of functor cells.
   :documentation "The maximum number of functors the WAM can keep track of.")
