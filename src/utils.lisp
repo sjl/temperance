@@ -222,3 +222,21 @@
           (:returns ,value-type)
           ,documentation
           (aref ,table ,key))))))
+
+
+;;;; ecase/tree
+;;; See http://www.foldr.org/~michaelw/log/programming/lisp/icfp-contest-2006-vm
+
+(defmacro ecase/tree (keyform &body cases)
+  (labels ((%case/tree (keyform cases)
+             (if (<= (length cases) 4)
+                 `(ecase ,keyform ,@cases)
+                 (loop for rest-cases on cases
+                       repeat (truncate (length cases) 2)
+                       collect (first rest-cases) into first-half
+                       finally (return `(if (< ,keyform ,(caar rest-cases))
+                                            ,(%case/tree keyform first-half)
+                                            ,(%case/tree keyform rest-cases)))))))
+    (let (($keyform (gensym "CASE/TREE-")))
+      `(let ((,$keyform ,keyform))
+         ,(%case/tree $keyform (sort (copy-list cases) #'< :key #'first))))))

@@ -433,7 +433,7 @@
      (argument register-index))
   (%wam-copy-to-register% wam register argument))
 
-(define-instructions (%get-value-local %get-value-stack t)
+(define-instructions (%get-value-local %get-value-stack)
     ((wam wam)
      (register register-index)
      (argument register-index))
@@ -539,7 +539,7 @@
   (%%dynamic-procedure-call wam t))
 
 
-(define-instruction (%proceed t) ((wam wam))
+(define-instruction (%proceed) ((wam wam))
   (setf (wam-program-counter wam) ; P <- CP
         (wam-continuation-pointer wam)))
 
@@ -682,19 +682,6 @@
 
 
 ;;;; Running
-(defmacro instruction-call (wam instruction code-store pc number-of-arguments)
-  "Expand into a call of the appropriate machine instruction.
-
-  `pc` should be a safe place representing the program counter.
-
-  `code-store` should be a safe place representing the instructions.
-
-  "
-  `(,instruction ,wam
-    ,@(loop :for i :from 1 :to number-of-arguments
-            :collect `(aref ,code-store (+ ,pc ,i)))))
-
-
 (defun extract-things (wam addresses)
   "Extract the things at the given store addresses.
 
@@ -740,87 +727,146 @@
     (weave vars results)))
 
 
-(defun* run ((wam wam) (done-thunk function))
-  (with-accessors ((pc wam-program-counter)) wam
-    (let ((code (wam-code wam)))
-      (macrolet ((instruction (inst args)
-                   `(instruction-call wam ,inst code pc ,args)))
-        (loop
-          :with increment-pc = t
-          :while (and (not (wam-fail wam)) ; failure
-                      (not (= pc +code-sentinel+))) ; finished
-          :for opcode = (aref code pc) ; todo switch this to wam-code-word...
-          :do
-          (progn
-            (when *step*
-              (dump) ; todo: make this saner
-              (break "About to execute instruction at ~4,'0X" pc))
-            (ecase opcode
-              ;; Query
-              (#.+opcode-put-structure+          (instruction %put-structure 2))
-              (#.+opcode-put-variable-local+     (instruction %put-variable-local 2))
-              (#.+opcode-put-variable-stack+     (instruction %put-variable-stack 2))
-              (#.+opcode-put-value-local+        (instruction %put-value-local 2))
-              (#.+opcode-put-value-stack+        (instruction %put-value-stack 2))
-              ;; Program
-              (#.+opcode-get-structure+          (instruction %get-structure 2))
-              (#.+opcode-get-variable-local+     (instruction %get-variable-local 2))
-              (#.+opcode-get-variable-stack+     (instruction %get-variable-stack 2))
-              (#.+opcode-get-value-local+        (instruction %get-value-local 2))
-              (#.+opcode-get-value-stack+        (instruction %get-value-stack 2))
-              ;; Subterm
-              (#.+opcode-subterm-variable-local+ (instruction %subterm-variable-local 1))
-              (#.+opcode-subterm-variable-stack+ (instruction %subterm-variable-stack 1))
-              (#.+opcode-subterm-value-local+    (instruction %subterm-value-local 1))
-              (#.+opcode-subterm-value-stack+    (instruction %subterm-value-stack 1))
-              (#.+opcode-subterm-void+           (instruction %subterm-void 1))
-              ;; Constant
-              (#.+opcode-put-constant+           (instruction %put-constant 2))
-              (#.+opcode-get-constant+           (instruction %get-constant 2))
-              (#.+opcode-subterm-constant+       (instruction %subterm-constant 1))
-              ;; List
-              (#.+opcode-put-list+               (instruction %put-list 1))
-              (#.+opcode-get-list+               (instruction %get-list 1))
-              ;; Choice
-              (#.+opcode-try+                    (instruction %try 1))
-              (#.+opcode-retry+                  (instruction %retry 1))
-              (#.+opcode-trust+                  (instruction %trust 0))
-              (#.+opcode-cut+                    (instruction %cut 0))
-              ;; Control
-              (#.+opcode-allocate+               (instruction %allocate 1))
-              (#.+opcode-deallocate+             (instruction %deallocate 0))
-              ;; need to skip the PC increment for PROC/CALL/JUMP/DONE
-              ;; TODO: this is (still) still ugly
-              (#.+opcode-proceed+
-               (instruction %proceed 0)
-               (setf increment-pc nil))
-              (#.+opcode-jump+
-               (instruction %jump 1)
-               (setf increment-pc nil))
-              (#.+opcode-call+
-               (instruction %call 1)
-               (setf increment-pc nil))
-              (#.+opcode-dynamic-jump+
-               (instruction %dynamic-jump 0)
-               (setf increment-pc nil))
-              (#.+opcode-dynamic-call+
-               (instruction %dynamic-call 0)
-               (setf increment-pc nil))
-              (#.+opcode-done+
-               (if (funcall done-thunk)
-                 (return-from run)
-                 (backtrack! wam))))
-            ;; Only increment the PC when we didn't backtrack.
-            ;;
-            ;; If we backtracked, the PC will have been filled in from the
-            ;; choice point.
-            (when (and increment-pc (not (wam-backtracked wam)))
-              (incf pc (instruction-size opcode)))
-            (setf (wam-backtracked wam) nil
-                  increment-pc t)
-            (when (>= pc (wam-code-pointer wam))
-              (error "Fell off the end of the program code store."))))))
-    (values)))
+(defmacro instruction-call (wam instruction code-store pc number-of-arguments)
+  "Expand into a call of the appropriate machine instruction.
+
+  `pc` should be a safe place representing the program counter.
+
+  `code-store` should be a safe place representing the instructions.
+
+  "
+  `(,instruction ,wam
+    ,@(loop :for i :from 1 :to number-of-arguments
+            :collect `(aref ,code-store (+ ,pc ,i)))))
+
+(defmacro opcode-case ((wam code opcode-place) &rest clauses)
+  "Handle each opcode in the main VM run loop.
+
+  Each clause should be of the form:
+
+     (opcode &key instruction (increment-pc t) raw)
+
+  `opcode` must be a constant by macroexpansion time.
+
+  `instruction` should be the corresponding instruction function to call.  If
+  given it will be expanded with the appropriate `aref`s to get its arguments
+  from the code store.
+
+  If `increment-pc` is true an extra `incf` form will be added after the
+  instruction to handle incrementing the program counter (but only if
+  backtracking didn't happen).
+
+  If a `raw` argument is given it will be spliced in verbatim.
+
+  "
+  ;; This macro is pretty nasty, but it's better than trying to write it all out
+  ;; by hand.
+  ;;
+  ;; The main idea is that we want to be able to nicely specify all our
+  ;; opcode/instruction pairs in `run`.  Furthermore, we need to handle
+  ;; everything really efficiently because `run` is the hot loop of the entire
+  ;; VM.  It is the #1 function you'll see when profiling.
+  ;;
+  ;; This macro handles expanding each case clause into the appropriate `aref`s
+  ;; and such, as well as updating the program counter.  The instruction size of
+  ;; each opcode is looked up at macroexpansion time to save cycles.
+  ;;
+  ;; For example, a clause like this:
+  ;;
+  ;;     (opcode-case (wam code opcode)
+  ;;       ;; ...
+  ;;       (#.+opcode-put-structure+ :instruction %put-structure))
+  ;;
+  ;; will get expanded into something like this:
+  ;;
+  ;;     (ecase/tree opcode
+  ;;       ;; ...
+  ;;       (+opcode-put-structure+ (%put-structure wam (aref code (+ program-counter 1))
+  ;;                                                   (aref code (+ program-counter 2)))
+  ;;                               (incf program-counter 3)))
+  (flet
+      ((parse-opcode-clause (clause)
+         (destructuring-bind (opcode &key instruction (increment-pc t) raw)
+             clause
+           (let ((size (instruction-size opcode)))
+             `(,opcode
+               ,(when instruction
+                  `(instruction-call ,wam
+                    ,instruction
+                    ,code
+                    (wam-program-counter ,wam)
+                    ,(1- size)))
+               ,(when increment-pc
+                  `(when (not (wam-backtracked ,wam))
+                    (incf (wam-program-counter ,wam) ,size)))
+               ,raw)))))
+    `(ecase/tree ,opcode-place
+      ,@(mapcar #'parse-opcode-clause clauses))))
+
+
+(defun* run ((wam wam) (done-thunk function) &optional (step *step*))
+  (loop
+    :with code = (wam-code wam)
+    :until (or (wam-fail wam) ; failure
+               (= (wam-program-counter wam) +code-sentinel+)) ; finished
+    :for opcode = (aref (wam-code wam) (wam-program-counter wam))
+    :do (progn
+          (when step
+            (dump)
+            (break "About to execute instruction at ~4,'0X" (wam-program-counter wam)))
+
+          (opcode-case (wam code opcode)
+            ;; Query
+            (#.+opcode-put-structure+       :instruction %put-structure)
+            (#.+opcode-put-variable-local+  :instruction %put-variable-local)
+            (#.+opcode-put-variable-stack+  :instruction %put-variable-stack)
+            (#.+opcode-put-value-local+     :instruction %put-value-local)
+            (#.+opcode-put-value-stack+     :instruction %put-value-stack)
+            ;; Program
+            (#.+opcode-get-structure+       :instruction %get-structure)
+            (#.+opcode-get-variable-local+  :instruction %get-variable-local)
+            (#.+opcode-get-variable-stack+  :instruction %get-variable-stack)
+            (#.+opcode-get-value-local+     :instruction %get-value-local)
+            (#.+opcode-get-value-stack+     :instruction %get-value-stack)
+            ;; Subterm
+            (#.+opcode-subterm-variable-local+  :instruction %subterm-variable-local)
+            (#.+opcode-subterm-variable-stack+  :instruction %subterm-variable-stack)
+            (#.+opcode-subterm-value-local+     :instruction %subterm-value-local)
+            (#.+opcode-subterm-value-stack+     :instruction %subterm-value-stack)
+            (#.+opcode-subterm-void+            :instruction %subterm-void)
+            ;; Constant
+            (#.+opcode-put-constant+      :instruction %put-constant)
+            (#.+opcode-get-constant+      :instruction %get-constant)
+            (#.+opcode-subterm-constant+  :instruction %subterm-constant)
+            ;; List
+            (#.+opcode-put-list+  :instruction %put-list)
+            (#.+opcode-get-list+  :instruction %get-list)
+            ;; Choice
+            (#.+opcode-try+    :instruction %try)
+            (#.+opcode-retry+  :instruction %retry)
+            (#.+opcode-trust+  :instruction %trust)
+            (#.+opcode-cut+    :instruction %cut)
+            ;; Control
+            (#.+opcode-allocate+      :instruction %allocate)
+            (#.+opcode-deallocate+    :instruction %deallocate)
+            (#.+opcode-proceed+       :instruction %proceed      :increment-pc nil)
+            (#.+opcode-jump+          :instruction %jump         :increment-pc nil)
+            (#.+opcode-call+          :instruction %call         :increment-pc nil)
+            (#.+opcode-dynamic-jump+  :instruction %dynamic-jump :increment-pc nil)
+            (#.+opcode-dynamic-call+  :instruction %dynamic-call :increment-pc nil)
+            ;; Final
+            (#.+opcode-done+
+             :increment-pc nil
+             :raw (if (funcall done-thunk)
+                    (return-from run)
+                    (backtrack! wam))))
+
+          (setf (wam-backtracked wam) nil)
+
+          (when (>= (wam-program-counter wam)
+                    (wam-code-pointer wam))
+            (error "Fell off the end of the program code store."))))
+  (values))
 
 (defun* run-query ((wam wam)
                    term

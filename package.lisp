@@ -16,6 +16,7 @@
     #:symbolize
     #:dis
     #:megabytes
+    #:ecase/tree
     #:gethash-or-init
     #:define-lookup
     #:queue
