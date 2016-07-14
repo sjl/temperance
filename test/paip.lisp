@@ -1,9 +1,5 @@
 (in-package #:bones-test.paip)
 
-(def-suite :bones.paip)
-(in-suite :bones.paip)
-
-
 ;;;; Utils
 (defun alist-equal (x y)
   (set-equal x y :test #'equal))
@@ -27,10 +23,10 @@
 
 
 (defmacro proves (query)
-  `(is-true (return-all ,query)))
+  `(is (return-all ,query)))
 
 (defmacro not-proves (query)
-  `(is-false (return-all ,query)))
+  `(is (not (return-all ,query))))
 
 (defmacro proves-with (query results)
   `(is (set-equal ',results (return-all ,query)

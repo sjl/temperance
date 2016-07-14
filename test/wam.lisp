@@ -1,9 +1,5 @@
 (in-package #:bones-test.wam)
 
-(def-suite :bones.wam)
-(in-suite :bones.wam)
-
-
 ;;;; Setup
 (defun make-test-database ()
   (let ((db (make-database)))
@@ -166,7 +162,7 @@
        (?x cats)
        (?x (f dogs))))))
 
-(test not
+(test negation
   (with-fresh-database
     (push-logic-frame-with
       (fact (yes ?anything))

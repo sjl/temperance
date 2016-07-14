@@ -3,7 +3,7 @@
   :author "Steve Losh <steve@stevelosh.com>"
   :license "MIT/X11"
   :depends-on (#:bones
-               #:fiveam)
+               #:1am)
   :serial t
   :components ((:file "package-test")
                (:module "test"

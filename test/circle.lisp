@@ -1,19 +1,16 @@
 (in-package #:bones-test.circle)
 
-(def-suite :bones.circle)
-(in-suite :bones.circle)
-
 (defmacro is-circle-contents (circle values)
   `(is (equal ,values
               (circle-to-list ,circle))))
 
 
 (test empty-circles
-  (is-true (circle-empty-p (make-empty-circle)))
-  (is-true (circle-empty-p (make-circle-with nil)))
-  (is-false (circle-empty-p (make-circle-with (list 1)))))
+  (is (circle-empty-p (make-empty-circle)))
+  (is (circle-empty-p (make-circle-with nil)))
+  (is (not (circle-empty-p (make-circle-with (list 1))))))
 
-(test make-circle-with
+(test making-circle-with
   (is-circle-contents
     (make-circle-with (list))
     nil)
@@ -68,7 +65,7 @@
     (is-circle-contents c '(a b 1 p q))))
 
 
-(test forward
+(test moving-forward
   (let ((c (make-circle-with (list 1 2 3 4))))
     (is (equal
           '(1 2 3 4)
@@ -76,7 +73,7 @@
                 :while node
                 :collect (circle-value node))))))
 
-(test backward
+(test moving-backward
   (let ((c (make-circle-with (list 1 2 3 4))))
     (is (equal
           '(4 3 2 1)
@@ -85,7 +82,7 @@
                 :collect (circle-value node))))))
 
 
-(test rotate
+(test rotating
   (let ((c (make-circle-with (list 1 2 3 4))))
     (is-circle-contents (circle-rotate c 0)
                         '(1 2 3 4))
@@ -118,7 +115,8 @@
     (is-circle-contents (circle-rotate (circle-rotate c 3) -1)
                         '(2 3 4 1))))
 
-(test nth
+
+(test retrieving-nth
   (let* ((data (list 'a 'b 'c 'd))
          (c (make-circle-with data)))
     (loop :for i :from 0 :below 4
@@ -126,7 +124,7 @@
           :do (is (eql v (circle-value (circle-nth c i)))))))
 
 
-(test insert-before
+(test inserting-before
   (let ((c (make-circle-with (list 1 2 3))))
     (circle-insert-before c 'a)
     (is-circle-contents c '(1 2 3 a))
@@ -143,7 +141,7 @@
     (circle-insert-before (circle-nth c -1) 'e)
     (is-circle-contents c '(b c d 1 2 3 e a))))
 
-(test insert-after
+(test inserting-after
   (let ((c (make-circle-with (list 1 2 3))))
     (circle-insert-after c 'a)
     (is-circle-contents c '(a 1 2 3))
@@ -161,19 +159,19 @@
     (is-circle-contents c '(a b c d 1 2 3 x))))
 
 
-(test sentinel-p
+(test checking-sentinel
   (let ((c (make-circle-with (list 1 2 3))))
-    (is-true (circle-sentinel-p c))
-    (is-false (circle-sentinel-p (circle-nth c 0)))
-    (is-false (circle-sentinel-p (circle-nth c 1)))
-    (is-false (circle-sentinel-p (circle-nth c 2)))
-    (is-true (circle-sentinel-p (circle-nth c 3))))
-  (is-true (circle-sentinel-p (make-empty-circle)))
-  (is-true (circle-sentinel-p (circle-nth (make-empty-circle) 0)))
-  (is-true (circle-sentinel-p (circle-nth (make-empty-circle) -1))))
+    (is (circle-sentinel-p c))
+    (is (not (circle-sentinel-p (circle-nth c 0))))
+    (is (not (circle-sentinel-p (circle-nth c 1))))
+    (is (not (circle-sentinel-p (circle-nth c 2))))
+    (is (circle-sentinel-p (circle-nth c 3))))
+  (is (circle-sentinel-p (make-empty-circle)))
+  (is (circle-sentinel-p (circle-nth (make-empty-circle) 0)))
+  (is (circle-sentinel-p (circle-nth (make-empty-circle) -1))))
 
 
-(test remove
+(test removing
   (let ((c (make-circle-with (list 1 2 3))))
     (signals simple-error (circle-remove c))
     (is-circle-contents c '(1 2 3))
@@ -187,14 +185,14 @@
     (circle-remove (circle-nth c 0))
     (is-circle-contents c '())))
 
-(test backward-remove
+(test removing-backward
   (let ((c (make-circle-with (list 1 2 3 4 5 6))))
     (is-circle-contents c '(1 2 3 4 5 6))
 
     (is-circle-contents (circle-backward-remove (circle-nth c 1))
                         '(1 3 4 5 6))
 
-    (is-false (circle-backward-remove (circle-nth c 0)))
+    (is (not (circle-backward-remove (circle-nth c 0))))
     (is-circle-contents c '(3 4 5 6))
 
     (is-circle-contents (circle-backward-remove (circle-nth c -1))
@@ -202,18 +200,18 @@
 
     (is-circle-contents c '(3 4 5))))
 
-(test forward-remove
+(test removing-forward
   (let ((c (make-circle-with (list 1 2 3 4 5 6))))
     (is-circle-contents c '(1 2 3 4 5 6))
 
     (is-circle-contents (circle-forward-remove (circle-nth c 1))
                         '(3 4 5 6 1))
 
-    (is-false (circle-forward-remove (circle-nth c -1)))
+    (is (not (circle-forward-remove (circle-nth c -1))))
     (is-circle-contents c '(1 3 4 5))))
 
 
-(test replace
+(test replacing
   (let ((c (make-circle-with (list 1 2 3 4 5 6))))
     (is-circle-contents c '(1 2 3 4 5 6))
 
@@ -232,7 +230,7 @@
     (circle-replace (circle-nth c -1) 'c)
     (is-circle-contents c '(bar a b 4 5 c))))
 
-(test backward-replace
+(test replacing-backward
   (let ((c (make-circle-with (list 1 2 3 4 5 6))))
     (is-circle-contents c '(1 2 3 4 5 6))
 
@@ -245,10 +243,10 @@
     (is-circle-contents (circle-backward-replace (circle-nth c 2) 'a)
                         '(bar a 4 5 6 1))
 
-    (is-false (circle-backward-replace (circle-nth c 0) 'dogs))
+    (is (not (circle-backward-replace (circle-nth c 0) 'dogs)))
     (is-circle-contents c '(dogs bar a 4 5 6))))
 
-(test forward-replace
+(test replacing-forward
   (let ((c (make-circle-with (list 1 2 3 4 5 6))))
     (is-circle-contents c '(1 2 3 4 5 6))
 
@@ -258,11 +256,11 @@
     (is-circle-contents (circle-forward-replace (circle-nth c 1) 'bar)
                         '(3 4 5 6 1 bar))
 
-    (is-false (circle-forward-replace (circle-nth c -1) 'cats))
+    (is (not (circle-forward-replace (circle-nth c -1) 'cats)))
     (is-circle-contents c '(1 bar 3 4 5 cats))))
 
 
-(test splice
+(test splicing
   (let ((c (make-circle-with (list 1 2 3 4 5 6))))
     (is-circle-contents c '(1 2 3 4 5 6))
 
@@ -278,7 +276,7 @@
     (circle-splice (circle-nth c 3) nil)
     (is-circle-contents c '(a c 2 4 5 dogs cats))))
 
-(test backward-splice
+(test splicing-backward
   (let ((c (make-circle-with (list 1 2 3 4 5 6))))
     (is-circle-contents c '(1 2 3 4 5 6))
 
@@ -288,10 +286,10 @@
     (is-circle-contents (circle-backward-splice (circle-nth c -1) '())
                         '(5 1 2 a b 4))
 
-    (is-false (circle-backward-splice (circle-nth c 0) '(first second)))
+    (is (not (circle-backward-splice (circle-nth c 0) '(first second))))
     (is-circle-contents c '(first second 2 a b 4 5))))
 
-(test forward-splice
+(test splicing-forward
   (let ((c (make-circle-with (list 1 2 3 4 5 6))))
     (is-circle-contents c '(1 2 3 4 5 6))
 
@@ -301,5 +299,5 @@
     (is-circle-contents (circle-forward-splice (circle-nth c 1) '())
                         '(2 3 4 5 6 a))
 
-    (is-false (circle-forward-splice (circle-nth c -1) '(last)))
+    (is (not (circle-forward-splice (circle-nth c -1) '(last))))
     (is-circle-contents c '(a 2 3 4 5 last))))

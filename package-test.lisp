@@ -1,23 +1,20 @@
 (defpackage #:bones-test
   (:use
     #:cl
-    #:5am
+    #:1am
     ))
 
 (defpackage #:bones-test.paip
   (:use
     #:cl
-    #:5am
+    #:1am
     #:bones.quickutils
-    #:bones.paip)
-  ; kill me
-  (:shadowing-import-from #:5am
-    #:fail))
+    #:bones.paip))
 
 (defpackage #:bones-test.wam
   (:use
     #:cl
-    #:5am
+    #:1am
     #:bones.quickutils
     #:bones.wam)
   (:import-from #:bones.wam
@@ -39,4 +36,4 @@
     #:!))
 
 (defpackage #:bones-test.circle
-  (:use :cl :5am :bones.circle))
+  (:use :cl :1am :bones.circle))
