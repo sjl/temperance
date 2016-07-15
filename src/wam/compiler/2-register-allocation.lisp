@@ -182,10 +182,10 @@
       (store-variable state variable)))
 
 
-(defmacro set-when-unbound (instance slot value-form)
-  (once-only (instance slot)
-    `(when (not (slot-boundp ,instance ,slot))
-       (setf (slot-value ,instance ,slot) ,value-form))))
+(defmacro set-when-nil ((accessor instance) value-form)
+  (once-only (instance)
+    `(when (not (,accessor ,instance))
+      (setf (,accessor ,instance) ,value-form))))
 
 
 (defun* variable-anonymous-p ((state allocation-state) (variable symbol))
@@ -219,28 +219,28 @@
   (values))
 
 (defmethod allocate-register ((node variable-node) state)
-  (set-when-unbound node 'register
-    (allocate-variable-register state (node-variable node))))
+  (set-when-nil (node-register node)
+                (allocate-variable-register state (node-variable node))))
 
 (defmethod allocate-register ((node argument-variable-node) state)
-  (set-when-unbound node 'secondary-register
-    (allocate-variable-register state (node-variable node))))
+  (set-when-nil (node-secondary-register node)
+                (allocate-variable-register state (node-variable node))))
 
 (defmethod allocate-register ((node structure-node) state)
-  (set-when-unbound node 'register
-    (allocate-nonvariable-register state)))
+  (set-when-nil (node-register node)
+                (allocate-nonvariable-register state)))
 
 (defmethod allocate-register ((node list-node) state)
-  (set-when-unbound node 'register
-    (allocate-nonvariable-register state)))
+  (set-when-nil (node-register node)
+                (allocate-nonvariable-register state)))
 
 (defmethod allocate-register ((node lisp-object-node) state)
-  (set-when-unbound node 'register
-    (allocate-nonvariable-register state)))
+  (set-when-nil (node-register node)
+                (allocate-nonvariable-register state)))
 
 
 (defun* allocate-argument-registers ((node top-level-node))
-  (loop :for argument :in (node-arguments node)
+  (loop :for argument :in (top-level-node-arguments node)
         :for i :from 0
         :do (setf (node-register argument)
                   (make-register :argument i))))
@@ -250,7 +250,7 @@
                                         &key nead)
   ;; JESUS TAKE THE WHEEL
   (let*
-      ((actual-arity (node-arity node))
+      ((actual-arity (top-level-node-arity node))
        (reserved-arity (when nead
                          (clause-nead-arity clause-props)))
        (reserved-variables (when nead

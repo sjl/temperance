@@ -7,86 +7,45 @@
 ;;;;                           ,|
 ;;;;                           `'
 
-(defclass node () ())
-
-(defclass top-level-node (node)
-  ((functor :accessor node-functor
-            :type symbol
-            :initarg :functor)
-   (arity :accessor node-arity
-          :type arity
-          :initarg :arity)
-   (arguments :accessor node-arguments
-              :type list
-              :initarg :arguments)))
-
-(defclass vanilla-node (node)
-  ((register :accessor node-register
-             :type register
-             :documentation "The register allocated to store this node.")))
-
-
-(defclass structure-node (vanilla-node)
-  ((functor :accessor node-functor
-            :type symbol
-            :initarg :functor)
-   (arity :accessor node-arity
-          :type arity
-          :initarg :arity)
-   (arguments :accessor node-arguments
-              :type list
-              :initarg :arguments)))
-
-(defclass variable-node (vanilla-node)
-  ((variable :accessor node-variable
-             :type symbol
-             :initarg :variable)))
-
-(defclass argument-variable-node (variable-node)
-  ((secondary-register
-     :accessor node-secondary-register
-     :type register
-     :documentation
-     "The register that actually holds the variable (NOT the argument register).")))
-
-(defclass list-node (vanilla-node)
-  ((head :accessor node-head :type node :initarg :head)
-   (tail :accessor node-tail :type node :initarg :tail)))
-
-(defclass lisp-object-node (vanilla-node)
-  ((object :accessor node-object :type t :initarg :object)))
-
-
 ; todo functor -> fname
-(defun* make-top-level-node ((functor symbol) (arity arity) (arguments list))
-  (:returns top-level-node)
-  (values (make-instance 'top-level-node
-                         :functor functor
-                         :arity arity
-                         :arguments arguments)))
 
-(defun* make-structure-node ((functor symbol) (arity arity) (arguments list))
-  (:returns structure-node)
-  (values (make-instance 'structure-node
-                         :functor functor
-                         :arity arity
-                         :arguments arguments)))
+(defstruct node)
 
-(defun* make-variable-node ((variable symbol))
-  (:returns variable-node)
-  (values (make-instance 'variable-node :variable variable)))
 
-(defun* make-argument-variable-node ((variable symbol))
-  (:returns variable-node)
-  (values (make-instance 'argument-variable-node :variable variable)))
+(defstruct (top-level-node (:include node))
+  (functor nil :type symbol)
+  (arity 0 :type arity)
+  (arguments nil :type list))
 
-(defun* make-list-node ((head node) (tail node))
-  (:returns list-node)
-  (values (make-instance 'list-node :head head :tail tail)))
+(defstruct (vanilla-node (:include node)
+                         (:conc-name node-))
+  ;; The register allocated to store this node.
+  (register nil :type (or null register)))
 
-(defun* make-lisp-object-node ((object t))
-  (:returns lisp-object-node)
-  (values (make-instance 'lisp-object-node :object object)))
+
+(defstruct (structure-node (:include vanilla-node)
+                           (:conc-name node-))
+  (functor nil :type symbol)
+  (arity 0 :type arity)
+  (arguments nil :type list))
+
+(defstruct (variable-node (:include vanilla-node)
+                          (:conc-name node-))
+  (variable nil :type symbol))
+
+(defstruct (argument-variable-node (:include variable-node)
+                                   (:conc-name node-))
+  ;; The register that actually holds the variable (NOT the argument register).
+  (secondary-register nil :type (or null register)))
+
+(defstruct (list-node (:include vanilla-node)
+                      (:conc-name node-))
+  (head (error "Head argument required") :type node)
+  (tail (error "Head argument required") :type node))
+
+(defstruct (lisp-object-node (:include vanilla-node)
+                             (:conc-name node-))
+  (object nil :type t))
 
 
 (defgeneric* node-children (node)
@@ -99,7 +58,7 @@
   (list))
 
 (defmethod node-children ((node top-level-node))
-  (node-arguments node))
+  (top-level-node-arguments node))
 
 (defmethod node-children ((node structure-node))
   (node-arguments node))
@@ -175,12 +134,13 @@
   (format t "~A>" (lisp-object-to-string (node-object node))))
 
 (defmethod dump-node ((node top-level-node))
-  (format t "#<~A/~D" (node-functor node) (node-arity node))
-  (let ((*dump-node-indent* 4))
-    (dolist (n (node-arguments node))
-      (terpri)
-      (dump-node n)))
-  (format t ">"))
+  (with-slots (functor arity arguments) node
+    (format t "#<~A/~D" functor arity)
+    (let ((*dump-node-indent* 4))
+      (dolist (n arguments)
+        (terpri)
+        (dump-node n)))
+    (format t ">")))
 
 (defmethod print-object ((node node) stream)
   (let ((*standard-output* stream))
@@ -190,25 +150,27 @@
 (defun* parse-list ((contents list))
   (:returns node)
   (if contents
-    (make-list-node (parse (car contents))
-                    (parse-list (cdr contents)))
-    (make-structure-node 'nil 0 ())))
+    (make-list-node :head (parse (car contents))
+                    :tail (parse-list (cdr contents)))
+    (make-structure-node :functor nil
+                         :arity 0
+                         :arguments ())))
 
 (defun* parse-list* ((contents list))
   (:returns node)
   (destructuring-bind (next . remaining) contents
     (if (null remaining)
       (parse next)
-      (make-list-node (parse next)
-                      (parse-list* remaining)))))
+      (make-list-node :head (parse next)
+                      :tail (parse-list* remaining)))))
 
 (defun* parse (term &optional top-level-argument)
   (:returns node)
   (cond
     ((variablep term)
      (if top-level-argument
-       (make-argument-variable-node term)
-       (make-variable-node term)))
+       (make-argument-variable-node :variable term)
+       (make-variable-node :variable term)))
     ((symbolp term)
      (parse (list term))) ; c/0 -> (c/0)
     ((consp term)
@@ -220,11 +182,11 @@
        (case functor
          (list (parse-list arguments))
          (list* (parse-list* arguments))
-         (t (make-structure-node functor
-                                 (length arguments)
-                                 (mapcar #'parse arguments))))))
+         (t (make-structure-node :functor functor
+                                 :arity (length arguments)
+                                 :arguments (mapcar #'parse arguments))))))
     ((numberp term)
-     (make-lisp-object-node term))
+     (make-lisp-object-node :object term))
     (t (error "Cannot parse term ~S into a Prolog term." term))))
 
 (defun* parse-top-level (term)
@@ -236,9 +198,10 @@
               (error
                 "Cannot parse top-level term ~S because ~S is not a valid functor."
                 term functor))
-            (make-top-level-node functor (length arguments)
-                                 (mapcar (lambda (a) (parse a t))
-                                         arguments))))
+            (make-top-level-node :functor functor
+                                 :arity (length arguments)
+                                 :arguments (mapcar (lambda (a) (parse a t))
+                                                    arguments))))
     (t (error "Cannot parse top-level term ~S into a Prolog term." term))))
 
 

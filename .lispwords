@@ -2,7 +2,6 @@
 (1 repeat)
 (2 define-instruction define-instructions)
 (1 with-database)
-(2 set-when-unbound)
 (1 recursively)
 (1 when-let)
 (1 rule)

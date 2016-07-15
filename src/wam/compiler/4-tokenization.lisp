@@ -146,9 +146,10 @@
       flatten-query
       tokenize-assignments
       ;; We need to shove a CALL/JUMP token onto the end.
-      (append <> (list (make-instance (if is-tail 'jump-token 'call-token)
-                                      :functor (node-functor tree)
-                                      :arity (node-arity tree)))))))
+      (append <> (list (make-instance
+                         (if is-tail 'jump-token 'call-token)
+                         :functor (top-level-node-functor tree)
+                         :arity (top-level-node-arity tree)))))))
 
 
 
