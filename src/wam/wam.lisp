@@ -199,7 +199,7 @@
   (define-unsafe %unsafe-structure-value store-index)
   (define-unsafe %unsafe-reference-value store-index)
   (define-unsafe %unsafe-functor-value functor)
-  (define-unsafe %unsafe-constant-value functor)
+  (define-unsafe %unsafe-constant-value fname)
   (define-unsafe %unsafe-list-value store-index)
   (define-unsafe %unsafe-lisp-object-value t)
   (define-unsafe %unsafe-stack-value stack-word))

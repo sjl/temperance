@@ -13,7 +13,7 @@
       ((:structure s) (format nil "struct pointer to ~8,'0X " s))
       ((:functor f) (destructuring-bind (functor . arity) f
                       (format nil "~A/~D " functor arity)))
-      ((:constant c) (format nil "~A/0 " (car c)))
+      ((:constant c) (format nil "~A/0 " c))
       (t ""))))
 
 
@@ -140,8 +140,10 @@
 
 
 (defun pretty-functor (functor)
-  (destructuring-bind (symbol . arity) functor
-    (format nil "~A/~D" symbol arity)))
+  (etypecase functor
+    (symbol (format nil "~A/0" functor))
+    (cons (destructuring-bind (symbol . arity) functor
+            (format nil "~A/~D" symbol arity)))))
 
 (defun pretty-argument (argument)
   (typecase argument

@@ -39,7 +39,7 @@
   "Push a new functor cell onto the heap, returning its address."
   (wam-heap-push! wam +cell-type-functor+ functor))
 
-(defun* push-new-constant! ((wam wam) (constant functor))
+(defun* push-new-constant! ((wam wam) (constant fname))
   (:returns heap-index)
   "Push a new constant cell onto the heap, returning its address."
   (wam-heap-push! wam +cell-type-constant+ constant))
@@ -50,10 +50,10 @@
   "Return whether the two functor cell values represent the same functor."
   (equal f1 f2))
 
-(defun* constants-match-p ((c1 functor) (c2 functor))
+(defun* constants-match-p ((c1 fname) (c2 fname))
   (:returns boolean)
   "Return whether the two constant cell values unify."
-  (equal c1 c2))
+  (eq c1 c2))
 
 (defun* lisp-objects-match-p ((o1 t) (o2 t))
   (:returns boolean)
@@ -486,10 +486,11 @@
 
 
 (defun* %%procedure-call ((wam wam)
-                          (functor functor)
+                          (functor fname)
+                          (arity arity)
                           (program-counter-increment instruction-size)
                           (is-tail boolean))
-  (let* ((target (wam-code-label wam (car functor) (cdr functor))))
+  (let* ((target (wam-code-label wam functor arity)))
     (if (not target)
       ;; Trying to call an unknown procedure.
       (backtrack! wam)
@@ -498,7 +499,7 @@
           (setf (wam-continuation-pointer wam) ; CP <- next instruction
                 (+ (wam-program-counter wam) program-counter-increment)))
         (setf (wam-number-of-arguments wam) ; set NARGS
-              (cdr functor)
+              arity
 
               (wam-cut-pointer wam) ; set B0 in case we have a cut
               (wam-backtrack-pointer wam)
@@ -507,16 +508,17 @@
               target)))))
 
 (defun* %%dynamic-procedure-call ((wam wam) (is-tail boolean))
-  (flet ((%go (functor)
-           (if is-tail
-             (%%procedure-call
-               wam functor (instruction-size +opcode-dynamic-jump+) t)
-             (%%procedure-call
-               wam functor (instruction-size +opcode-dynamic-call+) nil)))
-         (load-arguments (n start-address)
-           (loop :for arg :from 0 :below n
-                 :for source :from start-address
-                 :do (wam-copy-to-local-register! wam arg source))))
+  (flet*
+    ((%go (functor arity)
+       (if is-tail
+         (%%procedure-call
+           wam functor arity (instruction-size +opcode-dynamic-jump+) t)
+         (%%procedure-call
+           wam functor arity (instruction-size +opcode-dynamic-call+) nil)))
+     (load-arguments ((n arity) start-address)
+       (loop :for arg :from 0 :below n
+             :for source :from start-address
+             :do (wam-copy-to-local-register! wam arg source))))
     (cell-typecase (wam (deref wam 0)) ; A_0
       ((:structure functor-address)
        ;; If we have a non-zero-arity structure, we need to set up the
@@ -524,12 +526,13 @@
        ;; conveniently live contiguously right after the functor cell.
        (cell-typecase (wam functor-address)
          ((:functor f)
-          (load-arguments (cdr f) (1+ functor-address))
-          (%go f))))
+          (destructuring-bind (functor . arity) f
+            (load-arguments arity (1+ functor-address))
+            (%go functor arity)))))
 
       ;; Zero-arity functors don't need to set up anything at all -- we can
       ;; just call them immediately.
-      ((:constant c) (%go c))
+      ((:constant c) (%go c 0))
 
       ;; It's okay to do (call :var), but :var has to be bound by the time you
       ;; actually reach it at runtime.
@@ -540,10 +543,16 @@
 
 
 (define-instruction (%jump) ((wam wam) (functor functor))
-  (%%procedure-call wam functor (instruction-size +opcode-jump+) t))
+  (%%procedure-call wam
+                    (car functor) (cdr functor)
+                    (instruction-size +opcode-jump+)
+                    t))
 
 (define-instruction (%call) ((wam wam) (functor functor))
-  (%%procedure-call wam functor (instruction-size +opcode-call+) nil))
+  (%%procedure-call wam
+                    (car functor) (cdr functor)
+                    (instruction-size +opcode-call+)
+                    nil))
 
 
 (define-instruction (%dynamic-call) ((wam wam))
@@ -694,7 +703,7 @@
 
 (defun* %%match-constant
     ((wam wam)
-     (constant functor)
+     (constant fname)
      (address store-index))
   (cell-typecase (wam (deref wam address) address)
     (:reference
@@ -710,19 +719,19 @@
 
 (define-instruction (%put-constant)
     ((wam wam)
-     (constant functor)
+     (constant fname)
      (register register-index))
   (wam-set-local-register! wam register +cell-type-constant+ constant))
 
 (define-instruction (%get-constant)
     ((wam wam)
-     (constant functor)
+     (constant fname)
      (register register-index))
   (%%match-constant wam constant register))
 
 (define-instruction (%subterm-constant)
     ((wam wam)
-     (constant functor))
+     (constant fname))
   (ecase (wam-mode wam)
     (:read (%%match-constant wam constant (wam-subterm wam)))
     (:write (push-new-constant! wam constant)))
@@ -756,7 +765,7 @@
              ((:reference r) (extract-var r))
              ((:structure s) (recur s))
              ((:list l) (cons (recur l) (recur (1+ l))))
-             ((:constant c) (car c))
+             ((:constant c) c)
              ((:functor f)
               (destructuring-bind (functor . arity) f
                 (list* functor

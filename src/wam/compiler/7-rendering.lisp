@@ -80,10 +80,15 @@
 
 (defun* render-argument (argument)
   (:returns code-word)
-  (etypecase argument
-    (null 0) ; ugly choice point args that'll be filled later...
-    (register (register-number argument)) ; bytecode just needs register numbers
-    (t argument))) ; everything else just gets shoved right into the array
+  (cond
+    ;; Ugly choice point args that'll be filled later...
+    ((eq +choice-point-placeholder+ argument) 0)
+
+    ;; Bytecode just needs the register numbers.
+    ((typep argument 'register) (register-number argument))
+
+    ;; Everything else just gets shoved right into the array.
+    (t argument)))
 
 (defun* render-bytecode ((store generic-code-store)
                          (instructions circle)

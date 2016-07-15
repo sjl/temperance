@@ -5,6 +5,10 @@
 ;;;; , |   / ,-| |  ,-|
 ;;;; `-^--'  `-^ `' `-^
 
+;;;; Constants
+(defconstant +choice-point-placeholder+ 'choice-point-placeholder)
+
+
 ;;;; Utils
 (declaim (inline variablep))
 

@@ -414,10 +414,11 @@
               :for last-p = (null remaining)
               :for clause-instructions = (precompile-clause head body)
               :do (progn
-                    (circle-insert-end instructions
-                                       (cond (first-p '(:try nil))
-                                             (last-p '(:trust))
-                                             (t '(:retry nil))))
+                    (circle-insert-end
+                      instructions
+                      (cond (first-p `(:try ,+choice-point-placeholder+))
+                            (last-p `(:trust))
+                            (t `(:retry ,+choice-point-placeholder+))))
                     (circle-append-circle instructions clause-instructions))
               :finally (return instructions)))
       functor

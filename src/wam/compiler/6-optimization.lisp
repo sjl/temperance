@@ -13,16 +13,20 @@
 ;;; circle of instructions, doing one optimization each time.
 
 
-(defun* optimize-get-constant ((node circle) constant (register register))
+(defun* optimize-get-constant ((node circle)
+                               (constant fname)
+                               (register register))
   ;; 1. get_structure c/0, Ai -> get_constant c, Ai
   (circle-replace node `(:get-constant ,constant ,register)))
 
-(defun* optimize-put-constant ((node circle) constant (register register))
+(defun* optimize-put-constant ((node circle)
+                               (constant fname)
+                               (register register))
   ;; 2. put_structure c/0, Ai -> put_constant c, Ai
   (circle-replace node `(:put-constant ,constant ,register)))
 
 (defun* optimize-subterm-constant-query ((node circle)
-                                         constant
+                                         (constant fname)
                                          (register register))
   ;; 3. put_structure c/0, Xi                     *** WE ARE HERE
   ;;    ...
@@ -40,7 +44,7 @@
     (return previous)))
 
 (defun* optimize-subterm-constant-program ((node circle)
-                                           constant
+                                           (constant fname)
                                            (register register))
   ;; 4. subterm_variable Xi       -> subterm_constant c
   ;;    ...
@@ -60,28 +64,25 @@
   (:returns circle)
   ;; From the book and the erratum, there are four optimizations we can do for
   ;; constants (0-arity structures).
-  (flet ((constant-p (functor)
-           (zerop (cdr functor))))
-    (loop :for node = (circle-forward instructions) :then (circle-forward node)
-          :while node
-          :for (opcode . arguments) = (circle-value node)
-          :do
-          (match (circle-value node)
 
-            ((guard `(:put-structure ,functor ,register)
-                    (constant-p functor))
-             (setf node
-                   (if (register-argument-p register)
-                     (optimize-put-constant node functor register)
-                     (optimize-subterm-constant-query node functor register))))
+  (loop :for node = (circle-forward instructions) :then (circle-forward node)
+        :while node
+        :for (opcode . arguments) = (circle-value node)
+        :do
+        (match (circle-value node)
 
-            ((guard `(:get-structure ,functor ,register)
-                    (constant-p functor))
-             (setf node
-                   (if (register-argument-p register)
-                     (optimize-get-constant node functor register)
-                     (optimize-subterm-constant-program node functor register))))))
-    instructions))
+          (`(:put-structure (,functor . 0) ,register)
+           (setf node
+                 (if (register-argument-p register)
+                   (optimize-put-constant node functor register)
+                   (optimize-subterm-constant-query node functor register))))
+
+          (`(:get-structure (,functor . 0) ,register)
+           (setf node
+                 (if (register-argument-p register)
+                   (optimize-get-constant node functor register)
+                   (optimize-subterm-constant-program node functor register))))))
+  instructions)
 
 
 (defun* optimize-void-runs ((instructions circle))
