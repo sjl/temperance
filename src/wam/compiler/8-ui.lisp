@@ -17,8 +17,8 @@
 
   "
   (multiple-value-bind (instructions permanent-variables)
-      (precompile-query wam query)
-    (optimize-instructions wam instructions)
+      (precompile-query query)
+    (optimize-instructions instructions)
     (render-query wam instructions)
     permanent-variables))
 
@@ -30,7 +30,7 @@
 
   "
   (multiple-value-bind (instructions functor arity)
-      (precompile-rules wam rules)
-    (optimize-instructions wam instructions)
+      (precompile-rules rules)
+    (optimize-instructions instructions)
     (render-rules wam functor arity instructions)))
 

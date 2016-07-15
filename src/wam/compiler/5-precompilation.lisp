@@ -163,7 +163,7 @@
                   (:stack :put-value-stack)))))))
 
 
-(defun* precompile-tokens ((wam wam) (head-tokens list) (body-tokens list))
+(defun* precompile-tokens ((head-tokens list) (body-tokens list))
   (:returns circle)
   "Generate a series of machine instructions from a stream of head and body
   tokens.
@@ -277,7 +277,7 @@
       instructions)))
 
 
-(defun* precompile-clause ((wam wam) head body)
+(defun* precompile-clause (head body)
   (:returns (values circle clause-properties))
   "Precompile the clause.
 
@@ -319,7 +319,7 @@
                        :is-tail (and (not (eq clause-type :query))
                                      (null remaining)))
                    (setf first nil)))))))
-    (let ((instructions (precompile-tokens wam head-tokens body-tokens))
+    (let ((instructions (precompile-tokens head-tokens body-tokens))
           (variable-count (length (clause-permanent-vars clause-props))))
       ;; We need to compile facts and rules differently.  Facts end with
       ;; a PROCEED and rules are wrapped in ALOC/DEAL.
@@ -356,7 +356,7 @@
       (values instructions clause-props))))
 
 
-(defun* precompile-query ((wam wam) (query list))
+(defun* precompile-query ((query list))
   (:returns (values circle list))
   "Compile `query`, returning the instructions and permanent variables.
 
@@ -364,7 +364,7 @@
 
   "
   (multiple-value-bind (instructions clause-props)
-      (precompile-clause wam nil query)
+      (precompile-clause nil query)
     (values instructions
             (clause-permanent-vars clause-props))))
 
@@ -384,7 +384,7 @@
       (t (error "Clause ~S has a malformed head." clause)))))
 
 
-(defun* precompile-rules ((wam wam) (rules list))
+(defun* precompile-rules ((rules list))
   "Compile a single predicate's `rules` into a list of instructions.
 
   All the rules must for the same predicate.  This is not checked, for
@@ -403,7 +403,7 @@
       (if (= 1 (length rules))
         ;; Single-clause rules don't need to bother setting up a choice point.
         (destructuring-bind ((head . body)) rules
-          (precompile-clause wam head body))
+          (precompile-clause head body))
         ;; Otherwise we need to loop through each of the clauses, pushing their
         ;; choice point instruction first, then their actual code.
         ;;
@@ -412,7 +412,7 @@
               :for ((head . body) . remaining) :on rules
               :for first-p = t :then nil
               :for last-p = (null remaining)
-              :for clause-instructions = (precompile-clause wam head body)
+              :for clause-instructions = (precompile-clause head body)
               :do (progn
                     (circle-insert-end instructions
                                        (cond (first-p '(:try nil))

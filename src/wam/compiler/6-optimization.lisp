@@ -56,9 +56,8 @@
     (circle-replace n `(:subterm-constant ,constant))
     (return (circle-backward-remove node))))
 
-(defun* optimize-constants ((wam wam) (instructions circle))
+(defun* optimize-constants ((instructions circle))
   (:returns circle)
-  (declare (ignore wam))
   ;; From the book and the erratum, there are four optimizations we can do for
   ;; constants (0-arity structures).
   (flet ((constant-p (functor)
@@ -111,9 +110,9 @@
   instructions)
 
 
-(defun* optimize-instructions ((wam wam) (instructions circle))
+(defun* optimize-instructions ((instructions circle))
   (->> instructions
-    (optimize-constants wam)
+    (optimize-constants)
     (optimize-void-runs)))
 
 
