@@ -8,6 +8,10 @@
 (defun make-database ()
   (make-wam))
 
+(defun reset-database ()
+  (setf *database* (make-database)))
+
+
 (defmacro with-database (database &body body)
   `(let ((*database* ,database))
      ,@body))

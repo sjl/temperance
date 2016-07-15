@@ -74,6 +74,7 @@
     #:bones.utils)
   (:export
     #:make-database
+    #:reset-database
     #:with-database
     #:with-fresh-database
 
