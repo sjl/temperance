@@ -32,36 +32,47 @@
     :initial-element 0
     :element-type 'cell-value))
 
+(defun allocate-wam-unification-stack (size)
+  (make-array size
+    :fill-pointer 0
+    :adjustable t
+    :element-type 'store-index))
 
-(defstruct (wam
-             (:print-function
-              (lambda (wam stream depth)
-                (declare (ignore depth))
-                (print-unreadable-object
-                  (wam stream :type t :identity t)
-                  (format stream "an wam"))))
-             (:constructor make-wam%))
+(defun allocate-wam-trail (size)
+  (make-array size
+    :fill-pointer 0
+    :adjustable t
+    :initial-element 0
+    :element-type 'store-index))
+
+
+(defstruct (wam (:constructor make-wam%))
+  ;; Data
   (type-store
-    (allocate-wam-type-store 0)
+    (error "Type store required.")
     :type type-store
     :read-only t)
   (value-store
-    (allocate-wam-value-store 0)
+    (error "Value store required.")
     :type value-store
     :read-only t)
+  (unification-stack
+    (error "Unification stack required.")
+    :type (vector store-index)
+    :read-only t)
+  (trail
+    (error "Trail required.")
+    :type (vector store-index)
+    :read-only t)
+
+  ;; Code
   (code
-    (allocate-wam-code 0)
+    (error "Code store required.")
     :type (simple-array code-word (*))
     :read-only t)
   (code-labels
     (make-hash-table :test 'eq)
     :read-only t)
-  (logic-stack
-    nil
-    :type list)
-  (logic-pool
-    nil
-    :type list)
   (functors
     (make-array 64
       :fill-pointer 0
@@ -69,39 +80,34 @@
       :element-type 'functor)
     :type (vector functor)
     :read-only t)
-  (unification-stack
-    (make-array 16
-      :fill-pointer 0
-      :adjustable t
-      :element-type 'store-index)
-    :type (vector store-index)
-    :read-only t)
-  (trail
-    (make-array 64
-      :fill-pointer 0
-      :adjustable t
-      :initial-element 0
-      :element-type 'store-index)
-    :type (vector store-index)
-    :read-only t)
+
+  ;; Logic Stack
+  (logic-stack nil :type list)
+  (logic-pool nil :type list)
 
   ;; Unique registers
-  (number-of-arguments    0                    :type arity)                ; NARGS
-  (subterm                +heap-start+         :type heap-index)           ; S
-  (program-counter        0                    :type code-index)           ; P
-  (code-pointer           +maximum-query-size+ :type code-index)           ; CODE
-  (heap-pointer           (1+ +heap-start+)    :type heap-index)           ; H
-  (stack-pointer          +stack-start+        :type stack-index)          ; SP
-  (continuation-pointer   0                    :type code-index)           ; CP
-  (environment-pointer    +stack-start+        :type environment-pointer)  ; E
-  (backtrack-pointer      +stack-start+        :type backtrack-pointer)    ; B
-  (cut-pointer            +stack-start+        :type backtrack-pointer)    ; B0
-  (heap-backtrack-pointer +heap-start+         :type heap-index)           ; HB
+  (number-of-arguments     0                  :type arity)               ; NARGS
+  (subterm                 +heap-start+       :type heap-index)          ; S
+  (program-counter         0                  :type code-index)          ; P
+  (code-pointer            +code-main-start+  :type code-index)          ; CODE
+  (heap-pointer            (1+ +heap-start+)  :type heap-index)          ; H
+  (stack-pointer           +stack-start+      :type stack-index)         ; SP
+  (continuation-pointer    0                  :type code-index)          ; CP
+  (environment-pointer     +stack-start+      :type environment-pointer) ; E
+  (backtrack-pointer       +stack-start+      :type backtrack-pointer)   ; B
+  (cut-pointer             +stack-start+      :type backtrack-pointer)   ; B0
+  (heap-backtrack-pointer  +heap-start+       :type heap-index)          ; HB
 
-  ;; Other global "registers"
+  ;; Flags
   (fail        nil :type boolean)
   (backtracked nil :type boolean)
   (mode        nil :type (or null (member :read :write))))
+
+
+(defmethod print-object ((wam wam) stream)
+  (print-unreadable-object
+      (wam stream :type t :identity t)
+    (format stream "an wam")))
 
 
 (defun* make-wam (&key
@@ -110,13 +116,15 @@
   (:returns wam)
   (make-wam% :code (allocate-wam-code code-size)
              :type-store (allocate-wam-type-store store-size)
-             :value-store (allocate-wam-value-store store-size)))
+             :value-store (allocate-wam-value-store store-size)
+             :unification-stack (allocate-wam-unification-stack 16)
+             :trail (allocate-wam-trail 64)))
 
 
 ;;;; Store
 ;;; The main store of the WAM is split into two separate arrays:
 ;;;
-;;; * An array of cell types, packed into 4-bit bytes.
+;;; * An array of cell types, each a fixnum.
 ;;; * An array of cell values, each being a fixnum or a normal Lisp pointer.
 ;;;
 ;;; The contents of the value depend on the type of cell.

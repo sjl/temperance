@@ -32,9 +32,17 @@
 (define-constant +register-count+ 2048
   :documentation "The number of local registers the WAM has available.")
 
-
 (define-constant +maximum-arity+ 1024
   :documentation "The maximum allowed arity of functors.")
+
+
+;; TODO Make all this shit configurable at runtime
+(define-constant +stack-limit+ 4096
+  :documentation "Maximum size of the WAM stack.")
+
+(define-constant +stack-frame-size-limit+ (+ 7 +register-count+)
+  :documentation "The maximum size, in stack frame words, that a stack frame could be.")
+
 
 (define-constant +maximum-query-size+ 1024
   :documentation
@@ -44,13 +52,11 @@
   :documentation
   "The maximum number of code words an instruction (including opcode) might be.")
 
+(define-constant +code-query-start+ 0
+  :documentation "The address in the code store where the query code begins.")
 
-;; TODO Make all this shit configurable at runtime
-(define-constant +stack-limit+ 4096
-  :documentation "Maximum size of the WAM stack.")
-
-(define-constant +stack-frame-size-limit+ (+ 7 +register-count+)
-  :documentation "The maximum size, in stack frame words, that a stack frame could be.")
+(define-constant +code-main-start+ +maximum-query-size+
+  :documentation "The address in the code store where the main program code begins.")
 
 
 (define-constant +stack-start+ +register-count+

@@ -27,8 +27,8 @@
 
 
 (defstruct (register (:constructor make-register (type number)))
-  (type :local :type register-type)
-  (number 0 :type register-number))
+  (type (error "Type required.") :type register-type)
+  (number (error "Number required.") :type register-number))
 
 
 (defun* make-temporary-register ((number register-number) (arity arity))
