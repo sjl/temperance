@@ -17,6 +17,8 @@
   (with-output-to-string (str)
     (print-unreadable-object (o str :type t :identity t))))
 
+(defun required ()
+  (error "Argument required."))
 
 
 ;;;; Registers
@@ -35,8 +37,8 @@
 
 
 (defstruct (register (:constructor make-register (type number)))
-  (type (error "Type required.") :type register-type)
-  (number (error "Number required.") :type register-number))
+  (type (required) :type register-type)
+  (number (required) :type register-number))
 
 
 (defun* make-temporary-register ((number register-number) (arity arity))
