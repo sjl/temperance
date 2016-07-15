@@ -10,7 +10,6 @@
                :while
                :until
                :tree-member-p
-               :tree-collect
                :with-gensyms
                :once-only
                :zip

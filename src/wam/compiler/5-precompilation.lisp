@@ -201,7 +201,7 @@
            ;; OP functor reg
            (push destination-register seen)
            (push-instruction (find-opcode-structure mode)
-                             (wam-unique-functor wam (cons functor arity))
+                             (cons functor arity)
                              destination-register))
          (handle-list (register)
            (push register seen)
@@ -221,7 +221,7 @@
              ;; [CALL/JUMP] functor
              (push-instruction
                (if is-jump :jump :call)
-               (wam-unique-functor wam (cons functor arity))))
+               (cons functor arity)))
            ;; This is a little janky, but at this point the body goals have been
            ;; turned into one single stream of tokens, so we don't have a nice
            ;; clean way to tell when one ends.  But in practice, a body goal is

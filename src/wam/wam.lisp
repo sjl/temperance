@@ -71,14 +71,8 @@
     :type (simple-array code-word (*))
     :read-only t)
   (code-labels
-    (make-hash-table :test 'eq)
-    :read-only t)
-  (functors
-    (make-array 64
-      :fill-pointer 0
-      :adjustable t
-      :element-type 'functor)
-    :type (vector functor)
+    (make-array +maximum-arity+ :initial-element nil)
+    :type (simple-array (or null hash-table))
     :read-only t)
 
   ;; Logic Stack
@@ -727,6 +721,16 @@
 
 
 ;;;; Code
+;;; The WAM needs to be able to look up predicates at runtime.  To do this we
+;;; keep a data structure that maps a functor and arity to a location in the
+;;; code store.
+;;;
+;;; This data structure is an array, with the arity we're looking up being the
+;;; position.  At that position will be a hash tables of the functor symbols to
+;;; the locations.
+;;;
+;;; Each arity's table will be created on-the-fly when it's first needed.
+
 (defun* retrieve-instruction (code-store (address code-index))
   "Return the full instruction at the given address in the code store."
   (make-array (instruction-size (aref code-store address))
@@ -735,18 +739,28 @@
     :adjustable nil
     :element-type 'code-word))
 
-(defun* wam-code-label ((wam wam) (functor functor))
+
+(defun* wam-code-label ((wam wam) (functor fname) (arity arity))
   (:returns (or null code-index))
-  (gethash functor (wam-code-labels wam)))
+  (let ((atable (aref (wam-code-labels wam) arity)))
+    (when atable
+      (values (gethash functor atable)))))
 
 (defun* (setf wam-code-label) ((new-value code-index)
                                (wam wam)
                                (functor fname)
                                (arity arity))
-  ;; Note that this takes a functor/arity and not a cons.
-  (setf (gethash (wam-unique-functor wam (cons functor arity))
-                 (wam-code-labels wam))
+  (setf (gethash functor (aref-or-init (wam-code-labels wam) arity
+                                       (make-hash-table :test 'eq)))
         new-value))
+
+(defun* wam-code-label-remove! ((wam wam)
+                                (functor fname)
+                                (arity arity))
+  (let ((atable (aref (wam-code-labels wam) arity)))
+    (when atable
+      ;; todo: remove the table entirely when empty?
+      (remhash functor atable))))
 
 
 (defun* wam-load-query-code! ((wam wam)
@@ -767,10 +781,13 @@
 ;;; of logic frames to reuse, which lets us simply `clrhash` in between instead
 ;;; of having to allocate a brand new hash table.
 
+(declaim (inline assert-logic-frame-poppable))
+
+
 (defstruct logic-frame
   (start 0 :type code-index)
   (final nil :type boolean)
-  (predicates (make-hash-table) :type hash-table))
+  (predicates (make-hash-table :test 'equal) :type hash-table))
 
 
 (defun* wam-logic-pool-release ((wam wam) (frame logic-frame))
@@ -816,24 +833,36 @@
     (push frame (wam-logic-stack wam)))
   (values))
 
+(defun assert-logic-frame-poppable (wam)
+  (let ((logic-stack (wam-logic-stack wam)))
+    (policy-cond:policy-if (or (> safety 1) (> debug 0) (< speed 3))
+      ;; Slow
+      (progn
+        (assert logic-stack ()
+          "Cannot pop logic frame from an empty logic stack.")
+        (assert (logic-frame-final (first logic-stack)) ()
+          "Cannot pop unfinalized logic frame."))
+      ;; Fast
+      (when (or (not logic-stack)
+                (not (logic-frame-final (first logic-stack))))
+        (error "Cannot pop logic frame.")))))
+
 (defun* wam-pop-logic-frame! ((wam wam))
   (:returns :void)
   (with-slots (logic-stack) wam
-    (assert logic-stack ()
-      "Cannot pop logic frame from an empty logic stack.")
-    (assert (logic-frame-final (first logic-stack)) ()
-      "Cannot pop unfinalized logic frame.")
+    (assert-logic-frame-poppable wam)
     (let ((frame (pop logic-stack)))
       (setf (wam-code-pointer wam)
             (logic-frame-start frame))
-      (loop :for label :being :the hash-keys :of (logic-frame-predicates frame)
-            :do (remhash label (wam-code-labels wam)))
+      (loop :for (functor . arity)
+            :being :the hash-keys :of (logic-frame-predicates frame)
+            :do (wam-code-label-remove! wam functor arity))
       (wam-logic-pool-release wam frame)))
   (values))
 
 
-(defun* assert-label-not-already-compiled ((wam wam) clause label)
-  (assert (not (wam-code-label wam label))
+(defun* assert-label-not-already-compiled ((wam wam) clause functor arity)
+  (assert (not (wam-code-label wam functor arity))
       ()
     "Cannot add clause ~S because its predicate has preexisting compiled code."
     clause))
@@ -842,12 +871,13 @@
   (assert (wam-logic-open-p wam) ()
     "Cannot add clause ~S without an open logic stack frame."
     clause)
+
   (multiple-value-bind (functor arity) (find-predicate clause)
-    (let ((label (wam-unique-functor wam (cons functor arity))))
-      (assert-label-not-already-compiled wam clause label)
-      (with-slots (predicates)
-          (wam-current-logic-frame wam)
-        (enqueue clause (gethash-or-init label predicates (make-queue))))))
+    (assert-label-not-already-compiled wam clause functor arity)
+    (enqueue clause (gethash-or-init
+                      (cons functor arity)
+                      (logic-frame-predicates (wam-current-logic-frame wam))
+                      (make-queue))))
   (values))
 
 
@@ -990,22 +1020,6 @@
                                      (destination register-index)
                                      (source store-index))
   (wam-copy-store-cell! wam (wam-stack-register-address wam destination) source))
-
-
-;;;; Functors
-;;; Functors are stored in an adjustable array to uniquify them... for now.
-
-(defun* wam-unique-functor ((wam wam) (functor functor))
-  (:returns functor)
-  "Return a unique version of the functor cons.
-
-  If the functor is not already in the table it will be added.
-
-  "
-  (or (find functor (wam-functors wam) :test #'equal)
-      (progn
-        (vector-push-extend functor (wam-functors wam))
-        functor)))
 
 
 ;;;; Unification Stack

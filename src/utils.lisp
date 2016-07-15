@@ -84,7 +84,7 @@
       (recur ,@(mapcar #'extract-val bindings)))))
 
 (defmacro gethash-or-init (key hash-table default-form)
-  "Get the a key's value in a hash table, initializing if necessary.
+  "Get `key`'s value in `hash-table`, initializing if necessary.
 
   If `key` is in `hash-table`: return its value without evaluating
   `default-form` at all.
@@ -101,6 +101,21 @@
         (if ,found
           ,value
           (setf (gethash ,key ,hash-table) ,default-form))))))
+
+(defmacro aref-or-init (array index default-form)
+  "Get `index` in `array`, initializing if necessary.
+
+  If `index` is non-nil in `array`: return its value without evaluating
+  `default-form` at all.
+
+  If `index` is nil in `array`: evaluate `default-form` and set it before
+  returning it.
+
+  "
+  ;; TODO: think up a less shitty name for this
+  (once-only (index array)
+    `(or (aref ,array ,index)
+      (setf (aref ,array ,index) ,default-form))))
 
 (defmacro array-push (value array pointer &environment env)
   "Push `value` onto `array` at `pointer`, incrementing `pointer` afterword.
@@ -240,3 +255,4 @@
     (let (($keyform (gensym "CASE/TREE-")))
       `(let ((,$keyform ,keyform))
          ,(%case/tree $keyform (sort (copy-list cases) #'< :key #'first))))))
+

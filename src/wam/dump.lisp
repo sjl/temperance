@@ -266,6 +266,18 @@
           (first arguments)))
 
 
+(defun functor-table (wam)
+  (loop
+    :with result = (make-hash-table)
+    :for arity :from 0
+    :for table :across (wam-code-labels wam)
+    :when table
+    :do (maphash (lambda (functor loc)
+                   (setf (gethash loc result)
+                         (cons functor arity)))
+                 table)
+    :finally (return result)))
+
 (defun dump-code-store (wam code-store
                         &optional
                         (from 0)
@@ -275,7 +287,7 @@
   ;; aren't aligned.  So if we just start at `from` we might start in the middle
   ;; of an instruction and everything would be fucked.
   (let ((addr 0)
-        (lbls (bones.utils::invert-hash-table (wam-code-labels wam)))) ; oh god
+        (lbls (functor-table wam))) ; oh god
     (while (< addr to)
       (let ((instruction (retrieve-instruction code-store addr)))
         (when (>= addr from)
@@ -320,8 +332,6 @@
                     (dump-cell-value value)
                     (format nil "; ~A" (first (extract-things wam (list register)))))))
 
-(defun dump-wam-functors (wam)
-  (format t "        FUNCTORS: ~S~%" (wam-functors wam)))
 
 (defun dump-wam-trail (wam)
   (format t "    TRAIL: ")
@@ -329,19 +339,11 @@
         (format t "~8,'0X //" address))
   (format t "~%"))
 
-(defun dump-labels (wam)
-  (format t "LABELS:~%~{  ~A -> ~4,'0X~^~%~}~%"
-          (loop :for functor
-                :being :the :hash-keys :of (wam-code-labels wam)
-                :using (hash-value address)
-                :nconc (list (pretty-functor functor) address))))
-
 
 (defun dump-wam (wam from to)
   (format t "            FAIL: ~A~%" (wam-fail wam))
   (format t "    BACKTRACKED?: ~A~%" (wam-backtracked wam))
   (format t "            MODE: ~S~%" (wam-mode wam))
-  (dump-wam-functors wam)
   (format t "       HEAP SIZE: ~A~%" (- (wam-heap-pointer wam) +heap-start+))
   (format t " PROGRAM COUNTER: ~4,'0X~%" (wam-program-counter wam))
   (format t "CONTINUATION PTR: ~4,'0X~%" (wam-continuation-pointer wam))
@@ -356,7 +358,6 @@
   (format t "~%")
   (dump-stack wam)
   (format t "~%")
-  (dump-labels wam)
   (dump-code wam))
 
 (defun dump-wam-query-code (wam &optional (max +maximum-query-size+))

@@ -48,12 +48,12 @@
 (defun* functors-match-p ((f1 functor) (f2 functor))
   (:returns boolean)
   "Return whether the two functor cell values represent the same functor."
-  (eq f1 f2))
+  (equal f1 f2))
 
 (defun* constants-match-p ((c1 functor) (c2 functor))
   (:returns boolean)
   "Return whether the two constant cell values unify."
-  (eq c1 c2))
+  (equal c1 c2))
 
 (defun* lisp-objects-match-p ((o1 t) (o2 t))
   (:returns boolean)
@@ -489,7 +489,7 @@
                           (functor functor)
                           (program-counter-increment instruction-size)
                           (is-tail boolean))
-  (let* ((target (wam-code-label wam functor)))
+  (let* ((target (wam-code-label wam (car functor) (cdr functor))))
     (if (not target)
       ;; Trying to call an unknown procedure.
       (backtrack! wam)
