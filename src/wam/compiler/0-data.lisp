@@ -109,9 +109,16 @@
   (anonymous-vars nil :type list))
 
 
-(defun find-variables (terms)
+(defun* find-variables ((terms list))
   "Return the set of variables in `terms`."
-  (remove-duplicates (tree-collect #'variablep terms)))
+  (let ((variables nil))
+    (recursively ((term terms))
+      (cond
+        ((variablep term) (pushnew term variables))
+        ((consp term) (recur (car term))
+                      (recur (cdr term)))
+        (t nil)))
+    variables))
 
 (defun find-shared-variables (terms)
   "Return the set of all variables shared by two or more terms."
@@ -165,7 +172,8 @@
            (progn (push term seen)
                   (push term once))))
         ((consp term) (recur (car term))
-                      (recur (cdr term)))))
+                      (recur (cdr term)))
+        (t nil)))
     once))
 
 
