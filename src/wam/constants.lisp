@@ -26,6 +26,7 @@
   +cell-type-functor+
   +cell-type-constant+
   +cell-type-list+
+  +cell-type-lisp-object+
   +cell-type-stack+)
 
 
@@ -136,7 +137,11 @@
 
   ;; Lists
   +opcode-get-list+
-  +opcode-put-list+)
+  +opcode-put-list+
+
+  ;; Lisp Objects
+  +opcode-get-lisp-object+
+  +opcode-put-lisp-object+)
 
 
 ;;;; Debug Config

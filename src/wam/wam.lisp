@@ -147,6 +147,10 @@
 ;;; consecutive cells.  The first cell is the car of the list, the second one is
 ;;; the cdr.
 ;;;
+;;; LISP-OBJECT cell values are simply arbitrary objects in memory.  They are
+;;; compared with `eql` during the unification process, so we don't actually
+;;; care WHAT they are, exactly.
+;;;
 ;;; STACK cell values are special cases.  The WAM's main store is a combination
 ;;; of the heap, the stack, and registers.  Heap cells (and registers) are those
 ;;; detailed above, but stack cells can also hold numbers like the continuation
@@ -203,6 +207,7 @@
   (define-unsafe %unsafe-functor-value functor)
   (define-unsafe %unsafe-constant-value functor)
   (define-unsafe %unsafe-list-value store-index)
+  (define-unsafe %unsafe-lisp-object-value t)
   (define-unsafe %unsafe-stack-value stack-word))
 
 
@@ -214,6 +219,7 @@
     (:functor +cell-type-functor+)
     (:constant +cell-type-constant+)
     (:list +cell-type-list+)
+    (:lisp-object +cell-type-lisp-object+)
     ((t) t)))
 
 (defun %type-designator-accessor (designator)
@@ -223,7 +229,8 @@
     (:reference '%unsafe-reference-value)
     (:functor '%unsafe-functor-value)
     (:constant '%unsafe-constant-value)
-    (:list '%unsafe-list-value)))
+    (:list '%unsafe-list-value)
+    (:lisp-object '%unsafe-lisp-object-value)))
 
 
 (defmacro cell-typecase ((wam address &optional address-symbol) &rest clauses)
@@ -1007,8 +1014,12 @@
                  wam-unification-stack-empty-p))
 
 
-(defun* wam-unification-stack-push! ((wam wam) (address store-index))
-  (vector-push-extend address (wam-unification-stack wam)))
+(defun* wam-unification-stack-push!
+    ((wam wam)
+     (address1 store-index)
+     (address2 store-index))
+  (vector-push-extend address1 (wam-unification-stack wam))
+  (vector-push-extend address2 (wam-unification-stack wam)))
 
 (defun* wam-unification-stack-pop! ((wam wam))
   (:returns store-index)

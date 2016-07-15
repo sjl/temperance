@@ -11,7 +11,7 @@
        (init (off q))
        (init (off r))
        (init (off s))
-       (init (step num1)))
+       (init (step 1)))
 
 
 (rule (next (on p))
@@ -122,13 +122,13 @@
   (succ ?x ?y))
 
 
-(facts (succ num1 num2)
-       (succ num2 num3)
-       (succ num3 num4)
-       (succ num4 num5)
-       (succ num5 num6)
-       (succ num6 num7)
-       (succ num7 num8))
+(facts (succ 1 2)
+       (succ 2 3)
+       (succ 3 4)
+       (succ 4 5)
+       (succ 5 6)
+       (succ 6 7)
+       (succ 7 8))
 
 (facts (legal robot a)
        (legal robot b)
@@ -136,23 +136,23 @@
        (legal robot d))
 
 
-(rule (goal robot num100)
+(rule (goal robot 100)
   (true (on p))
   (true (on q))
   (true (on r))
   (true (on s)))
-(rule (goal robot num0)
+(rule (goal robot 0)
   (true (off p)))
-(rule (goal robot num0)
+(rule (goal robot 0)
   (true (off q)))
-(rule (goal robot num0)
+(rule (goal robot 0)
   (true (off r)))
-(rule (goal robot num0)
+(rule (goal robot 0)
   (true (off s)))
 
 
 (rule (terminal)
-  (true (step num8)))
+  (true (step 8)))
 (rule (terminal)
   (true (on p))
   (true (on q))
@@ -247,7 +247,7 @@
           ; (format t "Searching: ~S (~D remaining)~%" state (length remaining))
           (if (terminalp)
             (prog1
-                (if (and (not exhaust) (eq 'num100 (goal-value *role*)))
+                (if (and (not exhaust) (= 100 (goal-value *role*)))
                   (list state (reverse path))
                   nil)
               (clear-state))

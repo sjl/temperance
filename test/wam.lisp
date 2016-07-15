@@ -486,3 +486,28 @@
        (?what ((move a b) (move a c) (move b c)
                (move a b)
                (move c a) (move c b) (move a b)))))))
+
+(test numbers
+  (with-fresh-database
+    (push-logic-frame-with
+      (rule (= ?x ?x))
+      (fact (foo 1))
+      (fact (bar 2))
+      (rule (baz ?x) (foo ?x))
+      (rule (baz ?x) (bar ?x))
+      (rule (lol ?x)
+        (foo ?x)
+        (bar ?x)))
+
+    (should-return
+      ((foo ?what)
+       (?what 1))
+      ((bar ?what)
+       (?what 2))
+      ((baz ?what)
+       (?what 1)
+       (?what 2))
+      ((foo 0) fail)
+      ((lol ?anything) fail)
+      ((= 0 1) fail)
+      ((= 0 0) empty))))

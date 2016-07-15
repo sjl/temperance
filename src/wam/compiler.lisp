@@ -10,6 +10,10 @@
   (and (symbolp term)
        (char= (char (symbol-name term) 0) #\?)))
 
+(defun lisp-object-to-string (o)
+  (with-output-to-string (str)
+    (print-unreadable-object (o str :type t :identity t))))
+
 
 ;;;; Registers
 (declaim (inline register-type register-number make-register register=
@@ -133,6 +137,9 @@
   ((head :accessor node-head :type node :initarg :head)
    (tail :accessor node-tail :type node :initarg :tail)))
 
+(defclass lisp-object-node (vanilla-node)
+  ((object :accessor node-object :type t :initarg :object)))
+
 
 ; todo functor -> fname
 (defun* make-top-level-node ((functor symbol) (arity arity) (arguments list))
@@ -160,6 +167,10 @@
 (defun* make-list-node ((head node) (tail node))
   (:returns list-node)
   (values (make-instance 'list-node :head head :tail tail)))
+
+(defun* make-lisp-object-node ((object t))
+  (:returns lisp-object-node)
+  (values (make-instance 'lisp-object-node :object object)))
 
 
 (defgeneric* node-children (node)
@@ -242,6 +253,11 @@
                      (dump-node element))))
   (format t ">"))
 
+(defmethod dump-node ((node lisp-object-node))
+  (format t "~VA#<LISP OBJECT " *dump-node-indent* "")
+  (print-node-register node t)
+  (format t "~A>" (lisp-object-to-string (node-object node))))
+
 (defmethod dump-node ((node top-level-node))
   (format t "#<~A/~D" (node-functor node) (node-arity node))
   (let ((*dump-node-indent* 4))
@@ -283,7 +299,7 @@
      (destructuring-bind (functor . arguments) term
        (when (not (symbolp functor))
          (error
-           "Cannot parse top-level term ~S because ~S is not a valid functor."
+           "Cannot parse term ~S because ~S is not a valid functor."
            term functor))
        (case functor
          (list (parse-list arguments))
@@ -291,7 +307,9 @@
          (t (make-structure-node functor
                                  (length arguments)
                                  (mapcar #'parse arguments))))))
-    (t (error "Cannot parse form ~S into a Prolog term." term))))
+    ((numberp term)
+     (make-lisp-object-node term))
+    (t (error "Cannot parse term ~S into a Prolog term." term))))
 
 (defun* parse-top-level (term)
   (:returns top-level-node)
@@ -636,6 +654,10 @@
   (set-when-unbound node 'register
     (allocate-nonvariable-register state)))
 
+(defmethod allocate-register ((node lisp-object-node) state)
+  (set-when-unbound node 'register
+    (allocate-nonvariable-register state)))
+
 
 (defun* allocate-argument-registers ((node top-level-node))
   (loop :for argument :in (node-arguments node)
@@ -729,6 +751,9 @@
   ((head :accessor assignment-head :type register :initarg :head)
    (tail :accessor assignment-tail :type register :initarg :tail)))
 
+(defclass lisp-object-assignment (register-assignment)
+  ((object :accessor assignment-object :type t :initarg :object)))
+
 
 (defmethod print-object ((assignment structure-assignment) stream)
   (print-unreadable-object (assignment stream :type nil :identity nil)
@@ -750,6 +775,12 @@
             (register-to-string (assignment-register assignment))
             (register-to-string (assignment-head assignment))
             (register-to-string (assignment-tail assignment)))))
+
+(defmethod print-object ((assignment lisp-object-assignment) stream)
+  (print-unreadable-object (assignment stream :type nil :identity nil)
+    (format stream "~A = ~A"
+            (register-to-string (assignment-register assignment))
+            (lisp-object-to-string (assignment-object assignment)))))
 
 
 (defgeneric* node-flatten (node)
@@ -775,6 +806,11 @@
                          :register (node-register node)
                          :head (node-register (node-head node))
                          :tail (node-register (node-tail node)))))
+
+(defmethod node-flatten ((node lisp-object-node))
+  (values (make-instance 'lisp-object-assignment
+                         :register (node-register node)
+                         :object (node-object node))))
 
 
 (defun* flatten-breadth-first ((tree top-level-node))
@@ -834,6 +870,8 @@
 
 (defclass list-token (register-token) ())
 
+(defclass lisp-object-token (register-token)
+  ((object :accessor token-object :type t :initarg :object)))
 
 (defclass procedure-call-token ()
   ((functor :accessor token-functor :type symbol :initarg :functor)
@@ -870,6 +908,12 @@
 (defmethod print-object ((token list-token) stream)
   (print-unreadable-object (token stream :identity nil :type nil)
     (format stream "~A = LIST" (register-to-string (token-register token)))))
+
+(defmethod print-object ((token lisp-object-token) stream)
+  (print-unreadable-object (token stream :identity nil :type nil)
+    (format stream "~A = ~A"
+            (register-to-string (token-register token))
+            (lisp-object-to-string (token-object token)))))
 
 (defmethod print-object ((token call-token) stream)
   (print-unreadable-object (token stream :identity nil :type nil)
@@ -909,6 +953,10 @@
         (make-register-token (assignment-head assignment))
         (make-register-token (assignment-tail assignment))))
 
+(defmethod tokenize-assignment ((assignment lisp-object-assignment))
+  (list (make-instance 'lisp-object-token
+                       :register (assignment-register assignment)
+                       :object (assignment-object assignment))))
 
 (defun* tokenize-assignments ((assignments list))
   (:returns list)
@@ -1059,6 +1107,12 @@
     (:program :get-list)
     (:query :put-list)))
 
+(defun* find-opcode-lisp-object ((mode keyword))
+  (:returns keyword)
+  (ecase mode
+    (:program :get-lisp-object)
+    (:query :put-lisp-object)))
+
 (defun* find-opcode-structure ((mode keyword))
   (:returns keyword)
   (ecase mode
@@ -1133,6 +1187,10 @@
            (push register seen)
            (push-instruction (find-opcode-list mode)
                              register))
+         (handle-lisp-object (register object)
+           ;; OP object register
+           (push register seen)
+           (push-instruction (find-opcode-lisp-object mode) object register))
          (handle-cut ()
            (push-instruction :cut))
          (handle-procedure-call (functor arity is-jump)
@@ -1174,6 +1232,9 @@
                                  (token-arity token)))
              (list-token
                (handle-list (token-register token)))
+             (lisp-object-token
+               (handle-lisp-object (token-register token)
+                                   (token-object token)))
              (cut-token
                (handle-cut))
              (jump-token
@@ -1505,9 +1566,11 @@
     (:subterm-void           +opcode-subterm-void+)
     (:put-constant           +opcode-put-constant+)
     (:get-constant           +opcode-get-constant+)
+    (:subterm-constant       +opcode-subterm-constant+)
     (:get-list               +opcode-get-list+)
     (:put-list               +opcode-put-list+)
-    (:subterm-constant       +opcode-subterm-constant+)
+    (:get-lisp-object        +opcode-get-lisp-object+)
+    (:put-lisp-object        +opcode-put-lisp-object+)
     (:jump                   +opcode-jump+)
     (:call                   +opcode-call+)
     (:dynamic-jump           +opcode-dynamic-jump+)
@@ -1524,11 +1587,9 @@
 (defun* render-argument (argument)
   (:returns code-word)
   (etypecase argument
-    ;; todo: simplify this to a single `if` once the store is fully split
     (null 0) ; ugly choice point args that'll be filled later...
     (register (register-number argument)) ; bytecode just needs register numbers
-    (functor argument) ; functors just get literally included
-    (number argument))) ; just a numeric argument, e.g. alloc 0
+    (t argument))) ; everything else just gets shoved right into the array
 
 (defun* render-bytecode ((store generic-code-store)
                          (instructions circle)

@@ -45,17 +45,20 @@
   (wam-heap-push! wam +cell-type-constant+ constant))
 
 
-(defun* functors-match-p ((f1 functor)
-                          (f2 functor))
+(defun* functors-match-p ((f1 functor) (f2 functor))
   (:returns boolean)
   "Return whether the two functor cell values represent the same functor."
   (eq f1 f2))
 
-(defun* constants-match-p ((c1 functor)
-                           (c2 functor))
+(defun* constants-match-p ((c1 functor) (c2 functor))
   (:returns boolean)
-  "Return whether the two constant cells represent the same functor."
+  "Return whether the two constant cell values unify."
   (eq c1 c2))
+
+(defun* lisp-objects-match-p ((o1 t) (o2 t))
+  (:returns boolean)
+  "Return whether the two lisp object cells unify."
+  (eql o1 o2))
 
 
 ;;;; "Ancillary" Functions
@@ -174,63 +177,72 @@
     (t (error "At least one cell must be an unbound reference when binding."))))
 
 (defun* unify! ((wam wam) (a1 store-index) (a2 store-index))
-  (wam-unification-stack-push! wam a1)
-  (wam-unification-stack-push! wam a2)
   (setf (wam-fail wam) nil)
-  ;; TODO: refactor this horror show.
+  (wam-unification-stack-push! wam a1 a2)
+
   (until (or (wam-fail wam)
              (wam-unification-stack-empty-p wam))
     (let* ((d1 (deref wam (wam-unification-stack-pop! wam)))
            (d2 (deref wam (wam-unification-stack-pop! wam)))
            (t1 (wam-store-type wam d1))
            (t2 (wam-store-type wam d2)))
-      (when (not (= d1 d2))
-        (cond
-          ;; If at least one is a reference, bind them.
-          ;;
-          ;; We know that any references we see here will be unbound because
-          ;; we deref'ed them above.
-          ((or (cell-type= t1 :reference)
-               (cell-type= t2 :reference))
-           (bind! wam d1 d2))
+      (macrolet ((both (cell-type-designator)
+                   `(and
+                     (cell-type= t1 ,cell-type-designator)
+                     (cell-type= t2 ,cell-type-designator)))
+                 (either (cell-type-designator)
+                   `(or
+                     (cell-type= t1 ,cell-type-designator)
+                     (cell-type= t2 ,cell-type-designator))))
+        (flet ((match-values (predicate)
+                 (when (not (funcall predicate
+                                     (wam-store-value wam d1)
+                                     (wam-store-value wam d2)))
+                   (backtrack! wam))))
+          (when (not (= d1 d2))
+            (cond
+              ;; If at least one is a reference, bind them.
+              ;;
+              ;; We know that any references we see here will be unbound because
+              ;; we deref'ed them above.
+              ((either :reference)
+               (bind! wam d1 d2))
 
-          ;; Otherwise if they're both constants, make sure they match.
-          ((and (cell-type= t1 :constant)
-                (cell-type= t2 :constant))
-           (let ((c1 (wam-store-value wam d1))
-                 (c2 (wam-store-value wam d2)))
-             (when (not (constants-match-p c1 c2))
-               (backtrack! wam))))
+              ;; Otherwise if they're both constants or lisp objects, make sure
+              ;; they match exactly.
+              ((both :constant) (match-values #'constants-match-p))
+              ((both :lisp-object) (match-values #'lisp-objects-match-p))
 
-          ;; Otherwise if they're both lists, unify their contents.
-          ((and (cell-type= t1 :list)
-                (cell-type= t2 :list))
-           (wam-unification-stack-push! wam (wam-store-value wam d1))
-           (wam-unification-stack-push! wam (wam-store-value wam d2))
-           (wam-unification-stack-push! wam (1+ (wam-store-value wam d1)))
-           (wam-unification-stack-push! wam (1+ (wam-store-value wam d2))))
+              ;; Otherwise if they're both lists, unify their contents.
+              ((both :list)
+               (wam-unification-stack-push! wam
+                                            (wam-store-value wam d1)
+                                            (wam-store-value wam d2))
+               (wam-unification-stack-push! wam
+                                            (1+ (wam-store-value wam d1))
+                                            (1+ (wam-store-value wam d2))))
 
-          ;; Otherwise if they're both structures, make sure they match and
-          ;; then schedule their subterms to be unified.
-          ((and (cell-type= t1 :structure)
-                (cell-type= t2 :structure))
-           (let* ((s1 (wam-store-value wam d1)) ; find where they
-                  (s2 (wam-store-value wam d2)) ; start on the heap
-                  (f1 (wam-store-value wam s1)) ; grab the
-                  (f2 (wam-store-value wam s2))) ; functors
-             (if (functors-match-p f1 f2)
-               ;; If the functors match, push their pairs of arguments onto
-               ;; the stack to be unified.
-               (loop :with arity = (cdr f1)
-                     :for i :from 1 :to arity :do
-                     (wam-unification-stack-push! wam (+ s1 i))
-                     (wam-unification-stack-push! wam (+ s2 i)))
-               ;; Otherwise we're hosed.
-               (backtrack! wam))))
+              ;; Otherwise if they're both structures, make sure they match and
+              ;; then schedule their subterms to be unified.
+              ((both :structure)
+               (let* ((s1 (wam-store-value wam d1)) ; find where they
+                      (s2 (wam-store-value wam d2)) ; start on the heap
+                      (f1 (wam-store-value wam s1)) ; grab the
+                      (f2 (wam-store-value wam s2))) ; functors
+                 (if (functors-match-p f1 f2)
+                   ;; If the functors match, push their pairs of arguments onto
+                   ;; the stack to be unified.
+                   (loop :with arity = (cdr f1)
+                         :repeat arity
+                         :for subterm1 :from (1+ s1)
+                         :for subterm2 :from (1+ s2)
+                         :do (wam-unification-stack-push! wam subterm1 subterm2))
+                   ;; Otherwise we're hosed.
+                   (backtrack! wam))))
 
-          ;; Otherwise we're looking at two different kinds of cells, and are
-          ;; just totally hosed.  Backtrack.
-          (t (backtrack! wam)))))))
+              ;; Otherwise we're looking at two different kinds of cells, and are
+              ;; just totally hosed.  Backtrack.
+              (t (backtrack! wam)))))))))
 
 
 ;;;; Instruction Definition
@@ -338,6 +350,7 @@
                            (wam-heap-pointer wam))
   (setf (wam-mode wam) :write))
 
+
 (define-instructions (%put-variable-local %put-variable-stack)
     ((wam wam)
      (register register-index)
@@ -426,6 +439,7 @@
 
     ;; Otherwise we can't unify.
     (t (backtrack! wam))))
+
 
 (define-instructions (%get-variable-local %get-variable-stack)
     ((wam wam)
@@ -638,6 +652,42 @@
       (tidy-trail! wam))))
 
 
+;;;; Lisp Object Instructions
+(declaim (inline %%match-lisp-object))
+
+
+(defun* %%match-lisp-object ((wam wam)
+                             (object t)
+                             (address store-index))
+  (cell-typecase (wam (deref wam address) address)
+    ;; If the thing points at a reference (unbound, because we deref'ed) we just
+    ;; bind it.
+    (:reference
+     (wam-set-store-cell! wam address +cell-type-lisp-object+ object)
+     (trail! wam address))
+
+    ;; If this is a lisp object, "unify" them with eql.
+    ((:lisp-object contents)
+     (when (not (lisp-objects-match-p object contents))
+       (backtrack! wam)))
+
+    ;; Otherwise we can't unify.
+    (t (backtrack! wam))))
+
+
+(define-instruction (%get-lisp-object)
+    ((wam wam)
+     (object t)
+     (register register-index))
+  (%%match-lisp-object wam object register))
+
+(define-instruction (%put-lisp-object)
+    ((wam wam)
+     (object t)
+     (register register-index))
+  (wam-set-local-register! wam register +cell-type-lisp-object+ object))
+
+
 ;;;; Constant Instructions
 (declaim (inline %%match-constant))
 
@@ -652,7 +702,7 @@
      (trail! wam address))
 
     ((:constant c)
-     (when (not (eq constant c))
+     (when (not (constants-match-p constant c))
        (backtrack! wam)))
 
     (t (backtrack! wam))))
@@ -662,9 +712,7 @@
     ((wam wam)
      (constant functor)
      (register register-index))
-  (wam-set-local-register! wam register +cell-type-constant+ constant)
-  ; todo we can probably elide this because constants never have subterms...
-  (setf (wam-mode wam) :write))
+  (wam-set-local-register! wam register +cell-type-constant+ constant))
 
 (define-instruction (%get-constant)
     ((wam wam)
@@ -715,6 +763,7 @@
                        (loop :repeat arity
                              :for subterm :from (+ address 1)
                              :collect (recur subterm)))))
+             ((:lisp-object o) o)
              (t (error "What to heck is this?")))))
       (mapcar #'recur addresses))))
 
@@ -838,6 +887,9 @@
             (#.+opcode-put-constant+      :instruction %put-constant)
             (#.+opcode-get-constant+      :instruction %get-constant)
             (#.+opcode-subterm-constant+  :instruction %subterm-constant)
+            ;; Lisp Objects
+            (#.+opcode-put-lisp-object+   :instruction %put-lisp-object)
+            (#.+opcode-get-lisp-object+   :instruction %get-lisp-object)
             ;; List
             (#.+opcode-put-list+  :instruction %put-list)
             (#.+opcode-get-list+  :instruction %get-list)

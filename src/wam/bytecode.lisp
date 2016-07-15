@@ -43,7 +43,10 @@
     (+opcode-subterm-constant+ "SUBTERM-CONSTANT")
 
     (+opcode-get-list+ "GET-LIST")
-    (+opcode-put-list+ "PUT-LIST")))
+    (+opcode-put-list+ "PUT-LIST")
+
+    (+opcode-get-lisp-object+ "GET-LISP-OBJECT")
+    (+opcode-put-lisp-object+ "PUT-LISP-OBJECT")))
 
 (defun* opcode-short-name ((opcode opcode))
   (:returns string)
@@ -86,7 +89,10 @@
     (+opcode-subterm-constant+ "UCON")
 
     (+opcode-get-list+ "GLST")
-    (+opcode-put-list+ "PLST")))
+    (+opcode-put-list+ "PLST")
+
+    (+opcode-get-lisp-object+ "GLOB")
+    (+opcode-put-lisp-object+ "PLOB")))
 
 
 ;;;; Instructions
@@ -134,7 +140,10 @@
   (#.+opcode-subterm-constant+ 2)
 
   (#.+opcode-get-list+ 2)
-  (#.+opcode-put-list+ 2))
+  (#.+opcode-put-list+ 2)
+
+  (#.+opcode-get-lisp-object+ 3)
+  (#.+opcode-put-lisp-object+ 3))
 
 
 ;;;; Cells
@@ -146,6 +155,7 @@
   (#.+cell-type-functor+ "FUNCTOR")
   (#.+cell-type-constant+ "CONSTANT")
   (#.+cell-type-list+ "LIST")
+  (#.+cell-type-lisp-object+ "LISP-OBJECT")
   (#.+cell-type-stack+ "STACK"))
 
 (define-lookup cell-type-short-name (type cell-type string "")
@@ -156,5 +166,6 @@
   (#.+cell-type-functor+ "FUN")
   (#.+cell-type-constant+ "CON")
   (#.+cell-type-list+ "LIS")
+  (#.+cell-type-lisp-object+ "OBJ")
   (#.+cell-type-stack+ "STK"))
 
