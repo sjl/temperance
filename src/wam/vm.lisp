@@ -9,11 +9,11 @@
                  constants-match-p))
 
 
-(defun* push-unbound-reference! ((wam wam))
+(defun push-unbound-reference! (wam)
   "Push a new unbound reference cell onto the heap, returning its address."
   (wam-heap-push! wam +cell-type-reference+ (wam-heap-pointer wam)))
 
-(defun* push-new-structure! ((wam wam))
+(defun push-new-structure! (wam)
   "Push a new structure cell onto the heap, returning its address.
 
   The structure cell's value will point at the next address, so make sure you
@@ -22,7 +22,7 @@
   "
   (wam-heap-push! wam +cell-type-structure+ (1+ (wam-heap-pointer wam))))
 
-(defun* push-new-list! ((wam wam))
+(defun push-new-list! (wam)
   "Push a new list cell onto the heap, returning its address.
 
   The list cell's value will point at the next address, so make sure you push
@@ -31,28 +31,27 @@
   "
   (wam-heap-push! wam +cell-type-list+ (1+ (wam-heap-pointer wam))))
 
-(defun* push-new-functor! ((wam wam) (functor fname) (arity arity))
+(defun push-new-functor! (wam functor arity)
   "Push a new functor cell pair onto the heap, returning its address."
   (prog1
       (wam-heap-push! wam +cell-type-functor+ functor)
     (wam-heap-push! wam +cell-type-lisp-object+ arity)))
 
-(defun* push-new-constant! ((wam wam) (constant fname))
+(defun push-new-constant! (wam constant)
   "Push a new constant cell onto the heap, returning its address."
   (wam-heap-push! wam +cell-type-constant+ constant))
 
 
-(defun* functors-match-p ((f1 fname) (a1 arity)
-                          (f2 fname) (a2 arity))
+(defun functors-match-p (f1 a1 f2 a2)
   "Return whether the two functor cell values represent the same functor."
   (and (eq f1 f2)
        (= a1 a2)))
 
-(defun* constants-match-p ((c1 fname) (c2 fname))
+(defun constants-match-p (c1 c2)
   "Return whether the two constant cell values unify."
   (eq c1 c2))
 
-(defun* lisp-objects-match-p ((o1 t) (o2 t))
+(defun lisp-objects-match-p (o1 o2)
   "Return whether the two lisp object cells unify."
   (eql o1 o2))
 
@@ -61,7 +60,7 @@
 (declaim (inline deref unbind! trail!))
 
 
-(defun* backtrack! ((wam wam))
+(defun backtrack! (wam)
   "Backtrack after a failure."
   (if (wam-backtrack-pointer-unset-p wam)
     (setf (wam-fail wam) t)
@@ -69,12 +68,12 @@
           (wam-cut-pointer wam) (wam-stack-choice-cc wam)
           (wam-backtracked wam) t)))
 
-(defun* trail! ((wam wam) (address store-index))
+(defun trail! (wam address)
   "Push the given address onto the trail (but only if necessary)."
   (when (< address (wam-heap-backtrack-pointer wam))
     (wam-trail-push! wam address)))
 
-(defun* unbind! ((wam wam) (address store-index))
+(defun unbind! (wam address)
   "Unbind the reference cell at `address`.
 
   No error checking is done, so please don't try to unbind something that's not
@@ -83,14 +82,12 @@
   "
   (wam-set-store-cell! wam address +cell-type-reference+ address))
 
-(defun* unwind-trail! ((wam wam)
-                       (trail-start trail-index)
-                       (trail-end trail-index))
+(defun unwind-trail! (wam trail-start trail-end)
   "Unbind all the things in the given range of the trail."
   (loop :for i :from trail-start :below trail-end :do
         (unbind! wam (wam-trail-value wam i))))
 
-(defun* tidy-trail! ((wam wam))
+(defun tidy-trail! (wam)
   (with-accessors ((tr wam-trail-pointer)
                    (h wam-heap-pointer)
                    (hb wam-heap-backtrack-pointer)
@@ -114,7 +111,7 @@
                 (wam-trail-value wam (1- tr)))
           (decf tr))))))
 
-(defun* deref ((wam wam) (address store-index))
+(defun deref (wam address)
   "Dereference the address in the WAM store to its eventual destination.
 
   If the address is a variable that's bound to something, that something will be
@@ -130,7 +127,7 @@
                           (setf address ref))) ; bound ref
       (t (return address))))) ; non-ref
 
-(defun* bind! ((wam wam) (address-1 store-index) (address-2 store-index))
+(defun bind! (wam address-1 address-2)
   "Bind the unbound reference cell to the other.
 
   `bind!` takes two addresses as arguments.  You are expected to have `deref`ed
@@ -171,7 +168,7 @@
     ;; wut
     (t (error "At least one cell must be an unbound reference when binding."))))
 
-(defun* unify! ((wam wam) (a1 store-index) (a2 store-index))
+(defun unify! (wam a1 a2)
   (setf (wam-fail wam) nil)
   (wam-unification-stack-push! wam a1 a2)
 
@@ -268,7 +265,7 @@
 ;;;
 ;;; To make the process of defining these two "variants" less excruciating we
 ;;; have these two macros.  `define-instruction` (singular) is just a little
-;;; sugar around `defun*`, for those instructions that don't deal with
+;;; sugar around `defun`, for those instructions that don't deal with
 ;;; arguments.
 ;;;
 ;;; `define-instructions` (plural) is the awful one.  You pass it a pair of
@@ -290,13 +287,14 @@
     ((name &optional should-inline) lambda-list &body body)
   "Define an instruction function.
 
-  This is just sugar over `defun*`.
+  This is just sugar over `defun`.
 
   "
   `(progn
     (declaim (,(if should-inline 'inline 'notinline) ,name))
-    (defun* ,name ,lambda-list
-      ,@body)))
+    (defun ,name ,lambda-list
+      ,@body
+      nil)))
 
 (defmacro define-instructions
     ((local-name stack-name &optional should-inline) lambda-list &body body)
@@ -329,19 +327,13 @@
 
 
 ;;;; Query Instructions
-(define-instruction (%put-structure)
-    ((wam wam)
-     (functor fname)
-     (arity arity)
-     (register register-index))
+(define-instruction (%put-structure) (wam functor arity register)
   (wam-set-local-register! wam register
                            +cell-type-structure+
                            (push-new-functor! wam functor arity))
   (setf (wam-mode wam) :write))
 
-(define-instruction (%put-list)
-    ((wam wam)
-     (register register-index))
+(define-instruction (%put-list) (wam register)
   (wam-set-local-register! wam register
                            +cell-type-list+
                            (wam-heap-pointer wam))
@@ -349,27 +341,20 @@
 
 
 (define-instructions (%put-variable-local %put-variable-stack)
-    ((wam wam)
-     (register register-index)
-     (argument register-index))
+    (wam register argument)
   (let ((ref (push-unbound-reference! wam)))
     (%wam-copy-to-register% wam register ref)
     (wam-copy-to-local-register! wam argument ref)
     (setf (wam-mode wam) :write)))
 
 (define-instructions (%put-value-local %put-value-stack)
-    ((wam wam)
-     (register register-index)
-     (argument register-index))
+    (wam register argument)
   (wam-copy-to-local-register! wam argument (%wam-register% wam register))
   (setf (wam-mode wam) :write))
 
 
 ;;;; Program Instructions
-(define-instruction (%get-structure) ((wam wam)
-                                      (functor fname)
-                                      (arity arity)
-                                      (register register-index))
+(define-instruction (%get-structure) (wam functor arity register)
   (cell-typecase (wam (deref wam register) address)
     ;; If the register points at an unbound reference cell, we push three new
     ;; cells onto the heap:
@@ -417,8 +402,7 @@
     ;; Otherwise we can't unify, so backtrack.
     (t (backtrack! wam))))
 
-(define-instruction (%get-list) ((wam wam)
-                                 (register register-index))
+(define-instruction (%get-list) (wam register)
   (cell-typecase (wam (deref wam register) address)
     ;; If the register points at a reference (unbound, because we deref'ed) we
     ;; bind it to a list and flip into write mode to write the upcoming two
@@ -437,22 +421,17 @@
 
 
 (define-instructions (%get-variable-local %get-variable-stack)
-    ((wam wam)
-     (register register-index)
-     (argument register-index))
+    (wam register argument)
   (%wam-copy-to-register% wam register argument))
 
 (define-instructions (%get-value-local %get-value-stack)
-    ((wam wam)
-     (register register-index)
-     (argument register-index))
+    (wam register argument)
   (unify! wam register argument))
 
 
 ;;;; Subterm Instructions
 (define-instructions (%subterm-variable-local %subterm-variable-stack)
-    ((wam wam)
-     (register register-index))
+    (wam register)
   (%wam-copy-to-register% wam register
                           (ecase (wam-mode wam)
                             (:read (wam-subterm wam))
@@ -460,8 +439,7 @@
   (incf (wam-subterm wam)))
 
 (define-instructions (%subterm-value-local %subterm-value-stack)
-    ((wam wam)
-     (register register-index))
+    (wam register)
   (ecase (wam-mode wam)
     (:read (unify! wam register (wam-subterm wam)))
     (:write (wam-heap-push! wam
@@ -469,7 +447,7 @@
                             (%wam-register-value% wam register))))
   (incf (wam-subterm wam)))
 
-(define-instruction (%subterm-void) ((wam wam) (n arity))
+(define-instruction (%subterm-void) (wam n)
   (ecase (wam-mode wam)
     (:read (incf (wam-subterm wam) n))
     (:write (repeat n
@@ -480,11 +458,7 @@
 (declaim (inline %%procedure-call %%dynamic-procedure-call))
 
 
-(defun* %%procedure-call ((wam wam)
-                          (functor fname)
-                          (arity arity)
-                          (program-counter-increment instruction-size)
-                          (is-tail boolean))
+(defun %%procedure-call (wam functor arity program-counter-increment is-tail)
   (let* ((target (wam-code-label wam functor arity)))
     (if (not target)
       ;; Trying to call an unknown procedure.
@@ -502,15 +476,15 @@
               (wam-program-counter wam) ; jump
               target)))))
 
-(defun* %%dynamic-procedure-call ((wam wam) (is-tail boolean))
-  (flet*
+(defun %%dynamic-procedure-call (wam is-tail)
+  (flet
     ((%go (functor arity)
        (if is-tail
          (%%procedure-call
            wam functor arity (instruction-size +opcode-dynamic-jump+) t)
          (%%procedure-call
            wam functor arity (instruction-size +opcode-dynamic-call+) nil)))
-     (load-arguments ((n arity) start-address)
+     (load-arguments (n start-address)
        (loop :for arg :from 0 :below n
              :for source :from start-address
              :do (wam-copy-to-local-register! wam arg source))))
@@ -536,29 +510,29 @@
       (t (error "Cannot dynamically call something other than a structure.")))))
 
 
-(define-instruction (%jump) ((wam wam) (functor fname) (arity arity))
+(define-instruction (%jump) (wam functor arity)
   (%%procedure-call wam functor arity
                     (instruction-size +opcode-jump+)
                     t))
 
-(define-instruction (%call) ((wam wam) (functor fname) (arity arity))
+(define-instruction (%call) (wam functor arity)
   (%%procedure-call wam functor arity
                     (instruction-size +opcode-call+)
                     nil))
 
 
-(define-instruction (%dynamic-call) ((wam wam))
+(define-instruction (%dynamic-call) (wam)
   (%%dynamic-procedure-call wam nil))
 
-(define-instruction (%dynamic-jump) ((wam wam))
+(define-instruction (%dynamic-jump) (wam)
   (%%dynamic-procedure-call wam t))
 
 
-(define-instruction (%proceed) ((wam wam))
+(define-instruction (%proceed) (wam)
   (setf (wam-program-counter wam) ; P <- CP
         (wam-continuation-pointer wam)))
 
-(define-instruction (%allocate) ((wam wam) (n stack-frame-argcount))
+(define-instruction (%allocate) (wam n)
   (let ((old-e (wam-environment-pointer wam))
         (new-e (wam-stack-top wam)))
     (wam-stack-ensure-size wam (+ new-e 4 n))
@@ -568,7 +542,7 @@
           (wam-stack-word wam (+ new-e 3)) n ; N
           (wam-environment-pointer wam) new-e))) ; E <- new-e
 
-(define-instruction (%deallocate) ((wam wam))
+(define-instruction (%deallocate) (wam)
   (setf (wam-continuation-pointer wam) (wam-stack-frame-cp wam)
         (wam-environment-pointer wam) (wam-stack-frame-ce wam)
         (wam-cut-pointer wam) (wam-stack-frame-cut wam)))
@@ -578,8 +552,7 @@
 (declaim (inline reset-choice-point! restore-registers-from-choice-point!))
 
 
-(defun* reset-choice-point! ((wam wam)
-                             (b backtrack-pointer))
+(defun reset-choice-point! (wam b)
   (setf (wam-backtrack-pointer wam) b
 
         ;; The book is wrong here: when resetting HB we use the NEW value of B,
@@ -597,14 +570,13 @@
           +heap-start+
           (wam-stack-choice-h wam b))))
 
-(defun* restore-registers-from-choice-point! ((wam wam)
-                                              (b backtrack-pointer))
+(defun restore-registers-from-choice-point! (wam b)
   (loop :for register :from 0 :below (wam-stack-choice-n wam b)
         :for saved-register :from (wam-stack-choice-argument-address wam 0 b)
         :do (wam-copy-to-local-register! wam register saved-register)))
 
 
-(define-instruction (%try) ((wam wam) (next-clause code-index))
+(define-instruction (%try) (wam next-clause)
   (let ((new-b (wam-stack-top wam))
         (nargs (wam-number-of-arguments wam)))
     (wam-stack-ensure-size wam (+ new-b 8 nargs))
@@ -622,7 +594,7 @@
           :for n :from 0 :below nargs ; arg N in the choice point frame
           :do (wam-copy-to-stack-choice-argument! wam n i new-b))))
 
-(define-instruction (%retry) ((wam wam) (next-clause code-index))
+(define-instruction (%retry) (wam next-clause)
   (let ((b (wam-backtrack-pointer wam)))
     (restore-registers-from-choice-point! wam b)
     (unwind-trail! wam (wam-stack-choice-tr wam b) (wam-trail-pointer wam))
@@ -634,7 +606,7 @@
           (wam-heap-pointer wam) (wam-stack-choice-h wam b)
           (wam-heap-backtrack-pointer wam) (wam-heap-pointer wam))))
 
-(define-instruction (%trust) ((wam wam))
+(define-instruction (%trust) (wam)
   (let* ((b (wam-backtrack-pointer wam))
          (old-b (wam-stack-choice-cb wam b)))
     (restore-registers-from-choice-point! wam b)
@@ -645,7 +617,7 @@
           (wam-heap-pointer wam) (wam-stack-choice-h wam b))
     (reset-choice-point! wam old-b)))
 
-(define-instruction (%cut) ((wam wam))
+(define-instruction (%cut) (wam)
   (let ((current-choice-point (wam-backtrack-pointer wam))
         (previous-choice-point (wam-stack-frame-cut wam)))
     (when (< previous-choice-point current-choice-point)
@@ -657,9 +629,7 @@
 (declaim (inline %%match-lisp-object))
 
 
-(defun* %%match-lisp-object ((wam wam)
-                             (object t)
-                             (address store-index))
+(defun %%match-lisp-object (wam object address)
   (cell-typecase (wam (deref wam address) address)
     ;; If the thing points at a reference (unbound, because we deref'ed) we just
     ;; bind it.
@@ -676,16 +646,10 @@
     (t (backtrack! wam))))
 
 
-(define-instruction (%get-lisp-object)
-    ((wam wam)
-     (object t)
-     (register register-index))
+(define-instruction (%get-lisp-object) (wam object register)
   (%%match-lisp-object wam object register))
 
-(define-instruction (%put-lisp-object)
-    ((wam wam)
-     (object t)
-     (register register-index))
+(define-instruction (%put-lisp-object) (wam object register)
   (wam-set-local-register! wam register +cell-type-lisp-object+ object))
 
 
@@ -693,10 +657,7 @@
 (declaim (inline %%match-constant))
 
 
-(defun* %%match-constant
-    ((wam wam)
-     (constant fname)
-     (address store-index))
+(defun %%match-constant (wam constant address)
   (cell-typecase (wam (deref wam address) address)
     (:reference
      (wam-set-store-cell! wam address +cell-type-constant+ constant)
@@ -709,21 +670,13 @@
     (t (backtrack! wam))))
 
 
-(define-instruction (%put-constant)
-    ((wam wam)
-     (constant fname)
-     (register register-index))
+(define-instruction (%put-constant) (wam constant register)
   (wam-set-local-register! wam register +cell-type-constant+ constant))
 
-(define-instruction (%get-constant)
-    ((wam wam)
-     (constant fname)
-     (register register-index))
+(define-instruction (%get-constant) (wam constant register)
   (%%match-constant wam constant register))
 
-(define-instruction (%subterm-constant)
-    ((wam wam)
-     (constant fname))
+(define-instruction (%subterm-constant) (wam constant)
   (ecase (wam-mode wam)
     (:read (%%match-constant wam constant (wam-subterm wam)))
     (:write (push-new-constant! wam constant)))
@@ -731,7 +684,7 @@
 
 
 ;;;; Running
-(defun* extract-things ((wam wam) (addresses list))
+(defun extract-things (wam addresses)
   "Extract the things at the given store addresses.
 
   The things will be returned in the same order as the addresses were given.
@@ -767,7 +720,7 @@
              (t (error "What to heck is this?")))))
       (mapcar #'recur addresses))))
 
-(defun* extract-query-results ((wam wam) (vars list))
+(defun extract-query-results (wam vars)
   (let* ((addresses (loop :for var :in vars
                           ;; TODO: make this suck less
                           :for i :from (+ (wam-environment-pointer wam) 4)
@@ -853,7 +806,7 @@
       ,@(mapcar #'parse-opcode-clause clauses))))
 
 
-(defun* run ((wam wam) (done-thunk function) &optional (step *step*))
+(defun run (wam done-thunk &optional (step *step*))
   (loop
     :with code = (wam-code wam)
     :until (or (wam-fail wam) ; failure
@@ -920,11 +873,9 @@
             (error "Fell off the end of the program code store."))))
   (values))
 
-(defun* run-query ((wam wam)
-                   term
-                   &key
-                   ((result-function function)
-                    (lambda (results) (declare (ignore results)))))
+(defun run-query (wam term &key (result-function
+                                  (lambda (results)
+                                    (declare (ignore results)))))
   "Compile query `term` and run the instructions on the `wam`.
 
   Resets the heap, etc before running.

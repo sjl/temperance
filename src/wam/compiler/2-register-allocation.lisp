@@ -149,7 +149,7 @@
   (actual-arity 0 :type arity))
 
 
-(defun* find-variable ((state allocation-state) (variable symbol))
+(defun find-variable (state variable)
   "Return the register that already contains this variable, or `nil` otherwise."
   (or (when-let (r (position variable
                              (queue-contents
@@ -160,7 +160,7 @@
         (make-permanent-register s))
       nil))
 
-(defun* store-variable ((state allocation-state) (variable symbol))
+(defun store-variable (state variable)
   "Assign `variable` to the next available local register.
 
   It is assumed that `variable` is not already assigned to another register
@@ -174,7 +174,7 @@
     :local
     (1- (enqueue variable (allocation-state-local-registers state)))))
 
-(defun* ensure-variable ((state allocation-state) (variable symbol))
+(defun ensure-variable (state variable)
   (or (find-variable state variable)
       (store-variable state variable)))
 
@@ -185,17 +185,17 @@
       (setf (,accessor ,instance) ,value-form))))
 
 
-(defun* variable-anonymous-p ((state allocation-state) (variable symbol))
+(defun variable-anonymous-p (state variable)
   "Return whether `variable` is considered anonymous in `state`."
   (and (member variable (allocation-state-anonymous-variables state)) t))
 
 
-(defun* allocate-variable-register ((state allocation-state) (variable symbol))
+(defun allocate-variable-register (state variable)
   (if (variable-anonymous-p state variable)
     (make-anonymous-register)
     (ensure-variable state variable)))
 
-(defun* allocate-nonvariable-register ((state allocation-state))
+(defun allocate-nonvariable-register (state)
   "Allocate and return a register for something that's not a variable."
   ;; We need to allocate registers for things like structures and lists, but we
   ;; never need to look them up later (like we do with variables), so we'll just
@@ -233,15 +233,13 @@
                 (allocate-nonvariable-register state)))
 
 
-(defun* allocate-argument-registers ((node top-level-node))
+(defun allocate-argument-registers (node)
   (loop :for argument :in (top-level-node-arguments node)
         :for i :from 0
         :do (setf (node-register argument)
                   (make-register :argument i))))
 
-(defun* allocate-nonargument-registers ((node top-level-node)
-                                        (clause-props clause-properties)
-                                        &key nead)
+(defun allocate-nonargument-registers (node clause-props &key nead)
   ;; JESUS TAKE THE WHEEL
   (let*
       ((actual-arity (top-level-node-arity node))
@@ -282,9 +280,7 @@
           (allocate-register node allocation-state)
           (recur (append remaining (node-children node))))))))
 
-(defun* allocate-registers ((node top-level-node)
-                            (clause-props clause-properties)
-                            &key nead)
+(defun allocate-registers (node clause-props &key nead)
   (allocate-argument-registers node)
   (allocate-nonargument-registers node clause-props :nead nead))
 

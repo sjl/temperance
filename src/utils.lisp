@@ -158,13 +158,13 @@
   (size 0 :type fixnum))
 
 
-(defun* make-queue ()
+(defun make-queue ()
   (make-queue%))
 
-(defun* queue-empty-p ((q queue))
+(defun queue-empty-p (q)
   (zerop (queue-size q)))
 
-(defun* enqueue ((item t) (q queue))
+(defun enqueue (item q)
   (let ((cell (cons item nil)))
     (setf (queue-last q)
           (if (queue-empty-p q)
@@ -172,12 +172,12 @@
             (setf (cdr (queue-last q)) cell))))
   (incf (queue-size q)))
 
-(defun* dequeue ((q queue))
+(defun dequeue (q)
   (when (zerop (decf (queue-size q)))
     (setf (queue-last q) nil))
   (pop (queue-contents q)))
 
-(defun* queue-append ((q queue) (l list))
+(defun queue-append (q l)
   (loop :for item :in l
         :for size = (enqueue item q)
         :finally (return size)))
@@ -185,7 +185,7 @@
 
 ;;;; Lookup Tables
 (defmacro define-lookup
-    (name (key key-type value-type default) documentation &rest entries)
+    (name (key value-type default) documentation &rest entries)
   "Define a lookup function.
 
   This macro defines a function that looks up a result in a constant array.
@@ -201,8 +201,7 @@
   with that.
 
   `key` should be a symbol that will be used as the argument for the lookup
-  function.  `key-type` should be its type and should be a subtype of
-  (integer 0 some-small-number) if you want this to be efficient.
+  function.
 
   `value-type` should be the type of your results.
 
@@ -228,7 +227,7 @@
                           :collect (getf entries i default))))
           :test (lambda (x y) (declare (ignore x y)) t)) ; what could go wrong
         (declaim (inline ,name))
-        (defun* ,name ((,key ,key-type))
+        (defun ,name (,key)
           ,documentation
           (the ,value-type (aref ,table ,key)))))))
 

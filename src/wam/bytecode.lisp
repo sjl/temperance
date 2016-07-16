@@ -2,7 +2,7 @@
 
 
 ;;;; Opcodes
-(defun* opcode-name ((opcode opcode))
+(defun opcode-name (opcode)
   (eswitch (opcode)
     (+opcode-noop+ "NOOP")
 
@@ -47,7 +47,7 @@
     (+opcode-get-lisp-object+ "GET-LISP-OBJECT")
     (+opcode-put-lisp-object+ "PUT-LISP-OBJECT")))
 
-(defun* opcode-short-name ((opcode opcode))
+(defun opcode-short-name (opcode)
   (eswitch (opcode)
     (+opcode-noop+ "NOOP")
 
@@ -94,7 +94,7 @@
 
 
 ;;;; Instructions
-(define-lookup instruction-size (opcode opcode instruction-size 0)
+(define-lookup instruction-size (opcode instruction-size 0)
   "Return the size of an instruction for the given opcode.
 
   The size includes one word for the opcode itself and one for each argument.
@@ -145,7 +145,7 @@
 
 
 ;;;; Cells
-(define-lookup cell-type-name (type cell-type string "")
+(define-lookup cell-type-name (type string "")
   "Return the full name of a cell type."
   (#.+cell-type-null+ "NULL")
   (#.+cell-type-structure+ "STRUCTURE")
@@ -156,7 +156,7 @@
   (#.+cell-type-lisp-object+ "LISP-OBJECT")
   (#.+cell-type-stack+ "STACK"))
 
-(define-lookup cell-type-short-name (type cell-type string "")
+(define-lookup cell-type-short-name (type string "")
   "Return the short name of a cell type."
   (#.+cell-type-null+ "NUL")
   (#.+cell-type-structure+ "STR")

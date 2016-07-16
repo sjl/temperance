@@ -104,7 +104,7 @@
 ;;; on that rabbit hole).
 
 
-(defun* find-opcode-register ((first-seen boolean) (register register))
+(defun find-opcode-register (first-seen register)
   (let ((register-variant (when register
                             (ecase (register-type register)
                               ((:local :argument) :local)
@@ -120,24 +120,22 @@
         (:stack :subterm-value-stack)
         (:void :subterm-void)))))
 
-(defun* find-opcode-list ((mode keyword))
+(defun find-opcode-list (mode)
   (ecase mode
     (:program :get-list)
     (:query :put-list)))
 
-(defun* find-opcode-lisp-object ((mode keyword))
+(defun find-opcode-lisp-object (mode)
   (ecase mode
     (:program :get-lisp-object)
     (:query :put-lisp-object)))
 
-(defun* find-opcode-structure ((mode keyword))
+(defun find-opcode-structure (mode)
   (ecase mode
     (:program :get-structure)
     (:query :put-structure)))
 
-(defun* find-opcode-argument ((first-seen boolean)
-                              (mode keyword)
-                              (register register))
+(defun find-opcode-argument (first-seen mode register)
   (let ((register-variant (ecase (register-type register)
                             ((:local :argument) :local)
                             ((:permanent) :stack))))
@@ -158,7 +156,7 @@
                   (:stack :put-value-stack)))))))
 
 
-(defun* precompile-tokens ((head-tokens list) (body-tokens list))
+(defun precompile-tokens (head-tokens body-tokens)
   "Generate a series of machine instructions from a stream of head and body
   tokens.
 
@@ -270,7 +268,7 @@
       instructions)))
 
 
-(defun* precompile-clause (head body)
+(defun precompile-clause (head body)
   "Precompile the clause.
 
   `head` should be the head of the clause for program clauses, or `nil` for
@@ -348,7 +346,7 @@
       (values instructions clause-props))))
 
 
-(defun* precompile-query ((query list))
+(defun precompile-query (query)
   "Compile `query`, returning the instructions and permanent variables.
 
   `query` should be a list of goal terms.
@@ -360,7 +358,7 @@
             (clause-permanent-vars clause-props))))
 
 
-(defun* find-predicate ((clause cons))
+(defun find-predicate (clause)
   "Return the functor and arity of the predicate of `clause`."
   ;; ( (f ?x ?y)   | head     ||| clause
   ;;   (foo ?x)      || body  |||
@@ -374,7 +372,7 @@
       (t (error "Clause ~S has a malformed head." clause)))))
 
 
-(defun* precompile-rules ((rules list))
+(defun precompile-rules (rules)
   "Compile a single predicate's `rules` into a list of instructions.
 
   All the rules must for the same predicate.  This is not checked, for

@@ -12,7 +12,7 @@
 ;;;; Utils
 (declaim (inline variablep))
 
-(defun* variablep (term)
+(defun variablep (term)
   (and (symbolp term)
        (char= (char (symbol-name term) 0) #\?)))
 
@@ -44,18 +44,18 @@
   (number (required) :type register-number))
 
 
-(defun* make-temporary-register ((number register-number) (arity arity))
+(defun make-temporary-register (number arity)
   (make-register (if (< number arity) :argument :local)
                  number))
 
-(defun* make-permanent-register ((number register-number))
+(defun make-permanent-register (number)
   (make-register :permanent number))
 
-(defun* make-anonymous-register ()
+(defun make-anonymous-register ()
   (make-register :anonymous 0))
 
 
-(defun* register-to-string ((register register))
+(defun register-to-string (register)
   (if (eq (register-type register) :anonymous)
     "__"
     (format nil "~A~D"
@@ -71,20 +71,20 @@
     (format stream (register-to-string object))))
 
 
-(defun* register-argument-p ((register register))
+(defun register-argument-p (register)
   (eq (register-type register) :argument))
 
-(defun* register-temporary-p ((register register))
+(defun register-temporary-p (register)
   (and (member (register-type register) '(:argument :local)) t))
 
-(defun* register-permanent-p ((register register))
+(defun register-permanent-p (register)
   (eq (register-type register) :permanent))
 
-(defun* register-anonymous-p ((register register))
+(defun register-anonymous-p (register)
   (eq (register-type register) :anonymous))
 
 
-(defun* register= ((r1 register) (r2 register))
+(defun register= (r1 r2)
   (and (eq (register-type r1)
            (register-type r2))
        (= (register-number r1)
@@ -104,7 +104,7 @@
   (anonymous-vars nil :type list))
 
 
-(defun* find-variables ((terms list))
+(defun find-variables (terms)
   "Return the set of variables in `terms`."
   (let ((variables nil))
     (recursively ((term terms))
@@ -172,7 +172,7 @@
     once))
 
 
-(defun* determine-clause-properties (head body)
+(defun determine-clause-properties (head body)
   (let* ((clause
            (cons head body))
          (permanent-vars

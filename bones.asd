@@ -8,8 +8,7 @@
   :license "MIT/X11"
   :version "0.0.1"
 
-  :depends-on (#:defstar
-               #:optima
+  :depends-on (#:optima
                #:trivial-types
                #:cl-arrows
                #:policy-cond

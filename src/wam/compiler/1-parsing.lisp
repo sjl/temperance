@@ -48,10 +48,11 @@
   (object nil :type t))
 
 
-(defgeneric* node-children (node)
+(defgeneric node-children (node)
+  (:documentation
   "Return the children of the given node.
 
-  Presumably these will need to be traversed when allocating registers.")
+  Presumably these will need to be traversed when allocating registers."))
 
 (defmethod node-children ((node vanilla-node))
   (list))
@@ -66,7 +67,7 @@
   (list (node-head node) (node-tail node)))
 
 
-(defun* nil-node-p ((node node))
+(defun nil-node-p (node)
   "Return whether the given node is the magic nil/0 constant."
   (and (typep node 'structure-node)
        (eql (node-functor node) nil)
@@ -145,7 +146,7 @@
     (dump-node node)))
 
 
-(defun* parse-list ((contents list))
+(defun parse-list (contents)
   (if contents
     (make-list-node :head (parse (car contents))
                     :tail (parse-list (cdr contents)))
@@ -153,14 +154,14 @@
                          :arity 0
                          :arguments ())))
 
-(defun* parse-list* ((contents list))
+(defun parse-list* (contents)
   (destructuring-bind (next . remaining) contents
     (if (null remaining)
       (parse next)
       (make-list-node :head (parse next)
                       :tail (parse-list* remaining)))))
 
-(defun* parse (term &optional top-level-argument)
+(defun parse (term &optional top-level-argument)
   (cond
     ((variablep term)
      (if top-level-argument
@@ -184,7 +185,7 @@
      (make-lisp-object-node :object term))
     (t (error "Cannot parse term ~S into a Prolog term." term))))
 
-(defun* parse-top-level (term)
+(defun parse-top-level (term)
   (typecase term
     (symbol (parse-top-level (list term))) ; c/0 -> (c/0)
     (cons (destructuring-bind (functor . arguments) term

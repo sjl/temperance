@@ -8,7 +8,7 @@
 
 ;;; The final phase wraps everything else up into a sane UI.
 
-(defun* compile-query ((wam wam) (query list))
+(defun compile-query (wam query)
   "Compile `query` into the query section of the WAM's code store.
 
   `query` should be a list of goal terms.
@@ -22,7 +22,7 @@
     (render-query wam instructions)
     permanent-variables))
 
-(defun* compile-rules ((wam wam) (rules list))
+(defun compile-rules (wam rules)
   "Compile `rules` into the WAM's code store.
 
   Each rule in `rules` should be a clause consisting of a head term and zero or

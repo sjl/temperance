@@ -13,21 +13,15 @@
 ;;; circle of instructions, doing one optimization each time.
 
 
-(defun* optimize-get-constant ((node circle)
-                               (constant fname)
-                               (register register))
+(defun optimize-get-constant (node constant register)
   ;; 1. get_structure c/0, Ai -> get_constant c, Ai
   (circle-replace node `(:get-constant ,constant ,register)))
 
-(defun* optimize-put-constant ((node circle)
-                               (constant fname)
-                               (register register))
+(defun optimize-put-constant (node constant register)
   ;; 2. put_structure c/0, Ai -> put_constant c, Ai
   (circle-replace node `(:put-constant ,constant ,register)))
 
-(defun* optimize-subterm-constant-query ((node circle)
-                                         (constant fname)
-                                         (register register))
+(defun optimize-subterm-constant-query (node constant register)
   ;; 3. put_structure c/0, Xi                     *** WE ARE HERE
   ;;    ...
   ;;    subterm_value Xi          -> subterm_constant c
@@ -43,9 +37,7 @@
     (circle-replace n `(:subterm-constant ,constant))
     (return previous)))
 
-(defun* optimize-subterm-constant-program ((node circle)
-                                           (constant fname)
-                                           (register register))
+(defun optimize-subterm-constant-program (node constant register)
   ;; 4. subterm_variable Xi       -> subterm_constant c
   ;;    ...
   ;;    get_structure c/0, Xi                     *** WE ARE HERE
@@ -60,7 +52,7 @@
     (circle-replace n `(:subterm-constant ,constant))
     (return (circle-backward-remove node))))
 
-(defun* optimize-constants ((instructions circle))
+(defun optimize-constants (instructions)
   ;; From the book and the erratum, there are four optimizations we can do for
   ;; constants (0-arity structures).
 
@@ -84,7 +76,7 @@
   instructions)
 
 
-(defun* optimize-void-runs ((instructions circle))
+(defun optimize-void-runs (instructions)
   ;; We can optimize runs of N (:[unify/set]-void 1) instructions into a single
   ;; one that does all N at once.
   (loop
@@ -109,7 +101,7 @@
   instructions)
 
 
-(defun* optimize-instructions ((instructions circle))
+(defun optimize-instructions (instructions)
   (->> instructions
     (optimize-constants)
     (optimize-void-runs)))

@@ -22,10 +22,7 @@
     (1- (instruction-size opcode))))
 
 
-(defun* code-push-instruction ((store generic-code-store)
-                               (opcode opcode)
-                               (arguments list)
-                               (address code-index))
+(defun code-push-instruction (store opcode arguments address)
   "Push the given instruction into `store` at `address`.
 
   `arguments` should be a list of `code-word`s.
@@ -39,7 +36,7 @@
   (instruction-size opcode))
 
 
-(defun* render-opcode ((opcode-designator keyword))
+(defun render-opcode (opcode-designator)
   (ecase opcode-designator
     (:get-structure          +opcode-get-structure+)
     (:get-variable-local     +opcode-get-variable-local+)
@@ -76,7 +73,7 @@
     (:trust                  +opcode-trust+)
     (:cut                    +opcode-cut+)))
 
-(defun* render-argument (argument)
+(defun render-argument (argument)
   (cond
     ;; Ugly choice point args that'll be filled later...
     ((eq +choice-point-placeholder+ argument) 0)
@@ -87,10 +84,7 @@
     ;; Everything else just gets shoved right into the array.
     (t argument)))
 
-(defun* render-bytecode ((store generic-code-store)
-                         (instructions circle)
-                         (start code-index)
-                         (limit code-index))
+(defun render-bytecode (store instructions start limit)
   "Render `instructions` (a circle) into `store` starting at `start`.
 
   Bail if ever pushed beyond `limit`.
@@ -134,22 +128,16 @@
         :do (incf address size)))))
 
 
-(defun* render-query ((wam wam) (instructions circle))
+(defun render-query (wam instructions)
   (render-bytecode (wam-code wam) instructions 0 +maximum-query-size+))
 
 
-(defun* mark-label ((wam wam)
-                    (functor symbol)
-                    (arity arity)
-                    (address code-index))
+(defun mark-label (wam functor arity address)
   "Set the code label `functor`/`arity` to point at `address`."
   (setf (wam-code-label wam functor arity)
         address))
 
-(defun* render-rules ((wam wam)
-                      (functor symbol)
-                      (arity arity)
-                      (instructions circle))
+(defun render-rules (wam functor arity instructions)
   ;; Before we render the instructions, make the label point at where they're
   ;; about to go.
   (mark-label wam functor arity (wam-code-pointer wam))

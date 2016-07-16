@@ -51,14 +51,14 @@
   (name (incf *var-counter*)) ; The variable's name (defaults to a new number)
   (binding unbound)) ; The variable's binding (defaults to unbound)
 
-(defun* print-var ((var var) stream depth)
+(defun print-var (var stream depth)
   (if (or (and (numberp *print-level*)
                (>= depth *print-level*))
           (var-p (deref var)))
     (format stream "?~A" (var-name var))
     (write var :stream stream)))
 
-(defun* bound-p ((var var))
+(defun bound-p (var)
   "Return whether the given variable has been bound."
   (not (eq (var-binding var) unbound)))
 
@@ -74,7 +74,7 @@
 (defvar *trail* (make-array 200 :fill-pointer 0 :adjustable t)
   "The trail of variable bindings performed so far.")
 
-(defun* set-binding! ((var var) value)
+(defun set-binding! (var value)
   "Set `var`'s binding to `value` after saving it in the trail.
 
   Always returns `t` (success).
@@ -85,7 +85,7 @@
     (setf (var-binding var) value))
   t)
 
-(defun* undo-bindings! ((old-trail integer))
+(defun undo-bindings! (old-trail)
   "Undo all bindings back to a given point in the trail.
 
   The point is specified by giving the desired fill pointer.
@@ -97,7 +97,7 @@
 
 
 ;;;; Unification
-(defun* unify! (x y)
+(defun unify! (x y)
   "Destructively unify two expressions, returning whether it was successful.
 
   Any variables in `x` and `y` may have their bindings set.
@@ -140,10 +140,7 @@
       (compile-predicate symbol arity matching-arity-clauses)
       (prolog-compile symbol other-arity-clauses))))
 
-(defun* clauses-with-arity
-    ((clauses (trivial-types:proper-list clause))
-     (test function)
-     (arity non-negative-integer))
+(defun clauses-with-arity (clauses test arity)
   "Return all clauses whose heads have the given arity."
   (find-all arity clauses
             :key #'(lambda (clause)
@@ -151,7 +148,7 @@
             :test test))
 
 
-(defun* relation-arity ((relation relation))
+(defun relation-arity (relation)
   "Return the number of arguments of the given relation.
 
   For example: `(relation-arity '(likes sally cats))` => `2`
@@ -159,7 +156,7 @@
   "
   (length (relation-arguments relation)))
 
-(defun* relation-arguments ((relation relation))
+(defun relation-arguments (relation)
   "Return the arguments of the given relation.
 
   For example:
@@ -171,10 +168,7 @@
   (rest relation))
 
 
-(defun* compile-predicate
-    ((symbol symbol)
-     (arity non-negative-integer)
-     (clauses (trivial-types:proper-list clause)))
+(defun compile-predicate (symbol arity clauses)
   "Compile all the clauses for the symbol+arity into a single Lisp function."
   (let ((predicate (make-predicate symbol arity))
         (parameters (make-parameters arity)))
@@ -186,13 +180,12 @@
                          (compile-clause parameters clause 'continuation))
                       clauses)))))))
 
-(defun* make-parameters ((arity non-negative-integer))
+(defun make-parameters (arity)
   "Return the list (?arg1 ?arg2 ... ?argN)."
   (loop :for i :from 1 :to arity
         :collect (new-symbol '?arg i)))
 
-(defun* make-predicate ((symbol symbol)
-                        (arity non-negative-integer))
+(defun make-predicate (symbol arity)
   "Returns (and interns) the symbol with the Prolog-style name symbol/arity."
   (values (interned-symbol symbol '/ arity)))
 

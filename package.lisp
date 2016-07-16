@@ -1,7 +1,6 @@
 (defpackage #:bones.utils
   (:use
     #:cl
-    #:defstar
     #:cl-arrows
     #:bones.quickutils)
   (:export
@@ -26,12 +25,10 @@
     #:dequeue
     #:queue-contents
     #:queue-empty-p
-    #:queue-append)
-  (:shadowing-import-from #:cl-arrows
-    #:->))
+    #:queue-append))
 
 (defpackage #:bones.circle
-  (:use #:cl #:defstar)
+  (:use #:cl)
   (:export
     #:circle
     #:make-circle-with
@@ -67,7 +64,6 @@
 (defpackage #:bones.wam
   (:use
     #:cl
-    #:defstar
     #:optima
     #:cl-arrows
     #:bones.circle
@@ -108,17 +104,13 @@
 
     #:call
     #:?
-    #:!
-    )
+    #:!)
   (:import-from #:optima
-    #:match)
-  (:shadowing-import-from #:cl-arrows
-    #:->))
+    #:match))
 
 (defpackage #:bones.paip
   (:use
     #:cl
-    #:defstar
     #:bones.quickutils)
   (:documentation "Test?")
   (:export

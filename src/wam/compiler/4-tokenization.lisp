@@ -48,7 +48,7 @@
 (defclass cut-token (token) ())
 
 
-(defun* make-register-token ((register register))
+(defun make-register-token (register)
   (values (make-instance 'register-token :register register)))
 
 
@@ -95,8 +95,8 @@
     (format stream "CUT!")))
 
 
-(defgeneric* tokenize-assignment ((assignment register-assignment))
-  "Tokenize `assignment` into a flat list of tokens.")
+(defgeneric tokenize-assignment (assignment)
+  (:documentation "Tokenize `assignment` into a flat list of tokens."))
 
 (defmethod tokenize-assignment ((assignment structure-assignment))
   (list* (make-instance 'structure-token
@@ -120,20 +120,18 @@
                        :register (assignment-register assignment)
                        :object (assignment-object assignment))))
 
-(defun* tokenize-assignments ((assignments list))
+(defun tokenize-assignments (assignments)
   "Tokenize a flattened set of register assignments into a stream."
   (mapcan #'tokenize-assignment assignments))
 
 
-(defun* tokenize-program-term (term (clause-props clause-properties))
+(defun tokenize-program-term (term clause-props)
   "Tokenize `term` as a program term, returning its tokens."
   (let ((tree (parse-top-level term)))
     (allocate-registers tree clause-props :nead t)
     (-> tree flatten-program tokenize-assignments)))
 
-(defun* tokenize-query-term (term
-                             (clause-props clause-properties)
-                             &key in-nead is-tail)
+(defun tokenize-query-term (term clause-props &key in-nead is-tail)
   "Tokenize `term` as a query term, returning its tokens."
   (let ((tree (parse-top-level term)))
     (allocate-registers tree clause-props :nead in-nead)

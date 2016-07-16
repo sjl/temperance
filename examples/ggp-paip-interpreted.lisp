@@ -7,29 +7,29 @@
                  queue-empty-p queue-append))
 
 
-(defun* queue-contents ((q queue))
+(defun queue-contents (q)
   (cdr q))
 
-(defun* make-queue ()
+(defun make-queue ()
   (let ((q (cons nil nil)))
     (setf (car q) q)))
 
-(defun* enqueue ((item t) (q queue))
+(defun enqueue (item q)
   (setf (car q)
         (setf (rest (car q))
               (cons item nil)))
   q)
 
-(defun* dequeue ((q queue))
+(defun dequeue (q)
   (prog1
       (pop (cdr q))
     (if (null (cdr q))
       (setf (car q) q))))
 
-(defun* queue-empty-p ((q queue))
+(defun queue-empty-p (q)
   (null (queue-contents q)))
 
-(defun* queue-append ((q queue) (l list))
+(defun queue-append (q l)
   (when l
     (setf (car q)
           (last (setf (rest (car q))

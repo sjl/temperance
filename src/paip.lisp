@@ -24,40 +24,35 @@
 
 
 ;;;; Unification
-(defun* variable-p (term)
+(defun variable-p (term)
   "Return whether the given term is a logic variable."
   (and (symbolp term)
        (equal (char (symbol-name term) 0)
               #\?)))
 
 
-(defun* get-binding ((variable logic-variable)
-                     (bindings binding-list))
+(defun get-binding (variable bindings)
   "Return the binding (var . val) for the given variable, or nil."
   (assoc variable bindings))
 
-(defun* has-binding ((variable logic-variable)
-                     (bindings binding-list))
+(defun has-binding (variable bindings)
   (not (null (get-binding variable bindings))))
 
 
-(defun* binding-variable ((binding binding))
+(defun binding-variable (binding)
   "Return the variable part of a binding."
   (car binding))
 
-(defun* binding-value ((binding binding))
+(defun binding-value (binding)
   "Return the value part of a binding."
   (cdr binding))
 
 
-(defun* lookup ((variable logic-variable)
-                (bindings binding-list))
+(defun lookup (variable bindings)
   "Return the value the given variable is bound to."
   (binding-value (get-binding variable bindings)))
 
-(defun* extend-bindings ((variable logic-variable)
-                         (value t)
-                         (bindings binding-list))
+(defun extend-bindings (variable value bindings)
   "Add a binding (var . val) to the binding list (nondestructively)."
   (cons (cons variable value)
         (if (and (equal bindings no-bindings))
@@ -65,9 +60,7 @@
           bindings)))
 
 
-(defun* check-occurs ((variable logic-variable)
-                      (target t)
-                      (bindings binding-list))
+(defun check-occurs (variable target bindings)
   "Check whether the variable occurs somewhere in the target.
 
   Takes the bindings into account.  This is expensive.
@@ -145,8 +138,7 @@
 
 
 ;;;; Substitution
-(defun* substitute-bindings ((bindings binding-list)
-                             (form t))
+(defun substitute-bindings (bindings form)
   "Substitute (recursively) the bindings into the given form."
   (cond ((eq bindings fail) fail)
         ((eq bindings no-bindings) form)
