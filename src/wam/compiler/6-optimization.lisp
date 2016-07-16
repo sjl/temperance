@@ -1,5 +1,4 @@
 (in-package #:bones.wam)
-(named-readtables:in-readtable :fare-quasiquote)
 
 ;;;; ,,--.     .                    .
 ;;;; |`, | ,-. |- . ,-,-. . ,_, ,-. |- . ,-. ,-.
@@ -52,27 +51,30 @@
     (circle-replace n `(:subterm-constant ,constant))
     (return (circle-backward-remove node))))
 
+
 (defun optimize-constants (instructions)
   ;; From the book and the erratum, there are four optimizations we can do for
   ;; constants (0-arity structures).
 
-  (loop :for node = (circle-forward instructions) :then (circle-forward node)
-        :while node
-        :for (opcode . arguments) = (circle-value node)
-        :do
-        (match (circle-value node)
-
-          (`(:put-structure ,functor 0 ,register)
-           (setf node
-                 (if (register-argument-p register)
-                   (optimize-put-constant node functor register)
-                   (optimize-subterm-constant-query node functor register))))
-
-          (`(:get-structure ,functor 0 ,register)
-           (setf node
-                 (if (register-argument-p register)
-                   (optimize-get-constant node functor register)
-                   (optimize-subterm-constant-program node functor register))))))
+  (flet ((optimize-put (node functor register)
+           (if (register-argument-p register)
+             (optimize-put-constant node functor register)
+             (optimize-subterm-constant-query node functor register)))
+         (optimize-get (node functor register)
+           (if (register-argument-p register)
+             (optimize-get-constant node functor register)
+             (optimize-subterm-constant-program node functor register))))
+    (loop
+      :for node = (circle-forward instructions) :then (circle-forward node)
+      :while node :do
+      (destructuring-bind (opcode . arguments) (circle-value node)
+        (when (member opcode '(:put-structure :get-structure))
+          (destructuring-bind (functor arity register) arguments
+            (when (zerop arity)
+              (setf node
+                    (case opcode
+                      (:put-structure (optimize-put node functor register))
+                      (:get-structure (optimize-get node functor register))))))))))
   instructions)
 
 

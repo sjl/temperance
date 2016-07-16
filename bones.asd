@@ -8,12 +8,9 @@
   :license "MIT/X11"
   :version "0.0.1"
 
-  :depends-on (#:optima
-               #:trivial-types
+  :depends-on (#:trivial-types
                #:cl-arrows
-               #:policy-cond
-               #:fare-quasiquote-optima
-               #:fare-quasiquote-readtable)
+               #:policy-cond)
 
   :serial t
   :components ((:file "src/quickutils") ; quickutils package ordering crap

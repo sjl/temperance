@@ -64,7 +64,6 @@
 (defpackage #:bones.wam
   (:use
     #:cl
-    #:optima
     #:cl-arrows
     #:bones.circle
     #:bones.quickutils
@@ -104,9 +103,7 @@
 
     #:call
     #:?
-    #:!)
-  (:import-from #:optima
-    #:match))
+    #:!))
 
 (defpackage #:bones.paip
   (:use

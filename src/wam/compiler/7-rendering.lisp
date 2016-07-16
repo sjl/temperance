@@ -102,10 +102,14 @@
         :with address = start
 
         ;; Render the next instruction
-        :for (opcode-designator . arguments) :in (circle-to-list instructions)
+        :for node = (circle-forward instructions)
+        :then (or (circle-forward node)
+                  (return instruction-count))
+
+        :for (opcode-designator . arguments) = (circle-value node)
         :for opcode = (render-opcode opcode-designator)
         :for size = (instruction-size opcode)
-        :summing size
+        :summing size :into instruction-count
 
         ;; Make sure we don't run past the end of our section.
         :when (>= (+ size address) limit)
