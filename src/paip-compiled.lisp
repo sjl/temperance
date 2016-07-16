@@ -59,7 +59,6 @@
     (write var :stream stream)))
 
 (defun* bound-p ((var var))
-  (:returns boolean)
   "Return whether the given variable has been bound."
   (not (eq (var-binding var) unbound)))
 
@@ -76,7 +75,6 @@
   "The trail of variable bindings performed so far.")
 
 (defun* set-binding! ((var var) value)
-  (:returns (eql t))
   "Set `var`'s binding to `value` after saving it in the trail.
 
   Always returns `t` (success).
@@ -88,7 +86,6 @@
   t)
 
 (defun* undo-bindings! ((old-trail integer))
-  (:returns :void)
   "Undo all bindings back to a given point in the trail.
 
   The point is specified by giving the desired fill pointer.
@@ -101,7 +98,6 @@
 
 ;;;; Unification
 (defun* unify! (x y)
-  (:returns boolean)
   "Destructively unify two expressions, returning whether it was successful.
 
   Any variables in `x` and `y` may have their bindings set.
@@ -156,7 +152,6 @@
 
 
 (defun* relation-arity ((relation relation))
-  (:returns non-negative-integer)
   "Return the number of arguments of the given relation.
 
   For example: `(relation-arity '(likes sally cats))` => `2`
@@ -165,7 +160,6 @@
   (length (relation-arguments relation)))
 
 (defun* relation-arguments ((relation relation))
-  (:returns list)
   "Return the arguments of the given relation.
 
   For example:
@@ -193,14 +187,12 @@
                       clauses)))))))
 
 (defun* make-parameters ((arity non-negative-integer))
-  (:returns (trivial-types:proper-list symbol))
   "Return the list (?arg1 ?arg2 ... ?argN)."
   (loop :for i :from 1 :to arity
         :collect (new-symbol '?arg i)))
 
 (defun* make-predicate ((symbol symbol)
                         (arity non-negative-integer))
-  (:returns symbol)
   "Returns (and interns) the symbol with the Prolog-style name symbol/arity."
   (values (interned-symbol symbol '/ arity)))
 

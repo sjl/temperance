@@ -3,7 +3,6 @@
 
 ;;;; Opcodes
 (defun* opcode-name ((opcode opcode))
-  (:returns string)
   (eswitch (opcode)
     (+opcode-noop+ "NOOP")
 
@@ -49,7 +48,6 @@
     (+opcode-put-lisp-object+ "PUT-LISP-OBJECT")))
 
 (defun* opcode-short-name ((opcode opcode))
-  (:returns string)
   (eswitch (opcode)
     (+opcode-noop+ "NOOP")
 

@@ -159,15 +159,12 @@
 
 
 (defun* make-queue ()
-  (:returns queue)
   (make-queue%))
 
 (defun* queue-empty-p ((q queue))
-  (:returns boolean)
   (zerop (queue-size q)))
 
 (defun* enqueue ((item t) (q queue))
-  (:returns fixnum)
   (let ((cell (cons item nil)))
     (setf (queue-last q)
           (if (queue-empty-p q)
@@ -176,13 +173,11 @@
   (incf (queue-size q)))
 
 (defun* dequeue ((q queue))
-  (:returns t)
   (when (zerop (decf (queue-size q)))
     (setf (queue-last q) nil))
   (pop (queue-contents q)))
 
 (defun* queue-append ((q queue) (l list))
-  (:returns fixnum) ; todo make a structure sharing version of this
   (loop :for item :in l
         :for size = (enqueue item q)
         :finally (return size)))
@@ -234,9 +229,8 @@
           :test (lambda (x y) (declare (ignore x y)) t)) ; what could go wrong
         (declaim (inline ,name))
         (defun* ,name ((,key ,key-type))
-          (:returns ,value-type)
           ,documentation
-          (aref ,table ,key))))))
+          (the ,value-type (aref ,table ,key)))))))
 
 
 ;;;; ecase/tree

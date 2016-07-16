@@ -107,7 +107,6 @@
 (defun* make-wam (&key
                   (store-size (megabytes 10))
                   (code-size (megabytes 1)))
-  (:returns wam)
   (make-wam% :code (allocate-wam-code code-size)
              :type-store (allocate-wam-type-store store-size)
              :value-store (allocate-wam-value-store store-size)
@@ -157,12 +156,10 @@
 
 
 (defun* wam-store-type ((wam wam) (address store-index))
-  (:returns cell-type)
   "Return the type of the cell at the given address."
   (aref (wam-type-store wam) address))
 
 (defun* wam-store-value ((wam wam) (address store-index))
-  (:returns cell-value)
   "Return the value of the cell at the given address."
   (aref (wam-value-store wam) address))
 
@@ -193,8 +190,7 @@
              `(progn
                (declaim (inline ,name))
                (defun* ,name ((wam wam) (address store-index))
-                 (:returns ,return-type)
-                 (aref (wam-value-store wam) address)))))
+                 (the ,return-type (aref (wam-value-store wam) address))))))
   (define-unsafe %unsafe-null-value        (eql 0))
   (define-unsafe %unsafe-structure-value   store-index)
   (define-unsafe %unsafe-reference-value   store-index)
@@ -308,12 +304,10 @@
 
 
 (defun* wam-heap-pointer-unset-p ((wam wam) (address heap-index))
-  (:returns boolean)
   (declare (ignore wam))
   (= address +heap-start+))
 
 (defun* wam-heap-push! ((wam wam) (type cell-type) (value cell-value))
-  (:returns heap-index)
   "Push the cell onto the WAM heap and increment the heap pointer.
 
   Returns the address it was pushed to.
@@ -336,7 +330,6 @@
 
 
 (defun* wam-trail-pointer ((wam wam))
-  (:returns trail-index)
   "Return the current trail pointer of the WAM."
   (fill-pointer (wam-trail wam)))
 
@@ -346,7 +339,6 @@
 
 
 (defun* wam-trail-push! ((wam wam) (address store-index))
-  (:returns (values store-index trail-index))
   "Push `address` onto the trail.
 
   Returns the address and the trail address it was pushed to.
@@ -358,14 +350,12 @@
       (values address (vector-push-extend address trail)))))
 
 (defun* wam-trail-pop! ((wam wam))
-  (:returns store-index)
   "Pop the top address off the trail and return it."
   (vector-pop (wam-trail wam)))
 
 (defun* wam-trail-value ((wam wam) (address trail-index))
   ;; TODO: can we really not just pop, or is something else gonna do something
   ;; fucky with the trail?
-  (:returns store-index)
   "Return the element (a heap index) in the WAM trail at `address`."
   (aref (wam-trail wam) address))
 
@@ -390,7 +380,6 @@
 
 
 (defun* assert-inside-stack ((wam wam) (address store-index))
-  (:returns :void)
   (declare (ignorable wam address))
   (policy-cond:policy-cond
     ((>= debug 2)
@@ -407,14 +396,12 @@
   (values))
 
 (defun* wam-stack-ensure-size ((wam wam) (address stack-index))
-  (:returns :void)
   "Ensure the WAM stack is large enough to be able to write to `address`."
   (assert-inside-stack wam address)
   (values))
 
 
 (defun* wam-stack-word ((wam wam) (address stack-index))
-  (:returns stack-word)
   "Return the stack word at the given address."
   (assert-inside-stack wam address)
   (%unsafe-stack-value wam address))
@@ -431,7 +418,6 @@
    &optional
    ((backtrack-pointer backtrack-pointer)
     (wam-backtrack-pointer wam)))
-  (:returns boolean)
   (= backtrack-pointer +stack-start+))
 
 (defun* wam-environment-pointer-unset-p
@@ -439,7 +425,6 @@
    &optional
    ((environment-pointer environment-pointer)
     (wam-environment-pointer wam)))
-  (:returns boolean)
   (= environment-pointer +stack-start+))
 
 
@@ -469,7 +454,6 @@
      &optional
      ((e environment-pointer)
       (wam-environment-pointer wam)))
-  (:returns environment-pointer)
   (wam-stack-word wam e))
 
 (defun* wam-stack-frame-cp
@@ -477,7 +461,6 @@
      &optional
      ((e environment-pointer)
       (wam-environment-pointer wam)))
-  (:returns continuation-pointer)
   (wam-stack-word wam (1+ e)))
 
 (defun* wam-stack-frame-cut
@@ -485,7 +468,6 @@
      &optional
      ((e environment-pointer)
       (wam-environment-pointer wam)))
-  (:returns backtrack-pointer)
   (wam-stack-word wam (+ 2 e)))
 
 (defun* wam-stack-frame-n
@@ -493,7 +475,6 @@
      &optional
      ((e environment-pointer)
       (wam-environment-pointer wam)))
-  (:returns stack-frame-argcount)
   (wam-stack-word wam (+ 3 e)))
 
 
@@ -503,7 +484,6 @@
      &optional
      ((e environment-pointer)
       (wam-environment-pointer wam)))
-  (:returns stack-index)
   (+ 4 n e))
 
 (defun* wam-set-stack-frame-argument!
@@ -531,7 +511,6 @@
      &optional
      ((e environment-pointer)
       (wam-environment-pointer wam)))
-  (:returns stack-frame-size)
   "Return the size of the stack frame starting at environment pointer `e`."
   (+ (wam-stack-frame-n wam e) 4))
 
@@ -574,7 +553,6 @@
      &optional
      ((b backtrack-pointer)
       (wam-backtrack-pointer wam)))
-  (:returns arity)
   (wam-stack-word wam b))
 
 (defun* wam-stack-choice-ce
@@ -582,7 +560,6 @@
      &optional
      ((b backtrack-pointer)
       (wam-backtrack-pointer wam)))
-  (:returns environment-pointer)
   (wam-stack-word wam (+ b 1)))
 
 (defun* wam-stack-choice-cp
@@ -590,7 +567,6 @@
      &optional
      ((b backtrack-pointer)
       (wam-backtrack-pointer wam)))
-  (:returns continuation-pointer)
   (wam-stack-word wam (+ b 2)))
 
 (defun* wam-stack-choice-cb
@@ -598,7 +574,6 @@
      &optional
      ((b backtrack-pointer)
       (wam-backtrack-pointer wam)))
-  (:returns backtrack-pointer)
   (wam-stack-word wam (+ b 3)))
 
 (defun* wam-stack-choice-bp
@@ -606,7 +581,6 @@
      &optional
      ((b backtrack-pointer)
       (wam-backtrack-pointer wam)))
-  (:returns continuation-pointer)
   (wam-stack-word wam (+ b 4)))
 
 (defun* wam-stack-choice-tr
@@ -614,7 +588,6 @@
      &optional
      ((b backtrack-pointer)
       (wam-backtrack-pointer wam)))
-  (:returns trail-index)
   (wam-stack-word wam (+ b 5)))
 
 (defun* wam-stack-choice-h
@@ -622,7 +595,6 @@
      &optional
      ((b backtrack-pointer)
       (wam-backtrack-pointer wam)))
-  (:returns heap-index)
   (wam-stack-word wam (+ b 6)))
 
 (defun* wam-stack-choice-cc
@@ -630,7 +602,6 @@
      &optional
      ((b backtrack-pointer)
       (wam-backtrack-pointer wam)))
-  (:returns backtrack-pointer)
   (wam-stack-word wam (+ b 7)))
 
 
@@ -639,7 +610,6 @@
      (n register-index)
      &optional ((b backtrack-pointer)
                 (wam-backtrack-pointer wam)))
-  (:returns stack-index)
   (+ 8 n b))
 
 (defun* wam-set-stack-choice-argument!
@@ -666,13 +636,11 @@
     ((wam wam)
      &optional ((b backtrack-pointer)
                 (wam-backtrack-pointer wam)))
-  (:returns stack-choice-size)
   "Return the size of the choice frame starting at backtrack pointer `b`."
   (+ (wam-stack-choice-n wam b) 8))
 
 
 (defun* wam-stack-top ((wam wam))
-  (:returns stack-index)
   "Return the top of the stack.
 
   This is the first place it's safe to overwrite in the stack.
@@ -750,7 +718,6 @@
 
 
 (defun* wam-code-label ((wam wam) (functor fname) (arity arity))
-  (:returns (or null code-index))
   (let ((atable (aref (wam-code-labels wam) arity)))
     (when atable
       (values (gethash functor atable)))))
@@ -774,7 +741,6 @@
 
 (defun* wam-load-query-code! ((wam wam)
                               (query-code query-code-holder))
-  (:returns :void)
   (setf (subseq (wam-code wam) 0) query-code)
   (values))
 
@@ -800,7 +766,6 @@
 
 
 (defun* wam-logic-pool-release ((wam wam) (frame logic-frame))
-  (:returns :void)
   (with-slots (start final predicates) frame
     (clrhash predicates)
     (setf start 0 final nil))
@@ -808,32 +773,26 @@
   (values))
 
 (defun* wam-logic-pool-request ((wam wam))
-  (:returns logic-frame)
   (or (pop (wam-logic-pool wam))
       (make-logic-frame)))
 
 
 (defun* wam-current-logic-frame ((wam wam))
-  (:returns (or null logic-frame))
   (first (wam-logic-stack wam)))
 
 (defun* wam-logic-stack-empty-p ((wam wam))
-  (:returns boolean)
   (not (wam-current-logic-frame wam)))
 
 
 (defun* wam-logic-open-p ((wam wam))
-  (:returns boolean)
   (let ((frame (wam-current-logic-frame wam)))
     (and frame (not (logic-frame-final frame)))))
 
 (defun* wam-logic-closed-p ((wam wam))
-  (:returns boolean)
   (not (wam-logic-open-p wam)))
 
 
 (defun* wam-push-logic-frame! ((wam wam))
-  (:returns :void)
   (assert (wam-logic-closed-p wam) ()
     "Cannot push logic frame unless the logic stack is closed.")
   (let ((frame (wam-logic-pool-request wam)))
@@ -857,7 +816,6 @@
         (error "Cannot pop logic frame.")))))
 
 (defun* wam-pop-logic-frame! ((wam wam))
-  (:returns :void)
   (with-slots (logic-stack) wam
     (assert-logic-frame-poppable wam)
     (let ((frame (pop logic-stack)))
@@ -979,30 +937,24 @@
 
 
 (defun* wam-local-register-address ((wam wam) (register register-index))
-  (:returns store-index)
   (declare (ignore wam))
   register)
 
 (defun* wam-stack-register-address ((wam wam) (register register-index))
-  (:returns store-index)
   (wam-stack-frame-argument-address wam register))
 
 
 (defun* wam-local-register-type ((wam wam) (register register-index))
-  (:returns cell-type)
   (wam-store-type wam (wam-local-register-address wam register)))
 
 (defun* wam-stack-register-type ((wam wam) (register register-index))
-  (:returns cell-type)
   (wam-store-type wam (wam-stack-register-address wam register)))
 
 
 (defun* wam-local-register-value ((wam wam) (register register-index))
-  (:returns cell-value)
   (wam-store-value wam (wam-local-register-address wam register)))
 
 (defun* wam-stack-register-value ((wam wam) (register register-index))
-  (:returns cell-value)
   (wam-store-value wam (wam-stack-register-address wam register)))
 
 
@@ -1045,9 +997,7 @@
   (vector-push-extend address2 (wam-unification-stack wam)))
 
 (defun* wam-unification-stack-pop! ((wam wam))
-  (:returns store-index)
   (vector-pop (wam-unification-stack wam)))
 
 (defun* wam-unification-stack-empty-p ((wam wam))
-  (:returns boolean)
   (zerop (length (wam-unification-stack wam))))

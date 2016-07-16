@@ -10,12 +10,10 @@
 
 
 (defun* push-unbound-reference! ((wam wam))
-  (:returns heap-index)
   "Push a new unbound reference cell onto the heap, returning its address."
   (wam-heap-push! wam +cell-type-reference+ (wam-heap-pointer wam)))
 
 (defun* push-new-structure! ((wam wam))
-  (:returns heap-index)
   "Push a new structure cell onto the heap, returning its address.
 
   The structure cell's value will point at the next address, so make sure you
@@ -25,7 +23,6 @@
   (wam-heap-push! wam +cell-type-structure+ (1+ (wam-heap-pointer wam))))
 
 (defun* push-new-list! ((wam wam))
-  (:returns heap-index)
   "Push a new list cell onto the heap, returning its address.
 
   The list cell's value will point at the next address, so make sure you push
@@ -35,32 +32,27 @@
   (wam-heap-push! wam +cell-type-list+ (1+ (wam-heap-pointer wam))))
 
 (defun* push-new-functor! ((wam wam) (functor fname) (arity arity))
-  (:returns heap-index)
   "Push a new functor cell pair onto the heap, returning its address."
   (prog1
       (wam-heap-push! wam +cell-type-functor+ functor)
     (wam-heap-push! wam +cell-type-lisp-object+ arity)))
 
 (defun* push-new-constant! ((wam wam) (constant fname))
-  (:returns heap-index)
   "Push a new constant cell onto the heap, returning its address."
   (wam-heap-push! wam +cell-type-constant+ constant))
 
 
 (defun* functors-match-p ((f1 fname) (a1 arity)
                           (f2 fname) (a2 arity))
-  (:returns boolean)
   "Return whether the two functor cell values represent the same functor."
   (and (eq f1 f2)
        (= a1 a2)))
 
 (defun* constants-match-p ((c1 fname) (c2 fname))
-  (:returns boolean)
   "Return whether the two constant cell values unify."
   (eq c1 c2))
 
 (defun* lisp-objects-match-p ((o1 t) (o2 t))
-  (:returns boolean)
   "Return whether the two lisp object cells unify."
   (eql o1 o2))
 
@@ -123,7 +115,6 @@
           (decf tr))))))
 
 (defun* deref ((wam wam) (address store-index))
-  (:returns store-index)
   "Dereference the address in the WAM store to its eventual destination.
 
   If the address is a variable that's bound to something, that something will be
@@ -741,7 +732,6 @@
 
 ;;;; Running
 (defun* extract-things ((wam wam) (addresses list))
-  (:returns list)
   "Extract the things at the given store addresses.
 
   The things will be returned in the same order as the addresses were given.
@@ -778,7 +768,6 @@
       (mapcar #'recur addresses))))
 
 (defun* extract-query-results ((wam wam) (vars list))
-  (:returns list)
   (let* ((addresses (loop :for var :in vars
                           ;; TODO: make this suck less
                           :for i :from (+ (wam-environment-pointer wam) 4)

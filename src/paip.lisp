@@ -25,7 +25,6 @@
 
 ;;;; Unification
 (defun* variable-p (term)
-  (:returns boolean)
   "Return whether the given term is a logic variable."
   (and (symbolp term)
        (equal (char (symbol-name term) 0)
@@ -34,18 +33,15 @@
 
 (defun* get-binding ((variable logic-variable)
                      (bindings binding-list))
-  (:returns (or binding null))
   "Return the binding (var . val) for the given variable, or nil."
   (assoc variable bindings))
 
 (defun* has-binding ((variable logic-variable)
                      (bindings binding-list))
-  (:returns boolean)
   (not (null (get-binding variable bindings))))
 
 
 (defun* binding-variable ((binding binding))
-  (:returns logic-variable)
   "Return the variable part of a binding."
   (car binding))
 
@@ -62,7 +58,6 @@
 (defun* extend-bindings ((variable logic-variable)
                          (value t)
                          (bindings binding-list))
-  (:returns binding-list)
   "Add a binding (var . val) to the binding list (nondestructively)."
   (cons (cons variable value)
         (if (and (equal bindings no-bindings))
@@ -73,7 +68,6 @@
 (defun* check-occurs ((variable logic-variable)
                       (target t)
                       (bindings binding-list))
-  (:returns boolean)
   "Check whether the variable occurs somewhere in the target.
 
   Takes the bindings into account.  This is expensive.

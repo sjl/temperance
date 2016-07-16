@@ -58,7 +58,6 @@
 
 
 (defun* make-empty-circle ()
-  (:returns circle)
   "Create an empty circle.
 
   It will still contain a sentinel.
@@ -71,7 +70,6 @@
 
 (defun* make-circle-with ((list list))
   "Create a circle whose nodes contain the values in `list`."
-  (:returns circle)
   (let ((sentinel (make-empty-circle)))
     (loop :with prev = sentinel
           :for value :in list
@@ -94,26 +92,22 @@
 
 
 (defun* circle-sentinel-p ((circle circle))
-  (:returns boolean)
   "Return whether this circle node is the sentinel."
   (eq (circle-value circle) +circle-sentinel+))
 
 (defun* circle-empty-p ((circle circle))
-  (:returns boolean)
   "Return whether this circle is empty."
   (and (circle-sentinel-p circle)
        (eql circle (circle-next circle))))
 
 
 (defun* circle-rotate ((circle circle) (n integer))
-  (:returns circle)
   (cond
     ((> n 0) (circle-rotate (circle-next circle) (1- n)))
     ((< n 0) (circle-rotate (circle-prev circle) (1+ n)))
     (t circle)))
 
 (defun* circle-nth ((circle circle) (n integer))
-  (:returns circle)
   (when (not (circle-sentinel-p circle))
     (error "Can only call circle-nth on the sentinel."))
   (circle-rotate circle
@@ -179,13 +173,11 @@
 
 
 (defun* circle-forward ((circle circle))
-  (:returns (or circle null))
   (let ((next (circle-next circle)))
     (when (not (circle-sentinel-p next))
       next)))
 
 (defun* circle-backward ((circle circle))
-  (:returns (or circle null))
   (let ((prev (circle-prev circle)))
     (when (not (circle-sentinel-p prev))
       prev)))
@@ -200,20 +192,17 @@
     (circle-tie l r)))
 
 (defun* circle-backward-remove ((circle circle))
-  (:returns (or circle null))
   (prog1
       (circle-backward circle)
     (circle-remove circle)))
 
 (defun* circle-forward-remove ((circle circle))
-  (:returns (or circle null))
   (prog1
       (circle-forward circle)
     (circle-remove circle)))
 
 
 (defun* circle-replace ((circle circle) value)
-  (:returns circle)
   (when (circle-sentinel-p circle)
     (error "Cannot replace sentinel."))
   ;; L new R
@@ -222,13 +211,11 @@
     (make-circle-between l value r)))
 
 (defun* circle-backward-replace ((circle circle) value)
-  (:returns (or circle null))
   (prog1
       (circle-backward circle)
     (circle-replace circle value)))
 
 (defun* circle-forward-replace ((circle circle) value)
-  (:returns (or circle null))
   (prog1
       (circle-forward circle)
     (circle-replace circle value)))
@@ -248,20 +235,17 @@
         (circle-tie (circle-prev new) r)))))
 
 (defun* circle-backward-splice ((circle circle) values)
-  (:returns (or circle null))
   (prog1
       (circle-backward circle)
     (circle-splice circle values)))
 
 (defun* circle-forward-splice ((circle circle) values)
-  (:returns (or circle null))
   (prog1
       (circle-forward circle)
     (circle-splice circle values)))
 
 
 (defun* circle-to-list ((circle circle) &optional include-sentinel-p)
-  (:returns list)
   (loop
     :with node = circle
     :when (or include-sentinel-p

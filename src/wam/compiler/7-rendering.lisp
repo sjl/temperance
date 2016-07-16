@@ -33,7 +33,6 @@
   Returns how many words were pushed.
 
   "
-  (:returns instruction-size)
   (check-instruction opcode arguments)
   (setf (aref store address) opcode
         (subseq store (1+ address)) arguments)
@@ -41,7 +40,6 @@
 
 
 (defun* render-opcode ((opcode-designator keyword))
-  (:returns opcode)
   (ecase opcode-designator
     (:get-structure          +opcode-get-structure+)
     (:get-variable-local     +opcode-get-variable-local+)
@@ -79,7 +77,6 @@
     (:cut                    +opcode-cut+)))
 
 (defun* render-argument (argument)
-  (:returns code-word)
   (cond
     ;; Ugly choice point args that'll be filled later...
     ((eq +choice-point-placeholder+ argument) 0)

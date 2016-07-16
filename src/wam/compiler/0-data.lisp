@@ -13,7 +13,6 @@
 (declaim (inline variablep))
 
 (defun* variablep (term)
-  (:returns boolean)
   (and (symbolp term)
        (char= (char (symbol-name term) 0) #\?)))
 
@@ -46,16 +45,13 @@
 
 
 (defun* make-temporary-register ((number register-number) (arity arity))
-  (:returns register)
   (make-register (if (< number arity) :argument :local)
                  number))
 
 (defun* make-permanent-register ((number register-number))
-  (:returns register)
   (make-register :permanent number))
 
 (defun* make-anonymous-register ()
-  (:returns register)
   (make-register :anonymous 0))
 
 
@@ -76,24 +72,19 @@
 
 
 (defun* register-argument-p ((register register))
-  (:returns boolean)
   (eq (register-type register) :argument))
 
 (defun* register-temporary-p ((register register))
-  (:returns boolean)
   (and (member (register-type register) '(:argument :local)) t))
 
 (defun* register-permanent-p ((register register))
-  (:returns boolean)
   (eq (register-type register) :permanent))
 
 (defun* register-anonymous-p ((register register))
-  (:returns boolean)
   (eq (register-type register) :anonymous))
 
 
 (defun* register= ((r1 register) (r2 register))
-  (:returns boolean)
   (and (eq (register-type r1)
            (register-type r2))
        (= (register-number r1)
@@ -182,7 +173,6 @@
 
 
 (defun* determine-clause-properties (head body)
-  (:returns clause-properties)
   (let* ((clause
            (cons head body))
          (permanent-vars

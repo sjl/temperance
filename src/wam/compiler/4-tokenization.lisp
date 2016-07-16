@@ -49,7 +49,6 @@
 
 
 (defun* make-register-token ((register register))
-  (:returns register-token)
   (values (make-instance 'register-token :register register)))
 
 
@@ -97,7 +96,6 @@
 
 
 (defgeneric* tokenize-assignment ((assignment register-assignment))
-  (:returns list)
   "Tokenize `assignment` into a flat list of tokens.")
 
 (defmethod tokenize-assignment ((assignment structure-assignment))
@@ -123,13 +121,11 @@
                        :object (assignment-object assignment))))
 
 (defun* tokenize-assignments ((assignments list))
-  (:returns list)
   "Tokenize a flattened set of register assignments into a stream."
   (mapcan #'tokenize-assignment assignments))
 
 
 (defun* tokenize-program-term (term (clause-props clause-properties))
-  (:returns list)
   "Tokenize `term` as a program term, returning its tokens."
   (let ((tree (parse-top-level term)))
     (allocate-registers tree clause-props :nead t)
@@ -138,7 +134,6 @@
 (defun* tokenize-query-term (term
                              (clause-props clause-properties)
                              &key in-nead is-tail)
-  (:returns list)
   "Tokenize `term` as a query term, returning its tokens."
   (let ((tree (parse-top-level term)))
     (allocate-registers tree clause-props :nead in-nead)

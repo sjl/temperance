@@ -80,8 +80,7 @@
             (lisp-object-to-string (assignment-object assignment)))))
 
 
-(defgeneric* node-flatten (node)
-  (:returns (or null register-assignment)))
+(defgeneric* node-flatten (node))
 
 (defmethod node-flatten (node)
   nil)
@@ -111,7 +110,6 @@
 
 
 (defun* flatten-breadth-first ((tree top-level-node))
-  (:returns list)
   (let ((results nil))
     (recursively ((node tree))
       (when-let (assignment (node-flatten node))
@@ -120,7 +118,6 @@
     (nreverse results)))
 
 (defun* flatten-depth-first-post-order ((tree top-level-node))
-  (:returns list)
   (let ((results nil))
     (recursively ((node tree))
       (mapcar #'recur (node-children node))
@@ -130,11 +127,9 @@
 
 
 (defun* flatten-query ((tree top-level-node))
-  (:returns list)
   (flatten-depth-first-post-order tree))
 
 (defun* flatten-program ((tree top-level-node))
-  (:returns list)
   (flatten-breadth-first tree))
 
 

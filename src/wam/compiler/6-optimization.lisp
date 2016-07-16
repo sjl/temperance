@@ -61,7 +61,6 @@
     (return (circle-backward-remove node))))
 
 (defun* optimize-constants ((instructions circle))
-  (:returns circle)
   ;; From the book and the erratum, there are four optimizations we can do for
   ;; constants (0-arity structures).
 
@@ -86,7 +85,6 @@
 
 
 (defun* optimize-void-runs ((instructions circle))
-  (:returns circle)
   ;; We can optimize runs of N (:[unify/set]-void 1) instructions into a single
   ;; one that does all N at once.
   (loop

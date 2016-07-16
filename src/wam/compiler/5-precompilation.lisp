@@ -105,7 +105,6 @@
 
 
 (defun* find-opcode-register ((first-seen boolean) (register register))
-  (:returns keyword)
   (let ((register-variant (when register
                             (ecase (register-type register)
                               ((:local :argument) :local)
@@ -122,19 +121,16 @@
         (:void :subterm-void)))))
 
 (defun* find-opcode-list ((mode keyword))
-  (:returns keyword)
   (ecase mode
     (:program :get-list)
     (:query :put-list)))
 
 (defun* find-opcode-lisp-object ((mode keyword))
-  (:returns keyword)
   (ecase mode
     (:program :get-lisp-object)
     (:query :put-lisp-object)))
 
 (defun* find-opcode-structure ((mode keyword))
-  (:returns keyword)
   (ecase mode
     (:program :get-structure)
     (:query :put-structure)))
@@ -142,7 +138,6 @@
 (defun* find-opcode-argument ((first-seen boolean)
                               (mode keyword)
                               (register register))
-  (:returns keyword)
   (let ((register-variant (ecase (register-type register)
                             ((:local :argument) :local)
                             ((:permanent) :stack))))
@@ -164,7 +159,6 @@
 
 
 (defun* precompile-tokens ((head-tokens list) (body-tokens list))
-  (:returns circle)
   "Generate a series of machine instructions from a stream of head and body
   tokens.
 
@@ -277,7 +271,6 @@
 
 
 (defun* precompile-clause (head body)
-  (:returns (values circle clause-properties))
   "Precompile the clause.
 
   `head` should be the head of the clause for program clauses, or `nil` for
@@ -356,7 +349,6 @@
 
 
 (defun* precompile-query ((query list))
-  (:returns (values circle list))
   "Compile `query`, returning the instructions and permanent variables.
 
   `query` should be a list of goal terms.
@@ -369,7 +361,6 @@
 
 
 (defun* find-predicate ((clause cons))
-  (:returns (values t arity))
   "Return the functor and arity of the predicate of `clause`."
   ;; ( (f ?x ?y)   | head     ||| clause
   ;;   (foo ?x)      || body  |||

@@ -150,7 +150,6 @@
 
 
 (defun* find-variable ((state allocation-state) (variable symbol))
-  (:returns (or register null))
   "Return the register that already contains this variable, or `nil` otherwise."
   (or (when-let (r (position variable
                              (queue-contents
@@ -162,7 +161,6 @@
       nil))
 
 (defun* store-variable ((state allocation-state) (variable symbol))
-  (:returns register)
   "Assign `variable` to the next available local register.
 
   It is assumed that `variable` is not already assigned to another register
@@ -177,7 +175,6 @@
     (1- (enqueue variable (allocation-state-local-registers state)))))
 
 (defun* ensure-variable ((state allocation-state) (variable symbol))
-  (:returns register)
   (or (find-variable state variable)
       (store-variable state variable)))
 
@@ -189,19 +186,16 @@
 
 
 (defun* variable-anonymous-p ((state allocation-state) (variable symbol))
-  (:returns boolean)
   "Return whether `variable` is considered anonymous in `state`."
   (and (member variable (allocation-state-anonymous-variables state)) t))
 
 
 (defun* allocate-variable-register ((state allocation-state) (variable symbol))
-  (:returns register)
   (if (variable-anonymous-p state variable)
     (make-anonymous-register)
     (ensure-variable state variable)))
 
 (defun* allocate-nonvariable-register ((state allocation-state))
-  (:returns register)
   "Allocate and return a register for something that's not a variable."
   ;; We need to allocate registers for things like structures and lists, but we
   ;; never need to look them up later (like we do with variables), so we'll just
