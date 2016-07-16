@@ -71,13 +71,13 @@
         :do
         (match (circle-value node)
 
-          (`(:put-structure (,functor . 0) ,register)
+          (`(:put-structure ,functor 0 ,register)
            (setf node
                  (if (register-argument-p register)
                    (optimize-put-constant node functor register)
                    (optimize-subterm-constant-query node functor register))))
 
-          (`(:get-structure (,functor . 0) ,register)
+          (`(:get-structure ,functor 0 ,register)
            (setf node
                  (if (register-argument-p register)
                    (optimize-get-constant node functor register)

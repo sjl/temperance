@@ -39,9 +39,6 @@
 (deftype arity ()
   `(integer 0 ,+maximum-arity+))
 
-(deftype functor ()
-  '(cons fname arity))
-
 
 (deftype code-index ()
   ;; either an address or the sentinel

@@ -195,14 +195,14 @@
                (defun* ,name ((wam wam) (address store-index))
                  (:returns ,return-type)
                  (aref (wam-value-store wam) address)))))
-  (define-unsafe %unsafe-null-value (eql 0))
-  (define-unsafe %unsafe-structure-value store-index)
-  (define-unsafe %unsafe-reference-value store-index)
-  (define-unsafe %unsafe-functor-value functor)
-  (define-unsafe %unsafe-constant-value fname)
-  (define-unsafe %unsafe-list-value store-index)
+  (define-unsafe %unsafe-null-value        (eql 0))
+  (define-unsafe %unsafe-structure-value   store-index)
+  (define-unsafe %unsafe-reference-value   store-index)
+  (define-unsafe %unsafe-functor-value     fname)
+  (define-unsafe %unsafe-constant-value    fname)
+  (define-unsafe %unsafe-list-value        store-index)
   (define-unsafe %unsafe-lisp-object-value t)
-  (define-unsafe %unsafe-stack-value stack-word))
+  (define-unsafe %unsafe-stack-value       stack-word))
 
 
 (defun %type-designator-constant (designator)
@@ -226,6 +226,30 @@
     (:list '%unsafe-list-value)
     (:lisp-object '%unsafe-lisp-object-value)))
 
+(defun parse-cell-typecase-clause (wam address clause)
+  "Parse a `cell-typecase` clause into the appropriate `ecase` clause."
+  (destructuring-bind (binding . body) clause
+    (destructuring-bind
+        (type-designator &optional value-symbol secondary-value-symbol)
+        (if (symbolp binding) (list binding) binding) ; normalize binding
+      (let ((primary-let-binding
+              (when value-symbol
+                `((,value-symbol (,(%type-designator-accessor type-designator)
+                                  ,wam ,address)))))
+            (secondary-let-binding
+              (when secondary-value-symbol
+                `((,secondary-value-symbol
+                   ,(ecase type-designator
+                      (:functor
+                       `(the arity (%unsafe-lisp-object-value ; yolo
+                                     ,wam
+                                     (1+ ,address))))))))))
+        ; build the ecase clause (const ...body...)
+        (list
+          (%type-designator-constant type-designator)
+          `(let (,@primary-let-binding
+                 ,@secondary-let-binding)
+            ,@body))))))
 
 (defmacro cell-typecase ((wam address &optional address-symbol) &rest clauses)
   "Dispatch on the type of the cell at `address` in the WAM store.
@@ -252,31 +276,15 @@
 
   "
   (once-only (wam address)
-    (labels
-        ((normalize-binding (binding)
-           (cond
-             ((symbolp binding) (list binding nil))
-             ((= 1 (length binding)) (list (car binding) nil))
-             (t binding)))
-         (parse-clause (clause)
-           (destructuring-bind (binding . body) clause
-             (destructuring-bind (type-designator value-symbol)
-                 (normalize-binding binding)
-               `(,(%type-designator-constant type-designator)
-                 (let (,@(when value-symbol
-                           (list
-                             `(,value-symbol
-                               (,(%type-designator-accessor type-designator)
-                                ,wam ,address)))))
-                   ,@body))))))
-      `(progn
-        (policy-cond:policy-if (or (= safety 3) (= debug 3))
-          (wam-sanity-check-store-read ,wam ,address)
-          nil)
-        (let (,@(when address-symbol
-                  (list `(,address-symbol ,address))))
-          (case (wam-store-type ,wam ,address)
-            ,@(mapcar #'parse-clause clauses)))))))
+    `(progn
+      (policy-cond:policy-if (or (= safety 3) (= debug 3))
+        (wam-sanity-check-store-read ,wam ,address)
+        nil)
+      (let (,@(when address-symbol
+                (list `(,address-symbol ,address))))
+        (case (wam-store-type ,wam ,address)
+          ,@(mapcar (curry #'parse-cell-typecase-clause wam address)
+             clauses))))))
 
 
 (defmacro cell-type= (type type-designator)
@@ -708,6 +716,7 @@
     ;; todo we can't elide this once we start storing live objects... :(
     (wam-reset-local-registers! wam)
     nil) ; fuck it
+  (fill (wam-code wam) 0 :start 0 :end +maximum-query-size+)
   (setf (wam-program-counter wam) 0
         (wam-continuation-pointer wam) 0
         (wam-environment-pointer wam) +stack-start+

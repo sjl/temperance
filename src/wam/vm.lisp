@@ -34,10 +34,12 @@
   "
   (wam-heap-push! wam +cell-type-list+ (1+ (wam-heap-pointer wam))))
 
-(defun* push-new-functor! ((wam wam) (functor functor))
+(defun* push-new-functor! ((wam wam) (functor fname) (arity arity))
   (:returns heap-index)
-  "Push a new functor cell onto the heap, returning its address."
-  (wam-heap-push! wam +cell-type-functor+ functor))
+  "Push a new functor cell pair onto the heap, returning its address."
+  (prog1
+      (wam-heap-push! wam +cell-type-functor+ functor)
+    (wam-heap-push! wam +cell-type-lisp-object+ arity)))
 
 (defun* push-new-constant! ((wam wam) (constant fname))
   (:returns heap-index)
@@ -45,10 +47,12 @@
   (wam-heap-push! wam +cell-type-constant+ constant))
 
 
-(defun* functors-match-p ((f1 functor) (f2 functor))
+(defun* functors-match-p ((f1 fname) (a1 arity)
+                          (f2 fname) (a2 arity))
   (:returns boolean)
   "Return whether the two functor cell values represent the same functor."
-  (equal f1 f2))
+  (and (eq f1 f2)
+       (= a1 a2)))
 
 (defun* constants-match-p ((c1 fname) (c2 fname))
   (:returns boolean)
@@ -228,14 +232,15 @@
                (let* ((s1 (wam-store-value wam d1)) ; find where they
                       (s2 (wam-store-value wam d2)) ; start on the heap
                       (f1 (wam-store-value wam s1)) ; grab the
-                      (f2 (wam-store-value wam s2))) ; functors
-                 (if (functors-match-p f1 f2)
+                      (f2 (wam-store-value wam s2)) ; functors
+                      (a1 (wam-store-value wam (1+ s1)))  ; and the
+                      (a2 (wam-store-value wam (1+ s2)))) ; arities
+                 (if (functors-match-p f1 a1 f2 a2)
                    ;; If the functors match, push their pairs of arguments onto
                    ;; the stack to be unified.
-                   (loop :with arity = (cdr f1)
-                         :repeat arity
-                         :for subterm1 :from (1+ s1)
-                         :for subterm2 :from (1+ s2)
+                   (loop :repeat a1
+                         :for subterm1 :from (+ 2 s1)
+                         :for subterm2 :from (+ 2 s2)
                          :do (wam-unification-stack-push! wam subterm1 subterm2))
                    ;; Otherwise we're hosed.
                    (backtrack! wam))))
@@ -335,11 +340,12 @@
 ;;;; Query Instructions
 (define-instruction (%put-structure)
     ((wam wam)
-     (functor functor)
+     (functor fname)
+     (arity arity)
      (register register-index))
   (wam-set-local-register! wam register
                            +cell-type-structure+
-                           (push-new-functor! wam functor))
+                           (push-new-functor! wam functor arity))
   (setf (wam-mode wam) :write))
 
 (define-instruction (%put-list)
@@ -370,14 +376,16 @@
 
 ;;;; Program Instructions
 (define-instruction (%get-structure) ((wam wam)
-                                      (functor functor)
+                                      (functor fname)
+                                      (arity arity)
                                       (register register-index))
   (cell-typecase (wam (deref wam register) address)
-    ;; If the register points at an unbound reference cell, we push two new
+    ;; If the register points at an unbound reference cell, we push three new
     ;; cells onto the heap:
     ;;
     ;;     |   N | STR | N+1 |
-    ;;     | N+1 | FUN | f/n |
+    ;;     | N+1 | FUN | f   |
+    ;;     | N+2 | OBJ | n   |
     ;;     |     |     |     | <- S
     ;;
     ;; Then we bind this reference cell to point at the new structure, set
@@ -389,34 +397,30 @@
     ;; mode).
     (:reference
      (let ((structure-address (push-new-structure! wam))
-           (functor-address (push-new-functor! wam functor)))
+           (functor-address (push-new-functor! wam functor arity)))
        (bind! wam address structure-address)
        (setf (wam-mode wam) :write
-             (wam-subterm wam) (1+ functor-address))))
+             (wam-subterm wam) (+ 2 functor-address))))
 
     ;; If the register points at a structure cell, then we look at where
-    ;; that cell points (which will be the functor cell for the structure):
+    ;; that cell points (which will be the functor for the structure):
     ;;
     ;;     |   N | STR | M   | points at the structure, not necessarily contiguous
     ;;     |       ...       |
-    ;;     |   M | FUN | f/2 | the functor (hopefully it matches)
-    ;;     | M+1 | ... | ... | pieces of the structure, always contiguous
-    ;;     | M+2 | ... | ... | and always right after the functor
+    ;;     |   M | FUN | f   | the functor (hopefully it matches)
+    ;;     | M+1 | OBJ | 2   | the arity (hopefully it matches)
+    ;;     | M+2 | ... | ... | pieces of the structure, always contiguous
+    ;;     | M+3 | ... | ... | and always right after the functor
     ;;
     ;; If it matches the functor we're looking for, we can proceed.  We set
     ;; the S register to the address of the first subform we need to match
-    ;; (M+1 in the example above).
-    ;;
-    ;; What about if it's a 0-arity functor?  The S register will be set to
-    ;; garbage.  But that's okay, because we know the next thing in the
-    ;; stream of instructions will be another get-structure and we'll just
-    ;; blow away the S register there.
+    ;; (M+2 in the example above).
     ((:structure functor-address)
      (cell-typecase (wam functor-address)
-       ((:functor f)
-        (if (functors-match-p functor f)
+       ((:functor f n)
+        (if (functors-match-p functor arity f n)
           (setf (wam-mode wam) :read
-                (wam-subterm wam) (1+ functor-address))
+                (wam-subterm wam) (+ 2 functor-address))
           (backtrack! wam)))))
 
     ;; Otherwise we can't unify, so backtrack.
@@ -525,10 +529,9 @@
        ;; argument registers before we call it.  Luckily all the arguments
        ;; conveniently live contiguously right after the functor cell.
        (cell-typecase (wam functor-address)
-         ((:functor f)
-          (destructuring-bind (functor . arity) f
-            (load-arguments arity (1+ functor-address))
-            (%go functor arity)))))
+         ((:functor functor arity)
+          (load-arguments arity (+ 2 functor-address))
+          (%go functor arity))))
 
       ;; Zero-arity functors don't need to set up anything at all -- we can
       ;; just call them immediately.
@@ -542,15 +545,13 @@
       (t (error "Cannot dynamically call something other than a structure.")))))
 
 
-(define-instruction (%jump) ((wam wam) (functor functor))
-  (%%procedure-call wam
-                    (car functor) (cdr functor)
+(define-instruction (%jump) ((wam wam) (functor fname) (arity arity))
+  (%%procedure-call wam functor arity
                     (instruction-size +opcode-jump+)
                     t))
 
-(define-instruction (%call) ((wam wam) (functor functor))
-  (%%procedure-call wam
-                    (car functor) (cdr functor)
+(define-instruction (%call) ((wam wam) (functor fname) (arity arity))
+  (%%procedure-call wam functor arity
                     (instruction-size +opcode-call+)
                     nil))
 
@@ -766,12 +767,11 @@
              ((:structure s) (recur s))
              ((:list l) (cons (recur l) (recur (1+ l))))
              ((:constant c) c)
-             ((:functor f)
-              (destructuring-bind (functor . arity) f
-                (list* functor
-                       (loop :repeat arity
-                             :for subterm :from (+ address 1)
-                             :collect (recur subterm)))))
+             ((:functor functor arity)
+              (list* functor
+                     (loop :repeat arity
+                           :for subterm :from (+ 2 address)
+                           :collect (recur subterm))))
              ((:lisp-object o) o)
              (t (error "What to heck is this?")))))
       (mapcar #'recur addresses))))
@@ -933,9 +933,7 @@
                    term
                    &key
                    ((result-function function)
-                    (lambda (results) (declare (ignore results))))
-                   ((status-function function)
-                    (lambda (failp) (declare (ignore failp)))))
+                    (lambda (results) (declare (ignore results)))))
   "Compile query `term` and run the instructions on the `wam`.
 
   Resets the heap, etc before running.
@@ -945,14 +943,12 @@
 
   "
   (let ((vars (compile-query wam term)))
-    (wam-reset! wam)
     (setf (wam-program-counter wam) 0
           (wam-continuation-pointer wam) +code-sentinel+)
     (run wam (lambda ()
                (funcall result-function
-                        (extract-query-results wam vars))))
-    (when status-function
-      (funcall status-function (wam-fail wam))))
+                        (extract-query-results wam vars)))))
+  (wam-reset! wam)
   (values))
 
 

@@ -104,13 +104,13 @@
   "
   (#.+opcode-noop+ 1)
 
-  (#.+opcode-get-structure+ 3)
+  (#.+opcode-get-structure+ 4)
   (#.+opcode-get-variable-local+ 3)
   (#.+opcode-get-variable-stack+ 3)
   (#.+opcode-get-value-local+ 3)
   (#.+opcode-get-value-stack+ 3)
 
-  (#.+opcode-put-structure+ 3)
+  (#.+opcode-put-structure+ 4)
   (#.+opcode-put-variable-local+ 3)
   (#.+opcode-put-variable-stack+ 3)
   (#.+opcode-put-value-local+ 3)
@@ -122,8 +122,8 @@
   (#.+opcode-subterm-value-stack+ 2)
   (#.+opcode-subterm-void+ 2)
 
-  (#.+opcode-jump+ 2)
-  (#.+opcode-call+ 2)
+  (#.+opcode-jump+ 3)
+  (#.+opcode-call+ 3)
   (#.+opcode-dynamic-jump+ 1)
   (#.+opcode-dynamic-call+ 1)
   (#.+opcode-proceed+ 1)

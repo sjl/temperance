@@ -11,9 +11,8 @@
                         "unbound variable "
                         (format nil "var pointer to ~8,'0X " r)))
       ((:structure s) (format nil "struct pointer to ~8,'0X " s))
-      ((:functor f) (destructuring-bind (functor . arity) f
-                      (format nil "~A/~D " functor arity)))
-      ((:constant c) (format nil "~A/0 " c))
+      ((:functor f) (format nil "functor symbol ~A " f))
+      ((:constant c) (format nil "constant symbol ~A " c))
       (t ""))))
 
 
@@ -43,7 +42,7 @@
           :do (progn
                 (print-cell address indent)
                 (cell-typecase (wam address)
-                  ((:functor f) (setf indent (cdr f)))
+                  ((:functor f n) (declare (ignore f)) (setf indent n))
                   (t (when (not (zerop indent))
                        (decf indent)))))))
   (when (< to (wam-heap-pointer wam))
@@ -163,16 +162,18 @@
 
 
 (defmethod instruction-details ((opcode (eql +opcode-get-structure+)) arguments)
-  (format nil "GETS~A ; X~A = ~A"
+  (format nil "GETS~A ; X~A = ~A/~D"
           (pretty-arguments arguments)
-          (second arguments)
-          (pretty-functor (first arguments))))
+          (third arguments)
+          (first arguments)
+          (second arguments)))
 
 (defmethod instruction-details ((opcode (eql +opcode-put-structure+)) arguments)
-  (format nil "PUTS~A ; X~A <- new ~A"
+  (format nil "PUTS~A ; X~A <- new ~A/~D"
           (pretty-arguments arguments)
-          (second arguments)
-          (pretty-functor (first arguments))))
+          (third arguments)
+          (first arguments)
+          (second arguments)))
 
 (defmethod instruction-details ((opcode (eql +opcode-get-variable-local+)) arguments)
   (format nil "GVAR~A ; X~A <- A~A"
@@ -223,14 +224,16 @@
           (first arguments)))
 
 (defmethod instruction-details ((opcode (eql +opcode-call+)) arguments)
-  (format nil "CALL~A ; call ~A"
+  (format nil "CALL~A ; call ~A/~D"
           (pretty-arguments arguments)
-          (first arguments)))
+          (first arguments)
+          (second arguments)))
 
 (defmethod instruction-details ((opcode (eql +opcode-jump+)) arguments)
-  (format nil "JUMP~A ; jump ~A"
+  (format nil "JUMP~A ; jump ~A/~D"
           (pretty-arguments arguments)
-          (first arguments)))
+          (first arguments)
+          (second arguments)))
 
 (defmethod instruction-details ((opcode (eql +opcode-dynamic-call+)) arguments)
   (format nil "DYCL~A ; dynamic call"

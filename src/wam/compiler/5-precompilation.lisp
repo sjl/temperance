@@ -201,7 +201,8 @@
            ;; OP functor reg
            (push destination-register seen)
            (push-instruction (find-opcode-structure mode)
-                             (cons functor arity)
+                             functor
+                             arity
                              destination-register))
          (handle-list (register)
            (push register seen)
@@ -219,9 +220,7 @@
              ;; DYNAMIC-[CALL/JUMP]
              (push-instruction (if is-jump :dynamic-jump :dynamic-call))
              ;; [CALL/JUMP] functor
-             (push-instruction
-               (if is-jump :jump :call)
-               (cons functor arity)))
+             (push-instruction (if is-jump :jump :call) functor arity))
            ;; This is a little janky, but at this point the body goals have been
            ;; turned into one single stream of tokens, so we don't have a nice
            ;; clean way to tell when one ends.  But in practice, a body goal is

@@ -49,7 +49,7 @@
   :documentation
   "The maximum size (in bytes of bytecode) a query may compile to.")
 
-(define-constant +maximum-instruction-size+ 3
+(define-constant +maximum-instruction-size+ 4
   :documentation
   "The maximum number of code words an instruction (including opcode) might be.")
 
