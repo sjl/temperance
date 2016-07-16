@@ -740,7 +740,8 @@
 
 
 ;;;; Running
-(defun extract-things (wam addresses)
+(defun* extract-things ((wam wam) (addresses list))
+  (:returns list)
   "Extract the things at the given store addresses.
 
   The things will be returned in the same order as the addresses were given.
@@ -776,7 +777,8 @@
              (t (error "What to heck is this?")))))
       (mapcar #'recur addresses))))
 
-(defun extract-query-results (wam vars)
+(defun* extract-query-results ((wam wam) (vars list))
+  (:returns list)
   (let* ((addresses (loop :for var :in vars
                           ;; TODO: make this suck less
                           :for i :from (+ (wam-environment-pointer wam) 4)
@@ -867,7 +869,7 @@
     :with code = (wam-code wam)
     :until (or (wam-fail wam) ; failure
                (= (wam-program-counter wam) +code-sentinel+)) ; finished
-    :for opcode = (aref (wam-code wam) (wam-program-counter wam))
+    :for opcode = (the opcode (aref (wam-code wam) (wam-program-counter wam)))
     :do (progn
           (when step
             (dump)
@@ -919,7 +921,7 @@
             (#.+opcode-done+
              :increment-pc nil
              :raw (if (funcall done-thunk)
-                    (return-from run)
+                    (return-from run (values))
                     (backtrack! wam))))
 
           (setf (wam-backtracked wam) nil)
