@@ -178,8 +178,9 @@
          (permanent-vars
            (if (null head)
              ;; For query clauses we cheat a bit and make ALL variables
-             ;; permanent, so we can extract their bindings as results later.
-             (find-variables body)
+             ;; permanent (except ?, of course), so we can extract their
+             ;; bindings as results later.
+             (remove +wildcard-symbol+ (find-variables body))
              (find-permanent-variables clause)))
          (anonymous-vars
            (if (null head)

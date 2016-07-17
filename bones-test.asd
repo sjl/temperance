@@ -9,7 +9,9 @@
                (:module "test"
                 :serial t
                 :components ((:file "bones")
+                             (:file "utils")
                              (:file "circle")
                              (:file "paip")
-                             (:file "wam")))))
+                             (:file "wam")
+                             (:file "99")))))
 
