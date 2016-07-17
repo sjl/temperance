@@ -44,15 +44,15 @@
   (wam-logic-frame-add-clause! *database*
                                (list* (normalize-term head)
                                       (mapcar #'normalize-term body)))
-  (values))
+  nil)
 
 (defun invoke-fact (fact)
   (invoke-rule fact)
-  (values))
+  nil)
 
 (defun invoke-facts (&rest facts)
   (mapc #'invoke-fact facts)
-  (values))
+  nil)
 
 
 (defmacro rule (head &body body)
@@ -140,7 +140,7 @@
   (invoke (lambda (result)
             (funcall function result)
             nil))
-  (values))
+  nil)
 
 (define-invocation (invoke-query-find invoke-query-find-aot) (predicate)
   (let ((results nil)

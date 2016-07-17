@@ -863,7 +863,7 @@
             (#.+opcode-done+
              :increment-pc nil
              :raw (if (funcall done-thunk)
-                    (return-from run (values))
+                    (return-from run nil)
                     (backtrack! wam))))
 
           (setf (wam-backtracked wam) nil)
@@ -871,7 +871,7 @@
           (when (>= (wam-program-counter wam)
                     (wam-code-pointer wam))
             (error "Fell off the end of the program code store."))))
-  (values))
+  nil)
 
 
 (defun %run-query (wam vars result-function)
@@ -881,7 +881,7 @@
              (funcall result-function
                       (extract-query-results wam vars))))
   (wam-reset! wam)
-  (values))
+  nil)
 
 (defun run-query (wam terms &key (result-function
                                    (lambda (results)

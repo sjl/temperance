@@ -392,12 +392,11 @@
      (when (not (< +stack-start+ address +stack-end+))
        (error "Stack bounds crossed.  Game over.")))
     (t nil)) ; wew lads
-  (values))
+  nil)
 
 (defun wam-stack-ensure-size (wam address)
   "Ensure the WAM stack is large enough to be able to write to `address`."
-  (assert-inside-stack wam address)
-  (values))
+  (assert-inside-stack wam address))
 
 
 (defun wam-stack-word (wam address)
@@ -678,7 +677,7 @@
     (clrhash predicates)
     (setf start 0 final nil))
   (push frame (wam-logic-pool wam))
-  (values))
+  nil)
 
 (defun wam-logic-pool-request (wam)
   (or (pop (wam-logic-pool wam))
@@ -707,7 +706,7 @@
     (setf (logic-frame-start frame)
           (wam-code-pointer wam))
     (push frame (wam-logic-stack wam)))
-  (values))
+  nil)
 
 (defun assert-logic-frame-poppable (wam)
   (let ((logic-stack (wam-logic-stack wam)))
@@ -733,7 +732,7 @@
             :being :the hash-keys :of (logic-frame-predicates frame)
             :do (wam-code-label-remove! wam functor arity))
       (wam-logic-pool-release wam frame)))
-  (values))
+  nil)
 
 
 (defun assert-label-not-already-compiled (wam clause functor arity)
@@ -753,7 +752,7 @@
                       (cons functor arity)
                       (logic-frame-predicates (wam-current-logic-frame wam))
                       (make-queue))))
-  (values))
+  nil)
 
 
 (defun wam-finalize-logic-frame! (wam)
@@ -765,7 +764,7 @@
           ;; circular dep on the compiler here, ugh.
           :do (compile-rules wam (queue-contents clauses)))
     (setf final t))
-  (values))
+  nil)
 
 
 ;;;; Registers

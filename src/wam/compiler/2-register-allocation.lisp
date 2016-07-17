@@ -210,7 +210,7 @@
 
 (defmethod allocate-register ((node top-level-node) state)
   (declare (ignore node state))
-  (values))
+  nil)
 
 (defmethod allocate-register ((node variable-node) state)
   (set-when-nil (node-register node)
