@@ -54,6 +54,9 @@
 (deftype query-code-holder ()
   `(simple-array code-word (,+maximum-query-size+)))
 
+(deftype query-size ()
+  `(integer 0 ,+maximum-query-size+))
+
 (deftype instruction-size ()
   `(integer 1 ,+maximum-instruction-size+))
 

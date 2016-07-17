@@ -873,24 +873,42 @@
             (error "Fell off the end of the program code store."))))
   (values))
 
-(defun run-query (wam term &key (result-function
-                                  (lambda (results)
-                                    (declare (ignore results)))))
-  "Compile query `term` and run the instructions on the `wam`.
 
-  Resets the heap, etc before running.
-
-  When `*step*` is true, break into the debugger before calling the procedure and
-  after each instruction.
-
-  "
-  (let ((vars (compile-query wam term)))
-    (setf (wam-program-counter wam) 0
-          (wam-continuation-pointer wam) +code-sentinel+)
-    (run wam (lambda ()
-               (funcall result-function
-                        (extract-query-results wam vars)))))
+(defun %run-query (wam vars result-function)
+  (setf (wam-program-counter wam) 0
+        (wam-continuation-pointer wam) +code-sentinel+)
+  (run wam (lambda ()
+             (funcall result-function
+                      (extract-query-results wam vars))))
   (wam-reset! wam)
   (values))
+
+(defun run-query (wam terms &key (result-function
+                                   (lambda (results)
+                                     (declare (ignore results)))))
+  "Compile query `terms` and run the instructions on the `wam`.
+
+  Resets the heap, etc after running.
+
+  When `*step*` is true, break into the debugger before calling the procedure
+  and after each instruction.
+
+  "
+  (%run-query wam (compile-query wam terms) result-function))
+
+(defun run-aot-compiled-query (wam query-code query-size query-vars
+                               &key (result-function
+                                      (lambda (results)
+                                        (declare (ignore results)))))
+  "Run the AOT-compiled query `code`/`vars` on the `wam`.
+
+  Resets the heap, etc after running.
+
+  When `*step*` is true, break into the debugger before calling the procedure
+  and after each instruction.
+
+  "
+  (wam-load-query-code! wam query-code query-size)
+  (%run-query wam query-vars result-function))
 
 

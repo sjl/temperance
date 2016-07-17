@@ -2,7 +2,7 @@
 ;;;; See http://quickutil.org for details.
 
 ;;;; To regenerate:
-;;;; (qtlc:save-utils-as "quickutils.lisp" :utilities '(:DEFINE-CONSTANT :SET-EQUAL :CURRY :SWITCH :ENSURE-BOOLEAN :WHILE :UNTIL :TREE-MEMBER-P :TREE-COLLECT :WITH-GENSYMS :ONCE-ONLY :ZIP :ALIST-TO-HASH-TABLE :MAP-TREE :WEAVE :RANGE :ALIST-PLIST :EQUIVALENCE-CLASSES :MAP-PRODUCT) :ensure-package T :package "BONES.QUICKUTILS")
+;;;; (qtlc:save-utils-as "quickutils.lisp" :utilities '(:DEFINE-CONSTANT :SET-EQUAL :CURRY :RCURRY :SWITCH :ENSURE-BOOLEAN :WHILE :UNTIL :TREE-MEMBER-P :WITH-GENSYMS :ONCE-ONLY :ZIP :ALIST-TO-HASH-TABLE :MAP-TREE :WEAVE :ALIST-PLIST :EQUIVALENCE-CLASSES :MAP-PRODUCT) :ensure-package T :package "BONES.QUICKUTILS")
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (unless (find-package "BONES.QUICKUTILS")
@@ -15,13 +15,12 @@
 (when (boundp '*utilities*)
   (setf *utilities* (union *utilities* '(:DEFINE-CONSTANT :SET-EQUAL
                                          :MAKE-GENSYM-LIST :ENSURE-FUNCTION
-                                         :CURRY :STRING-DESIGNATOR
+                                         :CURRY :RCURRY :STRING-DESIGNATOR
                                          :WITH-GENSYMS :EXTRACT-FUNCTION-NAME
                                          :SWITCH :ENSURE-BOOLEAN :UNTIL :WHILE
-                                         :TREE-MEMBER-P :TREE-COLLECT
-                                         :ONCE-ONLY :TRANSPOSE :ZIP
-                                         :ALIST-TO-HASH-TABLE :MAP-TREE :WEAVE
-                                         :RANGE :SAFE-ENDP :ALIST-PLIST
+                                         :TREE-MEMBER-P :ONCE-ONLY :TRANSPOSE
+                                         :ZIP :ALIST-TO-HASH-TABLE :MAP-TREE
+                                         :WEAVE :SAFE-ENDP :ALIST-PLIST
                                          :EQUIVALENCE-CLASSES :MAPPEND
                                          :MAP-PRODUCT))))
 
@@ -116,6 +115,16 @@ it is called with to `function`."
          (declare (optimize (speed 3) (safety 1) (debug 1)))
          (lambda (&rest more)
            (apply ,fun ,@curries more)))))
+  
+
+  (defun rcurry (function &rest arguments)
+    "Returns a function that applies the arguments it is called
+with and `arguments` to `function`."
+    (declare (optimize (speed 3) (safety 1) (debug 1)))
+    (let ((fn (ensure-function function)))
+      (lambda (&rest more)
+        (declare (dynamic-extent more))
+        (multiple-value-call fn (values-list more) (values-list arguments)))))
   
 
   (deftype string-designator ()
@@ -240,25 +249,6 @@ returns the values of `default` if no keys match."
       (rec tree)))
   
 
-  (defun tree-collect (predicate tree)
-    "Returns a list of every node in the `tree` that satisfies the `predicate`. If there are any improper lists in the tree, the `predicate` is also applied to their dotted elements."
-    (let ((sentinel (gensym)))
-      (flet ((my-cdr (obj)
-               (cond ((consp obj)
-                      (let ((result (cdr obj)))
-                        (if (listp result)
-                            result
-                            (list result sentinel))))
-                     (t
-                      (list sentinel)))))
-        (loop :for (item . rest) :on tree :by #'my-cdr
-              :until (eq item sentinel)
-              :if (funcall predicate item) collect item
-                :else
-                  :if (listp item)
-                    :append (tree-collect predicate item)))))
-  
-
   (defmacro once-only (specs &body forms)
     "Evaluates `forms` with symbols specified in `specs` rebound to temporary
 variables, ensuring that each initform is evaluated only once.
@@ -335,14 +325,6 @@ tuples. Equivalent to `unzip`."
     "Return a list whose elements alternate between each of the lists
 `lists`. Weaving stops when any of the lists has been exhausted."
     (apply #'mapcan #'list lists))
-  
-
-  (defun range (start end &key (step 1) (key 'identity))
-    "Return the list of numbers `n` such that `start <= n < end` and
-`n = start + k*step` for suitable integers `k`. If a function `key` is
-provided, then apply it to each number."
-    (assert (<= start end))
-    (loop :for i :from start :below end :by step :collecting (funcall key i)))
   
 
   (declaim (inline safe-endp))
@@ -423,9 +405,9 @@ Example:
       (%map-product (ensure-function function) (cons list more-lists))))
   
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (export '(define-constant set-equal curry switch eswitch cswitch
-            ensure-boolean while until tree-member-p tree-collect with-gensyms
+  (export '(define-constant set-equal curry rcurry switch eswitch cswitch
+            ensure-boolean while until tree-member-p with-gensyms
             with-unique-names once-only zip alist-to-hash-table map-tree weave
-            range alist-plist plist-alist equivalence-classes map-product)))
+            alist-plist plist-alist equivalence-classes map-product)))
 
 ;;;; END OF quickutils.lisp ;;;;

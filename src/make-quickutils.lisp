@@ -5,6 +5,7 @@
   :utilities '(:define-constant
                :set-equal
                :curry
+               :rcurry
                :switch
                :ensure-boolean
                :while

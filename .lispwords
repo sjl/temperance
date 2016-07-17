@@ -8,3 +8,4 @@
 (0 push-logic-frame-with)
 (1 cell-typecase)
 (1 opcode-case)
+(2 define-invocation)

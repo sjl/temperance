@@ -10,6 +10,13 @@
     :initial-element 0
     :element-type 'code-word))
 
+(defun allocate-query-holder ()
+  (make-array +maximum-query-size+
+    :adjustable nil
+    :initial-element 0
+    :element-type 'code-word))
+
+
 (defun allocate-wam-type-store (size)
   ;; The main WAM store(s) contain three separate blocks of values:
   ;;
@@ -638,9 +645,12 @@
       (remhash functor atable))))
 
 
-(defun wam-load-query-code! (wam query-code)
-  (setf (subseq (wam-code wam) 0) query-code)
-  (values))
+(declaim (ftype (function (wam query-code-holder query-size)
+                          (values null &optional))
+                wam-load-query-code!))
+(defun wam-load-query-code! (wam query-code query-size)
+  (setf (subseq (wam-code wam) 0 query-size) query-code)
+  nil)
 
 
 ;;;; Logic Stack

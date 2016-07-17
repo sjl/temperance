@@ -132,8 +132,8 @@
         :do (incf address size)))))
 
 
-(defun render-query (wam instructions)
-  (render-bytecode (wam-code wam) instructions 0 +maximum-query-size+))
+(defun render-query-into (storage instructions)
+  (render-bytecode storage instructions 0 +maximum-query-size+))
 
 
 (defun mark-label (wam functor arity address)

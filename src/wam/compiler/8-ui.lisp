@@ -8,19 +8,33 @@
 
 ;;; The final phase wraps everything else up into a sane UI.
 
+(defun %compile-query-into (storage query)
+  (multiple-value-bind (instructions permanent-variables)
+      (precompile-query query)
+    (optimize-instructions instructions)
+    (values permanent-variables
+            (render-query-into storage instructions))))
+
 (defun compile-query (wam query)
   "Compile `query` into the query section of the WAM's code store.
 
   `query` should be a list of goal terms.
 
-  Returns the permanent variables.
+  Returns the permanent variables and the size of the compiled bytecode.
 
   "
-  (multiple-value-bind (instructions permanent-variables)
-      (precompile-query query)
-    (optimize-instructions instructions)
-    (render-query wam instructions)
-    permanent-variables))
+  (%compile-query-into (wam-code wam) query))
+
+(defun compile-query-into (storage query)
+  "Compile `query` into the given array `storage`.
+
+  `query` should be a list of goal terms.
+
+  Returns the permanent variables and the size of the compiled bytecode.
+
+  "
+  (%compile-query-into storage query))
+
 
 (defun compile-rules (wam rules)
   "Compile `rules` into the WAM's code store.

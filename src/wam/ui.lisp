@@ -21,20 +21,21 @@
 
 
 ;;;; Normalization
-(defun normalize-term (term)
-  ;; Normally a rule consists of a head terms and multiple body terms, like so:
-  ;;
-  ;;     (likes sally ?who) (likes ?who cats)
-  ;;
-  ;; But sometimes people are lazy and don't include the parens around
-  ;; zero-arity predicates:
-  ;;
-  ;;     (happy steve) sunny
-  (if (and (not (variablep term))
-           (symbolp term)
-           (not (eq term '!))) ; jesus
-    (list term)
-    term))
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defun normalize-term (term)
+    ;; Normally a rule consists of a head terms and many body terms, like so:
+    ;;
+    ;;     (likes sally ?who) (likes ?who cats)
+    ;;
+    ;; But sometimes people are lazy and don't include the parens around
+    ;; zero-arity predicates:
+    ;;
+    ;;     (happy steve) sunny
+    (if (and (not (variablep term))
+             (symbolp term)
+             (not (eq term '!))) ; jesus
+      (list term)
+      term)))
 
 
 ;;;; Assertion
@@ -86,58 +87,78 @@
 
 
 ;;;; Querying
+(defun perform-aot-query (code size vars result-function)
+  (assert *database* (*database*) "No database.")
+  (run-aot-compiled-query *database* code size vars
+                          :result-function result-function))
+
 (defun perform-query (terms result-function)
   (assert *database* (*database*) "No database.")
   (run-query *database* (mapcar #'normalize-term terms)
              :result-function result-function))
 
 
-(defun invoke-query (&rest terms)
+(defmacro define-invocation ((name aot-name) arglist &body body)
+  (with-gensyms (terms data code size vars)
+    `(progn
+      (defun ,name ,(append arglist `(&rest ,terms))
+        (macrolet ((invoke (result-function)
+                     `(perform-query ,',terms ,result-function)))
+          ,@body))
+      (defun ,aot-name ,(append arglist `(,data))
+        (destructuring-bind (,code ,size ,vars) ,data
+          (macrolet ((invoke (result-function)
+                       `(perform-aot-query ,',code ,',size ,',vars
+                                           ,result-function)))
+            ,@body))))))
+
+
+(define-invocation (invoke-query invoke-query-aot) ()
   (let ((result nil)
         (succeeded nil))
-    (perform-query terms (lambda (r)
-                           (setf result r
-                                 succeeded t)
-                           t))
+    (invoke (lambda (r)
+              (setf result r
+                    succeeded t)
+              t))
     (values result succeeded)))
 
-(defun invoke-query-all (&rest terms)
+(define-invocation (invoke-query-all invoke-query-all-aot) ()
   (let ((results nil))
-    (perform-query terms (lambda (result)
-                           (push result results)
-                           nil))
+    (invoke (lambda (result)
+              (push result results)
+              nil))
     (nreverse results)))
 
-(defun invoke-query-map (function &rest terms)
+(define-invocation (invoke-query-map invoke-query-map-aot) (function)
   (let ((results nil))
-    (perform-query terms (lambda (result)
-                           (push (funcall function result) results)
-                           nil))
+    (invoke (lambda (result)
+              (push (funcall function result) results)
+              nil))
     (nreverse results)))
 
-(defun invoke-query-do (function &rest terms)
-  (perform-query terms (lambda (result)
-                         (funcall function result)
-                         nil))
+(define-invocation (invoke-query-do invoke-query-do-aot) (function)
+  (invoke (lambda (result)
+            (funcall function result)
+            nil))
   (values))
 
-(defun invoke-query-find (predicate &rest terms)
+(define-invocation (invoke-query-find invoke-query-find-aot) (predicate)
   (let ((results nil)
         (succeeded nil))
-    (perform-query terms (lambda (result)
-                           (if (funcall predicate result)
-                             (progn (setf results result
-                                          succeeded t)
-                                    t)
-                             nil)))
+    (invoke (lambda (result)
+              (if (funcall predicate result)
+                (progn (setf results result
+                             succeeded t)
+                       t)
+                nil)))
     (values results succeeded)))
 
-(defun invoke-prove (&rest terms)
+(define-invocation (invoke-prove invoke-prove-aot) ()
   (let ((succeeded nil))
-    (perform-query terms (lambda (result)
-                           (declare (ignore result))
-                           (setf succeeded t)
-                           t))
+    (invoke (lambda (result)
+              (declare (ignore result))
+              (setf succeeded t)
+              t))
     succeeded))
 
 
@@ -161,6 +182,39 @@
 
 (defmacro prove (&rest terms)
   `(invoke-prove ,@(quote-terms terms)))
+
+
+;;;; Chili Dogs
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defun make-aot-data-form (terms)
+    (with-gensyms (code size vars)
+      `(load-time-value
+        (let* ((,code (allocate-query-holder)))
+          (multiple-value-bind (,vars ,size)
+              (compile-query-into
+                ,code ',(->> terms
+                          (mapcar #'eval)
+                          (mapcar #'normalize-term)))
+            (list ,code ,size ,vars)))
+        t))))
+
+
+(defmacro define-invocation-compiler-macro (name aot-name arglist)
+  `(define-compiler-macro ,name (&whole form
+                                 ,@arglist
+                                 &rest terms
+                                 &environment env)
+    (if (every (rcurry #'constantp env) terms)
+      `(,',aot-name ,,@arglist ,(make-aot-data-form terms))
+      form)))
+
+
+(define-invocation-compiler-macro invoke-query      invoke-query-aot ())
+(define-invocation-compiler-macro invoke-query-all  invoke-query-all-aot ())
+(define-invocation-compiler-macro invoke-query-map  invoke-query-map-aot (function))
+(define-invocation-compiler-macro invoke-query-do   invoke-query-do-aot (function))
+(define-invocation-compiler-macro invoke-query-find invoke-query-find-aot (predicate))
+(define-invocation-compiler-macro invoke-prove      invoke-prove-aot ())
 
 
 ;;;; Debugging
