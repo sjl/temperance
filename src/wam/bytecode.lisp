@@ -17,6 +17,7 @@
     (+opcode-put-variable-stack+ "PUT-VARIABLE")
     (+opcode-put-value-local+ "PUT-VALUE")
     (+opcode-put-value-stack+ "PUT-VALUE")
+    (+opcode-put-void+ "PUT-VOID")
 
     (+opcode-subterm-variable-local+ "SUBTERM-VARIABLE")
     (+opcode-subterm-variable-stack+ "SUBTERM-VARIABLE")
@@ -62,6 +63,7 @@
     (+opcode-put-variable-stack+ "PVAR")
     (+opcode-put-value-local+ "PVLU")
     (+opcode-put-value-stack+ "PVLU")
+    (+opcode-put-void+ "PVOI")
 
     (+opcode-subterm-variable-local+ "SVAR")
     (+opcode-subterm-variable-stack+ "SVAR")
@@ -113,6 +115,7 @@
   (#.+opcode-put-variable-stack+ 3)
   (#.+opcode-put-value-local+ 3)
   (#.+opcode-put-value-stack+ 3)
+  (#.+opcode-put-void+ 2)
 
   (#.+opcode-subterm-variable-local+ 2)
   (#.+opcode-subterm-variable-stack+ 2)

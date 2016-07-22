@@ -108,6 +108,7 @@
   +opcode-put-variable-stack+
   +opcode-put-value-local+
   +opcode-put-value-stack+
+  +opcode-put-void+
 
   ;; Subterm
   +opcode-subterm-variable-local+

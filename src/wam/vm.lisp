@@ -353,6 +353,10 @@
   (setf (wam-mode wam) :write))
 
 
+(define-instruction (%put-void) (wam argument)
+  (wam-copy-to-local-register! wam argument (push-unbound-reference! wam)))
+
+
 ;;;; Program Instructions
 (define-instruction (%get-structure) (wam functor arity register)
   (cell-typecase (wam (deref wam register) address)
@@ -824,6 +828,7 @@
             (#.+opcode-put-variable-stack+  :instruction %put-variable-stack)
             (#.+opcode-put-value-local+     :instruction %put-value-local)
             (#.+opcode-put-value-stack+     :instruction %put-value-stack)
+            (#.+opcode-put-void+            :instruction %put-void)
             ;; Program
             (#.+opcode-get-structure+       :instruction %get-structure)
             (#.+opcode-get-variable-local+  :instruction %get-variable-local)

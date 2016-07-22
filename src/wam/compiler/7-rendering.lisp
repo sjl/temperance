@@ -48,6 +48,7 @@
     (:put-variable-stack     +opcode-put-variable-stack+)
     (:put-value-local        +opcode-put-value-local+)
     (:put-value-stack        +opcode-put-value-stack+)
+    (:put-void               +opcode-put-void+)
     (:subterm-variable-local +opcode-subterm-variable-local+)
     (:subterm-variable-stack +opcode-subterm-variable-stack+)
     (:subterm-value-local    +opcode-subterm-value-local+)

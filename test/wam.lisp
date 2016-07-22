@@ -379,12 +379,18 @@
       (fact (foo x))
       (rule (bar (baz ?x ?y ?z ?thing))
         (foo ?thing))
-      (fact (wild ? ? ?)))
+      (fact (wild ? ? ?))
+      
+      (fact (does x move))
+      (rule (next z)
+        (does ? move)))
     (should-return
       ((following (s x x x a)) empty)
       ((bar (baz a b c no)) fail)
       ((bar (baz a b c ?what)) (?what x))
-      ((wild a b c) empty))))
+      ((wild a b c) empty)
+      ((next z) empty)
+      )))
 
 (test normalization-ui
   (with-fresh-database
@@ -483,3 +489,4 @@
       ((lol ?anything) fail)
       ((= 0 1) fail)
       ((= 0 0) empty))))
+

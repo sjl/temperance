@@ -180,9 +180,13 @@
            (setf seen (remove-if #'register-temporary-p seen)))
          (handle-argument (argument-register source-register)
            (if (register-anonymous-p source-register)
-             ;; Crazy, but we can just drop argument-position anonymous
-             ;; variables on the floor at this point.
-             nil
+             (ecase mode
+               ;; Query terms need to put an unbound var into their argument
+               ;; register for each anonymous variable.
+               (:query (push-instruction :put-void argument-register))
+               ;; Crazy, but for program terms we can just drop
+               ;; argument-position anonymous variables on the floor.
+               (:program nil))
              ;; OP X_n A_i
              (let ((first-seen (push-if-new source-register seen :test #'register=)))
                (push-instruction

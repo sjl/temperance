@@ -79,14 +79,13 @@
 
 
 (defun optimize-void-runs (instructions)
-  ;; We can optimize runs of N (:[unify/set]-void 1) instructions into a single
-  ;; one that does all N at once.
+  ;; We can optimize runs of N (:unify-void 1) instructions into a single one
+  ;; that does all N at once.
   (loop
     :for node = (circle-forward instructions) :then (circle-forward node)
     :while node
     :for opcode = (car (circle-value node))
-    :when (or (eq opcode :set-void)
-              (eq opcode :subterm-void))
+    :when (eq opcode :subterm-void)
     :do
     (loop
       :with beginning = (circle-backward node)
