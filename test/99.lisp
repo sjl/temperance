@@ -6,22 +6,6 @@
 ;;; Solutions to at least a few of these, for testing purposes.
 
 
-(defun %= ()
-  (push-logic-frame-with
-    (fact (= ?x ?x))))
-
-(defun %not ()
-  (push-logic-frame-with
-    (rule (not ?x) (call ?x) ! fail)
-    (fact (not ?x))))
-
-(defun %append ()
-  (push-logic-frame-with
-    (fact (append nil ?l ?l))
-    (rule (append (list* ?x ?rest) ?l (list* ?x ?result))
-      (append ?rest ?l ?result))))
-
-
 (test p1
   ;; Find the last element of a list.
   (with-fresh-database
@@ -193,3 +177,33 @@
       ((compress (list (f cats ?) ?what (f ? dogs))
                  (list ?))
        (?what (f cats dogs))))))
+
+; (test p9
+;   (with-fresh-database
+;     (%=)
+;     (%not)
+
+;     (push-logic-frame-with
+;       (fact (pack nil nil))
+;       (fact (pack (list ?x) (list (list ?x))))
+
+;       (rule (pack (list* ?x ?tail)
+;                   (list* (list ?x) ?ptail))
+;         (pack ?tail ?ptail)
+;         (= ?ptail (list* (list* ?y ?) ?))
+;         (not (= ?x ?y)))
+
+;       (rule (pack (list* ?h ?tail)
+;                   (list* (list* ?h ?h ?hs) ?more))
+;         (pack ?tail (list* (list* ?h ?hs) ?more))))
+
+;     (should-return
+;       ((pack nil nil) empty)
+;       ((pack (list a) ?what)
+;        (?what ((a))))
+;       ((pack (list a a) ?what)
+;        (?what ((a a))))
+;       ((pack (list a a a) ?what)
+;        (?what ((a a a))))
+;       ((pack (list a a b a) ?what)
+;        (?what ((a a) (b) (a)))))))

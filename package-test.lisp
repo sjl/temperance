@@ -13,7 +13,10 @@
     #:result=
     #:results=
     #:should-fail
-    #:should-return))
+    #:should-return
+    #:%=
+    #:%not
+    #:%append))
 
 (defpackage #:bones-test.paip
   (:use
@@ -47,6 +50,28 @@
     #:symbolize))
 
 (defpackage #:bones-test.99
+  (:use
+    #:cl
+    #:1am
+    #:bones-test.utils
+    #:bones.quickutils
+    #:bones.wam)
+  (:import-from #:bones.wam
+    #:with-fresh-database
+    #:push-logic-frame-with
+    #:rule
+    #:fact
+    #:facts
+    #:call
+    #:dump-wam-full
+    #:?
+    #:!
+    #:query
+    #:query-all)
+  (:import-from #:bones.utils
+    #:symbolize))
+
+(defpackage #:bones-test.taop
   (:use
     #:cl
     #:1am

@@ -28,3 +28,18 @@
                                (t results))
                            (query-all ,query))))))
 
+
+;;;; Prolog
+(defun %= ()
+  (push-logic-frame-with
+    (fact (= ?x ?x))))
+
+(defun %not ()
+  (push-logic-frame-with
+    (rule (not ?x) (call ?x) ! fail)
+    (fact (not ?x))))
+(defun %append ()
+  (push-logic-frame-with
+    (fact (append nil ?l ?l))
+    (rule (append (list* ?x ?rest) ?l (list* ?x ?result))
+      (append ?rest ?l ?result))))

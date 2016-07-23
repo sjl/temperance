@@ -89,6 +89,18 @@ my_pack([X | Tail], [[X] | ResultTail]) :-
 my_pack([X | Tail], [[X, X | XS] | ResultTail]) :-
     my_pack(Tail, [[X | XS] | ResultTail]).
 
+
+
+
+
+
+
+
+
+
+
+
+
 their_pack([],[]).
 their_pack([X | Tail], [Chunk | PackedTail]) :-
     their_transfer(X, [X | Tail], Remaining, Chunk),

@@ -13,5 +13,6 @@
                              (:file "circle")
                              (:file "paip")
                              (:file "wam")
-                             (:file "99")))))
+                             (:file "99")
+                             (:file "taop")))))
 
