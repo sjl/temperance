@@ -17,7 +17,8 @@
     #:define-test
     #:%=
     #:%not
-    #:%append))
+    #:%append
+    #:%member))
 
 (defpackage #:bones-test.paip
   (:use

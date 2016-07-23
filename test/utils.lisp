@@ -54,3 +54,9 @@
     (fact (append nil ?l ?l))
     (rule (append (list* ?x ?rest) ?l (list* ?x ?result))
       (append ?rest ?l ?result))))
+
+(defun %member ()
+  (push-logic-frame-with
+    (fact (member ?x (list* ?x ?)))
+    (rule (member ?x (list* ? ?rest))
+      (member ?x ?rest))))

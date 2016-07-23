@@ -110,56 +110,144 @@
 
     (push-logic-frame-with
       ;; and gate
-      (facts (resistor power n1)
-             (resistor power n2)
-             (transistor n2 ground n1)
-             (transistor n3 n4 n2)
-             (transistor n5 ground n4))
 
-      (rule (inverter ?input ?output)
-        (transistor ?input ground ?output)
-        (resistor power ?output))
+      ;; (resistor name node-1 node-2)
+      (facts (resistor r1 power n1)
+             (resistor r2 power n2))
 
-      (rule (nand ?a ?b ?output)
-        (transistor ?a ?x ?output)
-        (transistor ?b ground ?x)
-        (resistor power ?output))
+      ;; (transistor name gate source drain)
+      (facts (transistor t1 n2 ground n1)
+             (transistor t2 n3 n4 n2)
+             (transistor t3 n5 ground n4))
 
-      (rule (and ?a ?b ?output)
-        (nand ?a ?b ?x)
-        (inverter ?x ?output)))
+      (rule (inverter (inverter ?t ?r) ?input ?output)
+        (transistor ?t ?input ground ?output)
+        (resistor ?r power ?output))
+
+      (rule (nand (nand ?t1 ?t2 ?r) ?a ?b ?output)
+        (transistor ?t1 ?a ?x ?output)
+        (transistor ?t2 ?b ground ?x)
+        (resistor ?r power ?output))
+
+      (rule (and (and ?n ?i) ?a ?b ?output)
+        (nand ?n ?a ?b ?x)
+        (inverter ?i ?x ?output)))
+
     (should-return
-      ((and ?a ?b ?out)
-       (?a n3 ?b n5 ?out n1)))
+      ((and ?g ?a ?b ?out)
+       (?a n3 ?b n5 ?out n1 ?g (and (nand t2 t3 r2)
+                                    (inverter t1 r1)))))
 
     (pop-logic-frame)
 
     (push-logic-frame-with
       ;; nor gate
-      (facts (resistor power o)
-             (transistor i1 ground o)
-             (transistor i2 ground o)
-             (resistor power no)
-             (transistor o ground no))
+      (facts (resistor r1 power o)
+             (transistor t1 i1 ground o)
+             (transistor t2 i2 ground o)
+             (resistor r2 power no)
+             (transistor t3 o ground no))
 
-      (rule (inverter ?input ?output)
-        (transistor ?input ground ?output)
-        (resistor power ?output))
+      (rule (inverter (inverter ?t ?r) ?input ?output)
+        (transistor ?t ?input ground ?output)
+        (resistor ?r power ?output))
 
-      (rule (or ?a ?b ?output)
-        (transistor ?a ground ?output)
-        (transistor ?b ground ?output)
+      (rule (or (or ?t1 ?t2 ?r) ?a ?b ?output)
+        (transistor ?t1 ?a ground ?output)
+        (transistor ?t2 ?b ground ?output)
         (not (= ?a ?b))
-        (resistor power ?output))
+        (resistor ?r power ?output))
 
-      (rule (nor ?a ?b ?output)
-        (or ?a ?b ?x)
-        (inverter ?x ?output)))
+      (rule (nor (nor ?o ?i) ?a ?b ?output)
+        (or ?o ?a ?b ?x)
+        (inverter ?i ?x ?output)))
 
     (should-return
-      ((or ?a ?b ?out)
-       (?a i1 ?b i2 ?out o)
-       (?a i2 ?b i1 ?out o))
-      ((nor ?a ?b ?out)
-       (?a i1 ?b i2 ?out no)
-       (?a i2 ?b i1 ?out no)))))
+      ((or ?g ?a ?b ?out)
+       (?a i1 ?b i2 ?out o ?g (or t1 t2 r1))
+       (?a i2 ?b i1 ?out o ?g (or t2 t1 r1)))
+      ((nor ?g ?a ?b ?out)
+       (?a i1 ?b i2 ?out no ?g (nor (or t1 t2 r1)
+                                    (inverter t3 r2)))
+       (?a i2 ?b i1 ?out no ?g (nor (or t2 t1 r1)
+                                    (inverter t3 r2)))))))
+
+(define-test courses
+  (with-fresh-database
+    (push-logic-frame-with
+      (facts (course complexity
+                     (time monday 9 11)
+                     (lecturer david harel)
+                     (location feinberg a))
+             (course lisp
+                     (time monday 10 12)
+                     (lecturer alyssa p hacker)
+                     (location main-hall))
+             (course scheme
+                     (time monday 12 15)
+                     (lecturer alyssa p hacker)
+                     (location online))
+             (course prolog
+                     (time tuesday 12 15)
+                     (lecturer ben bitdiddle)
+                     (location feinberg b))
+             (course haskell
+                     (time wednesday 12 15)
+                     (lecturer ben bitdiddle)
+                     (location online)))
+
+      (rule (lecturer ?who ?course)
+        (course ?course ? ?who ?))
+
+      (rule (teaches-on ?who ?day)
+        (course ? (time ?day ? ?) ?who ?))
+
+      (rule (teaches-in ?who ?location)
+        (course ? ? ?who ?location))
+
+      (rule (location-of ?course ?location)
+        (course ?course ? ? ?location)))
+
+    (should-return
+      ((lecturer ?who lisp)
+       (?who (lecturer alyssa p hacker)))
+
+      ((teaches-in (lecturer alyssa p hacker) ?loc)
+       (?loc (location online))
+       (?loc (location main-hall)))
+
+      ((location-of lisp ?where)
+       (?where (location main-hall)))
+
+      ((teaches-on ?who ?day)
+       (?who (lecturer alyssa p hacker) ?day monday)
+       (?who (lecturer ben bitdiddle) ?day tuesday)
+       (?who (lecturer ben bitdiddle) ?day wednesday)
+       (?who (lecturer david harel) ?day monday)))))
+
+
+(define-test books
+  (with-fresh-database
+    (%member)
+    (push-logic-frame-with
+      (facts (book paip (list norvig) 1992)
+             (book sicp (list abelson sussman) 1996)
+             (book lol (list hoyte) 2008)
+             (book clos (list keene) 1988))
+
+      (rule (wrote ?who ?title)
+        (book ?title ?authors ?)
+        (member ?who ?authors))
+
+      (rule (published-in ?who ?year)
+        (book ? ?authors ?year)
+        (member ?who ?authors)))
+
+    (should-return
+      ((wrote sussman ?what)
+       (?what sicp))
+      ((published-in keene ?year)
+       (?year 1988))
+      ((published-in ?who 1996)
+       (?who abelson)
+       (?who sussman)))))
