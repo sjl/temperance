@@ -162,7 +162,4 @@
        (?a i2 ?b i1 ?out o))
       ((nor ?a ?b ?out)
        (?a i1 ?b i2 ?out no)
-       (?a i2 ?b i1 ?out no)))
-
-    )
-  )
+       (?a i2 ?b i1 ?out no)))))
