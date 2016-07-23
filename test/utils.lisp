@@ -2,6 +2,17 @@
 
 
 ;;;; Utils
+(defmacro define-test (name &body body)
+  "Define a 1am test that uses the correct package.
+
+  This makes the test output less of an unreadable mess.
+
+  "
+  `(test ,name
+    (let ((*package* ,*package*))
+      ,@body)))
+
+
 (defun result= (x y)
   (set-equal (plist-alist x)
              (plist-alist y)

@@ -6,7 +6,7 @@
 ;;; Solutions to at least a few of these, for testing purposes.
 
 
-(test p1
+(define-test p1
   ;; Find the last element of a list.
   (with-fresh-database
     (push-logic-frame-with
@@ -30,7 +30,7 @@
        (?what (foo))))))
 
 
-(test p2
+(define-test p2
   ;; Find the last but one element of a list.
   (with-fresh-database
     (push-logic-frame-with
@@ -65,7 +65,7 @@
     (rule (reverse ?l ?r)
       (reverse-acc ?l nil ?r))))
 
-(test p5
+(define-test p5
   ;; Reverse a list.
   (with-fresh-database
     (%reverse)
@@ -83,7 +83,7 @@
        (?x 1 ?y 4)))))
 
 
-(test p6
+(define-test p6
   ;; Find out whether a list is a palindrome.
   (with-fresh-database
     (%reverse)
@@ -101,7 +101,7 @@
        (?what (f foo))))))
 
 
-(test p7
+(define-test p7
   ;; Flatten a nested list structure.
   (with-fresh-database
     (%not)
@@ -144,7 +144,7 @@
        (?what (a b c))))))
 
 
-(test p8
+(define-test p8
   ;; Eliminate consecutive duplicates of list elements.
   (with-fresh-database
     (%=)
@@ -178,7 +178,7 @@
                  (list ?))
        (?what (f cats dogs))))))
 
-; (test p9
+; (define-test p9
 ;   (with-fresh-database
 ;     (%=)
 ;     (%not)

@@ -14,6 +14,7 @@
     #:results=
     #:should-fail
     #:should-return
+    #:define-test
     #:%=
     #:%not
     #:%append))
@@ -97,4 +98,5 @@
   (:use
     #:cl
     #:1am
+    #:bones-test.utils
     #:bones.circle))

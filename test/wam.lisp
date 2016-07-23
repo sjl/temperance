@@ -56,14 +56,14 @@
 
 
 ;;;; Tests
-(test facts-literal
+(define-test facts-literal
   (with-database *test-database*
     (should-return
       ((always) empty)
       ((fuzzy cats) empty)
       ((fuzzy snakes) fail))))
 
-(test facts-variables
+(define-test facts-variables
   (with-database *test-database*
     (should-return
       ((fuzzy ?what)
@@ -80,7 +80,7 @@
 
       ((listens ?who metal) fail))))
 
-(test facts-conjunctions
+(define-test facts-conjunctions
   (with-database *test-database*
     (is (results= '((?who alice))
                   (query-all (listens ?who blues)
@@ -94,7 +94,7 @@
                   (query-all (listens ?who blues)
                              (drinks ?who ?what))))))
 
-(test simple-unification
+(define-test simple-unification
   (with-fresh-database
     (push-logic-frame-with
       (rule (= ?x ?x)))
@@ -108,7 +108,7 @@
       ((= (f ?x cats) (f dogs ?y)) (?x dogs ?y cats))
       ((= (f ?x ?x) (f dogs ?y)) (?x dogs ?y dogs)))))
 
-(test dynamic-call
+(define-test dynamic-call
   (with-fresh-database
     (push-logic-frame-with
       (facts (g cats)
@@ -134,7 +134,7 @@
        (?x cats)
        (?x (f dogs))))))
 
-(test negation
+(define-test negation
   (with-fresh-database
     (push-logic-frame-with
       (fact (yes ?anything))
@@ -147,7 +147,7 @@
       ((not (yes x)) fail)
       ((not (no x)) empty))))
 
-(test backtracking
+(define-test backtracking
   (with-fresh-database
     (push-logic-frame-with
       (facts (b))
@@ -203,7 +203,7 @@
     (should-return
       ((f foo) fail))))
 
-(test basic-rules
+(define-test basic-rules
   (with-database *test-database*
     (should-fail
       (pets candace ?what))
@@ -231,7 +231,7 @@
       ((narcissist ?person)
        (?person kim)))))
 
-(test register-allocation
+(define-test register-allocation
   ;; test for tricky register allocation bullshit
   (with-fresh-database
     (push-logic-frame-with
@@ -247,7 +247,7 @@
     (should-return
       ((foo dogs) empty))))
 
-(test lists
+(define-test lists
   (with-fresh-database
     (push-logic-frame-with
       (rule (member ?x (list* ?x ?)))
@@ -278,7 +278,7 @@
            (eql (car (getf result '?anything)) 'a))
          (query (member a ?anything))))))
 
-(test cut
+(define-test cut
   (with-fresh-database
     (push-logic-frame-with
       (facts (a))
@@ -372,7 +372,7 @@
       (f ?what)
       (g ?what))))
 
-(test anonymous-variables
+(define-test anonymous-variables
   (with-fresh-database
     (push-logic-frame-with
       (fact (following (s ? ? ? a)))
@@ -380,7 +380,7 @@
       (rule (bar (baz ?x ?y ?z ?thing))
         (foo ?thing))
       (fact (wild ? ? ?))
-      
+
       (fact (does x move))
       (rule (next z)
         (does ? move)))
@@ -392,7 +392,7 @@
       ((next z) empty)
       )))
 
-(test normalization-ui
+(define-test normalization-ui
   (with-fresh-database
     (push-logic-frame-with
       (fact a)
@@ -412,7 +412,7 @@
       ((d) fail)
       (dogs empty))))
 
-(test nested-constants
+(define-test nested-constants
   (with-fresh-database
     (push-logic-frame-with
       (fact (foo (s a b c))))
@@ -420,12 +420,12 @@
       ((foo (s ?x ?y ?z))
        (?x a ?y b ?z c)))))
 
-(test dump
+(define-test dump
   (is (not (string= ""
                     (with-output-to-string (*standard-output*)
                       (dump-wam-full *test-database*))))))
 
-(test last-call-optimization
+(define-test last-call-optimization
   (let* ((big-ass-list (loop :repeat 1000 :collect 'a))
          (big-ass-result (reverse (cons 'x big-ass-list))))
     (with-fresh-database
@@ -440,7 +440,7 @@
                     (query-all (big-ass-list ?bal)
                                (append ?bal (list x) ?bar)))))))
 
-(test hanoi
+(define-test hanoi
   ;; From The Art of Prolog
   (with-fresh-database
     (push-logic-frame-with
@@ -465,7 +465,7 @@
                (move a b)
                (move c a) (move c b) (move a b)))))))
 
-(test numbers
+(define-test numbers
   (with-fresh-database
     (push-logic-frame-with
       (rule (= ?x ?x))
