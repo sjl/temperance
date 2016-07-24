@@ -77,7 +77,14 @@
       (rule (cousins ?x ?y)
         (parent ?px ?x)
         (parent ?py ?y)
-        (siblings ?px ?py)))
+        (siblings ?px ?py))
+
+      (rule (ancestor ?old ?young)
+        (parent ?old ?young))
+
+      (rule (ancestor ?old ?young)
+        (parent ?old ?p)
+        (ancestor ?p ?young)))
 
     (should-return
       ((father ?who)
@@ -101,7 +108,11 @@
        (?who nachor))
       ((uncle ?who isaac)
        (?who haran)
-       (?who nachor)))))
+       (?who nachor))
+      ((ancestor ?who isaac)
+       (?who abraham)
+       (?who sarah)
+       (?who terach)))))
 
 (define-test circuits
   (with-fresh-database
@@ -225,7 +236,6 @@
        (?who (lecturer ben bitdiddle) ?day wednesday)
        (?who (lecturer david harel) ?day monday)))))
 
-
 (define-test books
   (with-fresh-database
     (%member)
@@ -251,3 +261,25 @@
       ((published-in ?who 1996)
        (?who abelson)
        (?who sussman)))))
+
+(define-test graph
+  (with-fresh-database
+    (push-logic-frame-with
+      (facts (edge a b)
+             (edge c d)
+             (edge a c)
+             (edge d e)
+             (edge b d)
+             (edge f g))
+
+      (fact (connected ?node ?node))
+      (rule (connected ?node-1 ?node-2)
+        (edge ?node-1 ?link)
+        (connected ?link ?node-2)))
+
+    (should-return
+      ((connected a a) empty)
+      ((connected a e) empty)
+      ((connected f g) empty)
+      ((connected e f) fail)
+      ((connected g f) fail))))
