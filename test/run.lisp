@@ -2,19 +2,16 @@
 
 (declaim (optimize (debug 3) (safety 3) (speed 0)))
 
-
 (let ((*standard-output* (make-broadcast-stream))
       ; (*error-output* (make-broadcast-stream))
       )
+  (ql:quickload 'bones)
+  ;; Recompile to ensure we get the right optimize declarations...
   (asdf:load-system 'bones :force t)
-  (ql:quickload "bones-test"))
+  (ql:quickload 'bones-test))
 
-(defun done (exit-code)
-  #+sbcl (sb-ext:exit :code exit-code)
-  #+ccl (quit exit-code)
-  #+ecl (quit exit-code))
-
-
-(time (progn (1am:run) (terpri)))
+(time (prog1
+          (asdf:test-system 'bones)
+        (terpri)))
 (terpri)
-(done 0)
+(quit)

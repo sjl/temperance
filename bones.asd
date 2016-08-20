@@ -12,6 +12,8 @@
                #:cl-arrows
                #:policy-cond)
 
+  :in-order-to ((asdf:test-op (asdf:test-op #:bones-test)))
+
   :serial t
   :components ((:file "src/quickutils") ; quickutils package ordering crap
                (:file "package")
@@ -43,3 +45,28 @@
                                (:file "ui")))
                  (:file "bones")))))
 
+(asdf:defsystem #:bones-test
+  :name "bones-test"
+  :description "Test suite for bones."
+
+  :author "Steve Losh <steve@stevelosh.com>"
+  :license "MIT/X11"
+
+  :depends-on (#:bones
+               #:1am)
+
+  :perform (asdf:test-op
+             (op system)
+             (uiop:symbol-call :bones-test :run-tests))
+
+  :serial t
+  :components ((:file "package-test")
+               (:module "test"
+                :serial t
+                :components ((:file "bones")
+                             (:file "utils")
+                             (:file "circle")
+                             (:file "paip")
+                             (:file "wam")
+                             (:file "99")
+                             (:file "taop")))))

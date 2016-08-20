@@ -1,9 +1,10 @@
-.PHONY: test pubdocs bench profile test-sbcl test-ccl test-ecl
+.PHONY: test pubdocs test-sbcl test-ccl test-ecl
 
 sourcefiles = $(shell ffind --full-path --dir src --literal .lisp)
 docfiles = $(shell ls docs/*.markdown)
 apidoc = docs/03-reference.markdown
 
+# Testing ---------------------------------------------------------------------
 test: test-sbcl test-ccl test-ecl
 
 test-sbcl:
@@ -19,10 +20,12 @@ test-ecl:
 	ros run -L ecl --load test/run.lisp
 
 
+# Quickutils ------------------------------------------------------------------
 src/quickutils.lisp: src/make-quickutils.lisp
 	cd src && sbcl-rlwrap --noinform --load make-quickutils.lisp  --eval '(quit)'
 
 
+# Documentation ---------------------------------------------------------------
 $(apidoc): $(sourcefiles) docs/api.lisp
 	sbcl-rlwrap --noinform --load docs/api.lisp  --eval '(quit)'
 
@@ -36,10 +39,3 @@ pubdocs: docs
 	rsync --delete -a ./docs/build/ ~/src/sjl.bitbucket.org/bones
 	hg -R ~/src/sjl.bitbucket.org commit -Am 'bones: Update site.'
 	hg -R ~/src/sjl.bitbucket.org push
-
-
-bench:
-	sbcl-rlwrap --noinform --load examples/bench.lisp  --eval '(quit)'
-
-profile:
-	sbcl-rlwrap --noinform --load examples/profile.lisp  --eval '(quit)'
