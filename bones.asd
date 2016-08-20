@@ -24,26 +24,24 @@
                 :components
                 ((:file "utils")
                  (:file "circle")
-                 (:module "wam"
+                 (:file "constants")
+                 (:file "types")
+                 (:file "bytecode")
+                 (:file "wam")
+                 (:module "compiler"
                   :serial t
-                  :components ((:file "constants")
-                               (:file "types")
-                               (:file "bytecode")
-                               (:file "wam")
-                               (:module "compiler"
-                                :serial t
-                                :components ((:file "0-data")
-                                             (:file "1-parsing")
-                                             (:file "2-register-allocation")
-                                             (:file "3-flattening")
-                                             (:file "4-tokenization")
-                                             (:file "5-precompilation")
-                                             (:file "6-optimization")
-                                             (:file "7-rendering")
-                                             (:file "8-ui")))
-                               (:file "vm")
-                               (:file "dump")
-                               (:file "ui")))
+                  :components ((:file "0-data")
+                               (:file "1-parsing")
+                               (:file "2-register-allocation")
+                               (:file "3-flattening")
+                               (:file "4-tokenization")
+                               (:file "5-precompilation")
+                               (:file "6-optimization")
+                               (:file "7-rendering")
+                               (:file "8-ui")))
+                 (:file "vm")
+                 (:file "dump")
+                 (:file "ui")
                  (:file "bones")))))
 
 (asdf:defsystem #:bones-test
