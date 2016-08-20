@@ -21,7 +21,7 @@ Lisp, designed to let you write Lispy Prolog.  Its main goals are:
 * Interop back and forth with Common Lisp.
 * Don't be slow.
 
-Temperance was made with [General Game Playing][] in mind (hence the focus on
+Temperance was made with [General Game Playing][ggp] in mind (hence the focus on
 performance), but should be useful for anything you might normally use Prolog
 for.
 
