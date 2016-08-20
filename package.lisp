@@ -4,15 +4,10 @@
     #:cl-arrows
     #:bones.quickutils)
   (:export
-    #:yolo
-    #:repeat
-    #:hex
     #:push-if-new
-    #:array-push
     #:recursively
     #:recur
     #:when-let
-    #:dis
     #:megabytes
     #:ecase/tree
     #:gethash-or-init

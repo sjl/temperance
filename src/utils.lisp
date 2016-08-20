@@ -29,33 +29,11 @@
           :using (hash-value v)
           :collect (list v k))))
 
-(defmacro repeat (n &body body)
-  "Repeat `body` `n` times."
-  `(dotimes (,(gensym) ,n)
-     ,@body))
-
-(defun hex (d)
-  (format nil "~X" d))
-
 
 (defmacro when-let ((symbol value) &body body)
   "Bind `value` to `symbol` and execute `body` if the value was not `nil`."
   `(let ((,symbol ,value))
      (when ,symbol ,@body)))
-
-(defmacro dis (arglist &body body)
-  "Disassemble the code generated for a `lambda*` with `arglist` and `body`.
-
-  It will also spew compiler notes so you can see why the garbage box isn't
-  doing what you think it should be doing.
-
-  "
-  `(->> '(lambda* ,arglist
-          (declare (optimize speed))
-          ,@body)
-    macroexpand-1
-    (compile nil)
-    disassemble))
 
 (defmacro recursively (bindings &body body)
   "Execute body recursively, like Clojure's `loop`/`recur`.
@@ -115,29 +93,6 @@
     `(or (aref ,array ,index)
       (setf (aref ,array ,index) ,default-form))))
 
-(defmacro array-push (value array pointer &environment env)
-  "Push `value` onto `array` at `pointer`, incrementing `pointer` afterword.
-
-  Returns the index the value was pushed to.
-
-  "
-  (multiple-value-bind (temp-vars temp-vals stores store access)
-      (get-setf-expansion pointer env)
-    (with-gensyms (address)
-      `(let* (,@(mapcar #'list temp-vars temp-vals)
-              (,address ,access)
-              (,(car stores) (1+ ,address)))
-        (setf (aref ,array ,address) ,value)
-        ,store
-        ,address))))
-
-(defmacro yolo (&body body)
-  `(locally
-     #+sbcl (declare (optimize (sb-c::insert-array-bounds-checks 0)
-                               (speed 3)
-                               (debug 0)
-                               (safety 0)))
-     ,@body))
 
 (defun megabytes (n)
   "Return the number of 64-bit words in `n` megabytes."

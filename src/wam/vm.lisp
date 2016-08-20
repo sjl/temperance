@@ -454,8 +454,8 @@
 (define-instruction (%subterm-void) (wam n)
   (ecase (wam-mode wam)
     (:read (incf (wam-subterm wam) n))
-    (:write (repeat n
-              (push-unbound-reference! wam)))))
+    (:write (loop :repeat n
+                  :do (push-unbound-reference! wam)))))
 
 
 ;;;; Control Instructions
