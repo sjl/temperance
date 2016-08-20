@@ -1,12 +1,12 @@
-(defpackage #:bones-test
+(defpackage #:temperance-test
   (:use #:cl #:1am))
 
-(defpackage #:bones-test.utils
+(defpackage #:temperance-test.utils
   (:use
     #:cl
     #:1am
-    #:bones.wam
-    #:bones.quickutils)
+    #:temperance.wam
+    #:temperance.quickutils)
   (:export
     #:fail
     #:empty
@@ -20,14 +20,14 @@
     #:%append
     #:%member))
 
-(defpackage #:bones-test.wam
+(defpackage #:temperance-test.wam
   (:use
     #:cl
     #:1am
-    #:bones-test.utils
-    #:bones.quickutils
-    #:bones.wam)
-  (:import-from #:bones.wam
+    #:temperance-test.utils
+    #:temperance.quickutils
+    #:temperance.wam)
+  (:import-from #:temperance.wam
     #:with-database
     #:make-database
     #:with-fresh-database
@@ -42,14 +42,14 @@
     #:query
     #:query-all))
 
-(defpackage #:bones-test.99
+(defpackage #:temperance-test.99
   (:use
     #:cl
     #:1am
-    #:bones-test.utils
-    #:bones.quickutils
-    #:bones.wam)
-  (:import-from #:bones.wam
+    #:temperance-test.utils
+    #:temperance.quickutils
+    #:temperance.wam)
+  (:import-from #:temperance.wam
     #:with-fresh-database
     #:push-logic-frame-with
     #:rule
@@ -62,14 +62,14 @@
     #:query
     #:query-all))
 
-(defpackage #:bones-test.taop
+(defpackage #:temperance-test.taop
   (:use
     #:cl
     #:1am
-    #:bones-test.utils
-    #:bones.quickutils
-    #:bones.wam)
-  (:import-from #:bones.wam
+    #:temperance-test.utils
+    #:temperance.quickutils
+    #:temperance.wam)
+  (:import-from #:temperance.wam
     #:with-fresh-database
     #:push-logic-frame-with
     #:rule
@@ -82,9 +82,9 @@
     #:query
     #:query-all))
 
-(defpackage #:bones-test.circle
+(defpackage #:temperance-test.circle
   (:use
     #:cl
     #:1am
-    #:bones-test.utils
-    #:bones.circle))
+    #:temperance-test.utils
+    #:temperance.circle))

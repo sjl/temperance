@@ -2,15 +2,15 @@
 ;;;; See http://quickutil.org for details.
 
 ;;;; To regenerate:
-;;;; (qtlc:save-utils-as "quickutils.lisp" :utilities '(:DEFINE-CONSTANT :SET-EQUAL :CURRY :RCURRY :SWITCH :ENSURE-BOOLEAN :WHILE :UNTIL :TREE-MEMBER-P :WITH-GENSYMS :ONCE-ONLY :ZIP :ALIST-TO-HASH-TABLE :MAP-TREE :WEAVE :ALIST-PLIST :EQUIVALENCE-CLASSES :MAP-PRODUCT) :ensure-package T :package "BONES.QUICKUTILS")
+;;;; (qtlc:save-utils-as "quickutils.lisp" :utilities '(:DEFINE-CONSTANT :SET-EQUAL :CURRY :RCURRY :SWITCH :ENSURE-BOOLEAN :WHILE :UNTIL :TREE-MEMBER-P :WITH-GENSYMS :ONCE-ONLY :ZIP :ALIST-TO-HASH-TABLE :MAP-TREE :WEAVE :ALIST-PLIST :EQUIVALENCE-CLASSES :MAP-PRODUCT) :ensure-package T :package "TEMPERANCE.QUICKUTILS")
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (unless (find-package "BONES.QUICKUTILS")
-    (defpackage "BONES.QUICKUTILS"
+  (unless (find-package "TEMPERANCE.QUICKUTILS")
+    (defpackage "TEMPERANCE.QUICKUTILS"
       (:documentation "Package that contains Quickutil utility functions.")
       (:use #:cl))))
 
-(in-package "BONES.QUICKUTILS")
+(in-package "TEMPERANCE.QUICKUTILS")
 
 (when (boundp '*utilities*)
   (setf *utilities* (union *utilities* '(:DEFINE-CONSTANT :SET-EQUAL

@@ -1,4 +1,4 @@
-(in-package #:bones.wam)
+(in-package #:temperance.wam)
 
 ;;;; ,--,--'  .                     .
 ;;;; `- | ,-. | , ,-. ,-. . ,_, ,-. |- . ,-. ,-.

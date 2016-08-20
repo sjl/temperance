@@ -1,4 +1,4 @@
-(in-package #:bones.utils)
+(in-package #:temperance.utils)
 
 (defmacro push-if-new (thing place
                        &environment env

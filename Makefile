@@ -1,6 +1,6 @@
-.PHONY: test pubdocs test-sbcl test-ccl test-ecl
+.PHONY: test docs pubdocs test-sbcl test-ccl test-ecl
 
-sourcefiles = $(shell ffind --full-path --dir src --literal .lisp)
+sourcefiles = $(shell ffind --full-path --literal .lisp)
 docfiles = $(shell ls docs/*.markdown)
 apidoc = docs/03-reference.markdown
 
@@ -31,11 +31,11 @@ $(apidoc): $(sourcefiles) docs/api.lisp
 
 docs: docs/build/index.html
 
-docs/build/index.html: $(docfiles)
+docs/build/index.html: $(docfiles) $(apidoc)
 	cd docs && ~/.virtualenvs/d/bin/d
 
 pubdocs: docs
 	hg -R ~/src/sjl.bitbucket.org pull -u
-	rsync --delete -a ./docs/build/ ~/src/sjl.bitbucket.org/bones
-	hg -R ~/src/sjl.bitbucket.org commit -Am 'bones: Update site.'
+	rsync --delete -a ./docs/build/ ~/src/sjl.bitbucket.org/temperance
+	hg -R ~/src/sjl.bitbucket.org commit -Am 'temperance: Update site.'
 	hg -R ~/src/sjl.bitbucket.org push

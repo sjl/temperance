@@ -1,4 +1,4 @@
-(in-package #:bones.wam)
+(in-package #:temperance.wam)
 
 ; (deftype cell-type () ; todo: pick one of these...
 ;   `(integer 0 ,(1- +number-of-cell-types+)))

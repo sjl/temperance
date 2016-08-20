@@ -1,5 +1,5 @@
-(asdf:defsystem #:bones
-  :name "bones"
+(asdf:defsystem #:temperance
+  :name "temperance"
   :description "A logic programming library for Common Lisp."
 
   :author "Steve Losh <steve@stevelosh.com>"
@@ -12,7 +12,7 @@
                #:cl-arrows
                #:policy-cond)
 
-  :in-order-to ((asdf:test-op (asdf:test-op #:bones-test)))
+  :in-order-to ((asdf:test-op (asdf:test-op #:temperance-test)))
 
   :serial t
   :components ((:module "vendor"
@@ -42,27 +42,27 @@
                  (:file "vm")
                  (:file "dump")
                  (:file "ui")
-                 (:file "bones")))))
+                 (:file "temperance")))))
 
-(asdf:defsystem #:bones-test
-  :name "bones-test"
-  :description "Test suite for bones."
+(asdf:defsystem #:temperance-test
+  :name "temperance-test"
+  :description "Test suite for Temperance."
 
   :author "Steve Losh <steve@stevelosh.com>"
   :license "MIT/X11"
 
-  :depends-on (#:bones
+  :depends-on (#:temperance
                #:1am)
 
   :perform (asdf:test-op
              (op system)
-             (uiop:symbol-call :bones-test :run-tests))
+             (uiop:symbol-call :temperance-test :run-tests))
 
   :serial t
   :components ((:file "package-test")
                (:module "test"
                 :serial t
-                :components ((:file "bones")
+                :components ((:file "temperance")
                              (:file "utils")
                              (:file "circle")
                              (:file "wam")

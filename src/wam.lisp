@@ -1,4 +1,4 @@
-(in-package #:bones.wam)
+(in-package #:temperance.wam)
 
 ;;;; WAM
 (defun allocate-wam-code (size)

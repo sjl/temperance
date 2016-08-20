@@ -1,4 +1,4 @@
-(in-package #:bones-test.taop)
+(in-package #:temperance-test.taop)
 
 ;; Examples and exercises from The Art of Prolog
 

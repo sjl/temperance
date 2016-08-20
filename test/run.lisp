@@ -5,13 +5,13 @@
 (let ((*standard-output* (make-broadcast-stream))
       ; (*error-output* (make-broadcast-stream))
       )
-  (ql:quickload 'bones)
+  (ql:quickload 'temperance)
   ;; Recompile to ensure we get the right optimize declarations...
-  (asdf:load-system 'bones :force t)
-  (ql:quickload 'bones-test))
+  (asdf:load-system 'temperance :force t)
+  (ql:quickload 'temperance-test))
 
 (time (prog1
-          (asdf:test-system 'bones)
+          (asdf:test-system 'temperance)
         (terpri)))
 (terpri)
 (quit)

@@ -1,4 +1,4 @@
-(in-package #:bones.wam)
+(in-package #:temperance.wam)
 
 (defmacro define-constants (count-symbol &rest symbols)
   `(progn

@@ -20,6 +20,6 @@
                :alist-plist
                :equivalence-classes
                :map-product)
-  :package "BONES.QUICKUTILS")
+  :package "TEMPERANCE.QUICKUTILS")
 
 (quit)

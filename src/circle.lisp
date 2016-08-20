@@ -1,4 +1,4 @@
-(in-package #:bones.circle)
+(in-package #:temperance.circle)
 
 ;;;; Circular, Doubly-Linked Lists
 ;;; If you found this through a Google search or a link or something, turn back

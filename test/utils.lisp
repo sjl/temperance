@@ -1,4 +1,4 @@
-(in-package #:bones-test.utils)
+(in-package #:temperance-test.utils)
 
 
 ;;;; Utils

@@ -1,8 +1,8 @@
-(defpackage #:bones.utils
+(defpackage #:temperance.utils
   (:use
     #:cl
     #:cl-arrows
-    #:bones.quickutils)
+    #:temperance.quickutils)
   (:export
     #:push-if-new
     #:recursively
@@ -21,7 +21,7 @@
     #:queue-empty-p
     #:queue-append))
 
-(defpackage #:bones.circle
+(defpackage #:temperance.circle
   (:use #:cl)
   (:export
     #:circle
@@ -55,13 +55,13 @@
     #:circle-insert-beginning
     #:circle-insert-end))
 
-(defpackage #:bones.wam
+(defpackage #:temperance.wam
   (:use
     #:cl
     #:cl-arrows
-    #:bones.circle
-    #:bones.quickutils
-    #:bones.utils)
+    #:temperance.circle
+    #:temperance.quickutils
+    #:temperance.utils)
   (:export
     #:make-database
     #:reset-database
@@ -99,8 +99,8 @@
     #:?
     #:!))
 
-(defpackage #:bones
-  (:use #:cl #:bones.wam)
+(defpackage #:temperance
+  (:use #:cl #:temperance.wam)
   (:export
     #:make-database
     #:with-database
