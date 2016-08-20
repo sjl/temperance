@@ -21,8 +21,8 @@ test-ecl:
 
 
 # Quickutils ------------------------------------------------------------------
-src/quickutils.lisp: src/make-quickutils.lisp
-	cd src && sbcl-rlwrap --noinform --load make-quickutils.lisp  --eval '(quit)'
+vendor/quickutils.lisp: vendor/make-quickutils.lisp
+	cd vendor && ros run -L sbcl --load make-quickutils.lisp
 
 
 # Documentation ---------------------------------------------------------------

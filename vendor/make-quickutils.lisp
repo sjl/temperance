@@ -21,3 +21,5 @@
                :equivalence-classes
                :map-product)
   :package "BONES.QUICKUTILS")
+
+(quit)

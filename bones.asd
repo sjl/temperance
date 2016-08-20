@@ -15,7 +15,9 @@
   :in-order-to ((asdf:test-op (asdf:test-op #:bones-test)))
 
   :serial t
-  :components ((:file "src/quickutils") ; quickutils package ordering crap
+  :components ((:module "vendor"
+                :serial t
+                :components ((:file "quickutils")))
                (:file "package")
                (:module "src"
                 :serial t
