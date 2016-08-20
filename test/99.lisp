@@ -178,6 +178,8 @@
                  (list ?))
        (?what (f cats dogs))))))
 
+
+
 ; (define-test p9
 ;   (with-fresh-database
 ;     (%=)
@@ -207,3 +209,22 @@
 ;        (?what ((a a a))))
 ;       ((pack (list a a b a) ?what)
 ;        (?what ((a a) (b) (a)))))))
+
+
+(define-test p14
+  ;; Duplicate the elements of a list.
+  (with-fresh-database
+    (push-logic-frame-with
+      (fact (duplicate nil nil))
+      (rule (duplicate (list* ?x ?rest) (list* ?x ?x ?rest-dup))
+        (duplicate ?rest ?rest-dup)))
+
+    (should-return
+      ((duplicate nil nil)
+       empty)
+      ((duplicate (list 1) (list 1 1))
+       empty)
+      ((duplicate (list a b c d) (list a a b b c c d d))
+       empty)
+      ((duplicate ?what (list ?x 2 3 ?y))
+       (?what (2 3) ?x 2 ?y 3)))))
