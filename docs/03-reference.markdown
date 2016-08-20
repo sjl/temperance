@@ -1,6 +1,6 @@
 # API Reference
 
-The following is a list of all user-facing parts of Bones.
+The following is a list of all user-facing parts of Temperance.
 
 If there are backwards-incompatible changes to anything listed here, they will
 be noted in the changelog and the author will feel bad.
@@ -10,63 +10,119 @@ don't touch it.
 
 [TOC]
 
-## Package `BONES.PAIP`
-
-Test?
-
-### `*CHECK-OCCURS*` (variable)
-
-Whether to perform an occurs check.
-
-### `CLEAR-DB` (function)
-
-    (CLEAR-DB)
+## Package `TEMPERANCE.WAM`
 
 ### `FACT` (macro)
 
-    (FACT &REST BODY)
+    (FACT FACT)
 
-### `FAIL` (variable)
+### `FACTS` (macro)
 
-Failure to unify
+    (FACTS
+      &BODY
+      FACTS)
 
-### `NO-BINDINGS` (variable)
+### `FINALIZE-LOGIC-FRAME` (function)
 
-A succesful unification, with no bindings.
+    (FINALIZE-LOGIC-FRAME)
+
+### `INVOKE-FACT` (function)
+
+    (INVOKE-FACT FACT)
+
+### `INVOKE-FACTS` (function)
+
+    (INVOKE-FACTS &REST FACTS)
+
+### `INVOKE-PROVE` (function)
+
+    (INVOKE-PROVE &REST TERMS438)
+
+### `INVOKE-QUERY` (function)
+
+    (INVOKE-QUERY &REST TERMS262)
+
+### `INVOKE-QUERY-ALL` (function)
+
+    (INVOKE-QUERY-ALL &REST TERMS296)
+
+### `INVOKE-QUERY-DO` (function)
+
+    (INVOKE-QUERY-DO FUNCTION &REST TERMS366)
+
+### `INVOKE-QUERY-FIND` (function)
+
+    (INVOKE-QUERY-FIND PREDICATE &REST TERMS402)
+
+### `INVOKE-QUERY-MAP` (function)
+
+    (INVOKE-QUERY-MAP FUNCTION &REST TERMS330)
+
+### `INVOKE-RULE` (function)
+
+    (INVOKE-RULE HEAD &REST BODY)
+
+### `MAKE-DATABASE` (function)
+
+    (MAKE-DATABASE)
+
+### `POP-LOGIC-FRAME` (function)
+
+    (POP-LOGIC-FRAME)
+
+### `PROVE` (macro)
+
+    (PROVE &REST TERMS)
+
+### `PUSH-LOGIC-FRAME` (function)
+
+    (PUSH-LOGIC-FRAME)
+
+### `PUSH-LOGIC-FRAME-WITH` (macro)
+
+    (PUSH-LOGIC-FRAME-WITH
+      &BODY
+      BODY)
 
 ### `QUERY` (macro)
 
-    (QUERY &REST GOALS)
-
-Perform the query interactively.
+    (QUERY &REST TERMS)
 
 ### `QUERY-ALL` (macro)
 
-    (QUERY-ALL &REST GOALS)
+    (QUERY-ALL &REST TERMS)
 
-Perform the query and automatically show all results.
+### `QUERY-DO` (macro)
 
-### `QUERY-ONE` (macro)
+    (QUERY-DO FUNCTION &REST TERMS)
 
-    (QUERY-ONE &REST GOALS)
+### `QUERY-FIND` (macro)
 
-Perform the query and just show the first result.
+    (QUERY-FIND PREDICATE &REST TERMS)
 
-### `RETURN-ALL` (macro)
+### `QUERY-MAP` (macro)
 
-    (RETURN-ALL &REST GOALS)
+    (QUERY-MAP FUNCTION &REST TERMS)
 
-### `RETURN-ONE` (macro)
+### `RESET-DATABASE` (function)
 
-    (RETURN-ONE &REST GOALS)
+    (RESET-DATABASE)
 
 ### `RULE` (macro)
 
-    (RULE &REST CLAUSE)
+    (RULE HEAD
+      &BODY
+      BODY)
 
-### `UNIFY` (function)
+### `WITH-DATABASE` (macro)
 
-    (UNIFY X Y &OPTIONAL (BINDINGS NO-BINDINGS))
+    (WITH-DATABASE DATABASE
+      &BODY
+      BODY)
 
-Unify the two terms and return bindings necessary to do so (or FAIL).
+### `WITH-FRESH-DATABASE` (macro)
+
+    (WITH-FRESH-DATABASE
+      &BODY
+      BODY)
 
