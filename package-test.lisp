@@ -20,13 +20,6 @@
     #:%append
     #:%member))
 
-(defpackage #:bones-test.paip
-  (:use
-    #:cl
-    #:1am
-    #:bones.quickutils
-    #:bones.paip))
-
 (defpackage #:bones-test.wam
   (:use
     #:cl

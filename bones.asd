@@ -22,8 +22,7 @@
                (:module "src"
                 :serial t
                 :components
-                ((:file "paip")
-                 (:file "utils")
+                ((:file "utils")
                  (:file "circle")
                  (:module "wam"
                   :serial t
@@ -68,7 +67,6 @@
                 :components ((:file "bones")
                              (:file "utils")
                              (:file "circle")
-                             (:file "paip")
                              (:file "wam")
                              (:file "99")
                              (:file "taop")))))

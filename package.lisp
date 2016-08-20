@@ -99,42 +99,6 @@
     #:?
     #:!))
 
-(defpackage #:bones.paip
-  (:use
-    #:cl
-    #:bones.quickutils)
-  (:documentation "Test?")
-  (:export
-
-    ;; Unification, constants
-    #:unify
-    #:fail
-    #:no-bindings
-    #:*check-occurs*
-
-    ;; Destructive unification
-    #:unify!
-    #:unbound
-    #:bound-p
-
-    ;; Database management
-    #:clear-db
-    #:clear-predicate
-    #:fact
-    #:rule
-    #:add-fact
-    #:rule-fact
-
-    ;; Lisp data structures as results
-    #:return-one
-    #:return-all
-
-    ;; Interactive queries
-    #:query
-    #:query-one
-    #:query-all))
-
-
 (defpackage #:bones
   (:use #:cl #:bones.wam)
   (:export
