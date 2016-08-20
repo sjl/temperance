@@ -12,7 +12,6 @@
     #:recursively
     #:recur
     #:when-let
-    #:symbolize
     #:dis
     #:megabytes
     #:ecase/tree

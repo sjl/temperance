@@ -47,9 +47,7 @@
     #:?
     #:!
     #:query
-    #:query-all)
-  (:import-from #:bones.utils
-    #:symbolize))
+    #:query-all))
 
 (defpackage #:bones-test.99
   (:use
@@ -69,9 +67,7 @@
     #:?
     #:!
     #:query
-    #:query-all)
-  (:import-from #:bones.utils
-    #:symbolize))
+    #:query-all))
 
 (defpackage #:bones-test.taop
   (:use
@@ -91,9 +87,7 @@
     #:?
     #:!
     #:query
-    #:query-all)
-  (:import-from #:bones.utils
-    #:symbolize))
+    #:query-all))
 
 (defpackage #:bones-test.circle
   (:use
