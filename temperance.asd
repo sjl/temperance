@@ -8,8 +8,7 @@
   :license "MIT/X11"
   :version "0.0.1"
 
-  :depends-on (#:trivial-types
-               #:cl-arrows
+  :depends-on (#:cl-arrows
                #:policy-cond)
 
   :in-order-to ((asdf:test-op (asdf:test-op #:temperance-test)))
