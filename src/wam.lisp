@@ -748,7 +748,7 @@
 
   (multiple-value-bind (functor arity) (find-predicate clause)
     (assert-label-not-already-compiled wam clause functor arity)
-    (enqueue clause (gethash-or-init
+    (enqueue clause (ensure-gethash
                       (cons functor arity)
                       (logic-frame-predicates (wam-current-logic-frame wam))
                       (make-queue))))

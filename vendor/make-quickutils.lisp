@@ -19,6 +19,7 @@
                :weave
                :alist-plist
                :equivalence-classes
+               :ensure-gethash
                :map-product)
   :package "TEMPERANCE.QUICKUTILS")
 

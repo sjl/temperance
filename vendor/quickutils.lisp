@@ -2,7 +2,7 @@
 ;;;; See http://quickutil.org for details.
 
 ;;;; To regenerate:
-;;;; (qtlc:save-utils-as "quickutils.lisp" :utilities '(:DEFINE-CONSTANT :SET-EQUAL :CURRY :RCURRY :SWITCH :ENSURE-BOOLEAN :WHILE :UNTIL :TREE-MEMBER-P :WITH-GENSYMS :ONCE-ONLY :ZIP :ALIST-TO-HASH-TABLE :MAP-TREE :WEAVE :ALIST-PLIST :EQUIVALENCE-CLASSES :MAP-PRODUCT) :ensure-package T :package "TEMPERANCE.QUICKUTILS")
+;;;; (qtlc:save-utils-as "quickutils.lisp" :utilities '(:DEFINE-CONSTANT :SET-EQUAL :CURRY :RCURRY :SWITCH :ENSURE-BOOLEAN :WHILE :UNTIL :TREE-MEMBER-P :WITH-GENSYMS :ONCE-ONLY :ZIP :ALIST-TO-HASH-TABLE :MAP-TREE :WEAVE :ALIST-PLIST :EQUIVALENCE-CLASSES :ENSURE-GETHASH :MAP-PRODUCT) :ensure-package T :package "TEMPERANCE.QUICKUTILS")
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (unless (find-package "TEMPERANCE.QUICKUTILS")
@@ -21,8 +21,8 @@
                                          :TREE-MEMBER-P :ONCE-ONLY :TRANSPOSE
                                          :ZIP :ALIST-TO-HASH-TABLE :MAP-TREE
                                          :WEAVE :SAFE-ENDP :ALIST-PLIST
-                                         :EQUIVALENCE-CLASSES :MAPPEND
-                                         :MAP-PRODUCT))))
+                                         :EQUIVALENCE-CLASSES :ENSURE-GETHASH
+                                         :MAPPEND :MAP-PRODUCT))))
 
   (defun %reevaluate-constant (name value test)
     (if (not (boundp name))
@@ -377,6 +377,16 @@ defined by the equivalence relation `equiv`."
         classes)))
   
 
+  (defmacro ensure-gethash (key hash-table &optional default)
+    "Like `gethash`, but if `key` is not found in the `hash-table` saves the `default`
+under key before returning it. Secondary return value is true if key was
+already in the table."
+    `(multiple-value-bind (value ok) (gethash ,key ,hash-table)
+       (if ok
+           (values value ok)
+           (values (setf (gethash ,key ,hash-table) ,default) nil))))
+  
+
   (defun mappend (function &rest lists)
     "Applies `function` to respective element(s) of each `list`, appending all the
 all the result list to a single list. `function` must return a list."
@@ -408,6 +418,7 @@ Example:
   (export '(define-constant set-equal curry rcurry switch eswitch cswitch
             ensure-boolean while until tree-member-p with-gensyms
             with-unique-names once-only zip alist-to-hash-table map-tree weave
-            alist-plist plist-alist equivalence-classes map-product)))
+            alist-plist plist-alist equivalence-classes ensure-gethash
+            map-product)))
 
 ;;;; END OF quickutils.lisp ;;;;

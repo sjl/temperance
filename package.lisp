@@ -30,7 +30,6 @@
     #:when-let
     #:megabytes
     #:ecase/tree
-    #:gethash-or-init
     #:aref-or-init
     #:define-lookup
     #:queue
