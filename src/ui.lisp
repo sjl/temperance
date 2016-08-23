@@ -2,18 +2,18 @@
 
 
 ;;;; Database
-(defvar *database* nil)
+(defvar *standard-database* nil)
 
 
 (defun make-database ()
   (make-wam))
 
 (defun reset-database ()
-  (setf *database* (make-database)))
+  (setf *standard-database* (make-database)))
 
 
 (defmacro with-database (database &body body)
-  `(let ((*database* ,database))
+  `(let ((*standard-database* ,database))
      ,@body))
 
 (defmacro with-fresh-database (&body body)
@@ -40,8 +40,8 @@
 
 ;;;; Assertion
 (defun invoke-rule (head &rest body)
-  (assert *database* (*database*) "No database.")
-  (wam-logic-frame-add-clause! *database*
+  (assert *standard-database* (*standard-database*) "No database.")
+  (wam-logic-frame-add-clause! *standard-database*
                                (list* (normalize-term head)
                                       (mapcar #'normalize-term body)))
   nil)
@@ -68,16 +68,16 @@
 
 ;;;; Logic Frames
 (defun push-logic-frame ()
-  (assert *database* (*database*) "No database.")
-  (wam-push-logic-frame! *database*))
+  (assert *standard-database* (*standard-database*) "No database.")
+  (wam-push-logic-frame! *standard-database*))
 
 (defun pop-logic-frame ()
-  (assert *database* (*database*) "No database.")
-  (wam-pop-logic-frame! *database*))
+  (assert *standard-database* (*standard-database*) "No database.")
+  (wam-pop-logic-frame! *standard-database*))
 
 (defun finalize-logic-frame ()
-  (assert *database* (*database*) "No database.")
-  (wam-finalize-logic-frame! *database*))
+  (assert *standard-database* (*standard-database*) "No database.")
+  (wam-finalize-logic-frame! *standard-database*))
 
 (defmacro push-logic-frame-with (&body body)
   `(prog2
@@ -88,13 +88,13 @@
 
 ;;;; Querying
 (defun perform-aot-query (code size vars result-function)
-  (assert *database* (*database*) "No database.")
-  (run-aot-compiled-query *database* code size vars
+  (assert *standard-database* (*standard-database*) "No database.")
+  (run-aot-compiled-query *standard-database* code size vars
                           :result-function result-function))
 
 (defun perform-query (terms result-function)
-  (assert *database* (*database*) "No database.")
-  (run-query *database* (mapcar #'normalize-term terms)
+  (assert *standard-database* (*standard-database*) "No database.")
+  (run-query *standard-database* (mapcar #'normalize-term terms)
              :result-function result-function))
 
 
@@ -219,15 +219,15 @@
 
 ;;;; Debugging
 (defun dump (&optional full-code)
-  (dump-wam-full *database*)
+  (dump-wam-full *standard-database*)
   (when full-code
-    (dump-wam-code *database*)))
+    (dump-wam-code *standard-database*)))
 
 (defmacro bytecode (&body body)
   `(with-fresh-database
     (push-logic-frame-with ,@body)
     (format t ";;;; PROGRAM CODE =======================~%")
-    (dump-wam-code *database*)
+    (dump-wam-code *standard-database*)
     (format t "~%;;;; QUERY CODE =========================~%")
-    (dump-wam-query-code *database*)))
+    (dump-wam-query-code *standard-database*)))
 
