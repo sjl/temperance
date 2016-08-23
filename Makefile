@@ -1,4 +1,4 @@
-.PHONY: test docs pubdocs test-sbcl test-ccl test-ecl
+.PHONY: test docs pubdocs test-sbcl test-ccl test-ecl vendor
 
 sourcefiles = $(shell ffind --full-path --literal .lisp)
 docfiles = $(shell ls docs/*.markdown)
@@ -21,6 +21,8 @@ test-ecl:
 
 
 # Quickutils ------------------------------------------------------------------
+vendor: vendor/quickutils.lisp
+
 vendor/quickutils.lisp: vendor/make-quickutils.lisp
 	cd vendor && ros run -L sbcl --load make-quickutils.lisp
 

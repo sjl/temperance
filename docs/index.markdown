@@ -10,7 +10,7 @@ Temperance is an implementation of the [Warren Abstract Machine][wam] in Common
 Lisp, designed to let you write Lispy Prolog.  Its main goals are:
 
 * Be fast.
-* Implement most of vanilla Prolog.
+* Implement a decent subset of vanilla Prolog.
 * Execute quickly.
 * Interop back and forth with Common Lisp.
 * Don't be slow.
@@ -27,8 +27,3 @@ for.
 * **Mercurial:** <http://bitbucket.org/sjl/temperance/>
 * **Git:** <http://github.com/sjl/temperance/>
 * **Issues:** <http://github.com/sjl/temperance/issues/>
-
-License
--------
-
-Copyright 2016 Steve Losh and contributors.  Licensed as **MIT/X11**.
