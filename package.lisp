@@ -1,23 +1,3 @@
-(defpackage #:temperance.internal
-  (:use #:cl))
-
-(in-package #:temperance.internal)
-
-
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (defun external-symbols (package)
-    (let ((symbols nil))
-      (do-external-symbols (s (find-package package) symbols)
-        (push s symbols)))))
-
-(defmacro defpackage-inheriting (name parent-packages &rest args)
-  `(defpackage ,name
-     ,@args
-     ,@(loop :for parent-package :in parent-packages
-             :collect `(:use ,parent-package)
-             :collect `(:export ,@(external-symbols parent-package)))))
-
-
 (defpackage #:temperance.utils
   (:use
     #:cl
@@ -74,7 +54,7 @@
     #:circle-insert-beginning
     #:circle-insert-end))
 
-(defpackage #:temperance.wam
+(defpackage #:temperance
   (:use
     #:cl
     #:cl-arrows
@@ -118,6 +98,3 @@
     #:?
     #:!))
 
-
-(defpackage-inheriting #:temperance (#:temperance.wam)
-  (:use #:cl))

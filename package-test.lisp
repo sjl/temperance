@@ -5,7 +5,7 @@
   (:use
     #:cl
     #:1am
-    #:temperance.wam
+    #:temperance
     #:temperance.quickutils)
   (:export
     #:fail
@@ -26,8 +26,8 @@
     #:1am
     #:temperance-test.utils
     #:temperance.quickutils
-    #:temperance.wam)
-  (:import-from #:temperance.wam
+    #:temperance)
+  (:import-from #:temperance
     #:with-database
     #:make-database
     #:with-fresh-database
@@ -48,8 +48,8 @@
     #:1am
     #:temperance-test.utils
     #:temperance.quickutils
-    #:temperance.wam)
-  (:import-from #:temperance.wam
+    #:temperance)
+  (:import-from #:temperance
     #:with-fresh-database
     #:push-logic-frame-with
     #:rule
@@ -68,8 +68,8 @@
     #:1am
     #:temperance-test.utils
     #:temperance.quickutils
-    #:temperance.wam)
-  (:import-from #:temperance.wam
+    #:temperance)
+  (:import-from #:temperance
     #:with-fresh-database
     #:push-logic-frame-with
     #:rule

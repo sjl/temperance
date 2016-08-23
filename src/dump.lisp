@@ -1,4 +1,4 @@
-(in-package #:temperance.wam)
+(in-package #:temperance)
 
 (defun heap-debug (wam address indent-p)
   (format

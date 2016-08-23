@@ -1,4 +1,4 @@
-(in-package #:temperance.wam)
+(in-package #:temperance)
 
 ;;;; .-,--' .      .  .
 ;;;;  \|__  |  ,-. |- |- ,-. ,-. . ,-. ,-.
