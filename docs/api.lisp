@@ -1,7 +1,7 @@
 (ql:quickload "cl-d-api")
 
 (defparameter *document-packages*
-  (list "TEMPERANCE.WAM"))
+  (list "TEMPERANCE"))
 
 (defparameter *output-path*
   #p"docs/03-reference.markdown" )
