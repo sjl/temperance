@@ -7,7 +7,6 @@
     #:push-if-new
     #:recursively
     #:recur
-    #:when-let
     #:megabytes
     #:ecase/tree
     #:aref-or-init

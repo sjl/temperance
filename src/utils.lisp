@@ -30,11 +30,6 @@
           :collect (list v k))))
 
 
-(defmacro when-let ((symbol value) &body body)
-  "Bind `value` to `symbol` and execute `body` if the value was not `nil`."
-  `(let ((,symbol ,value))
-     (when ,symbol ,@body)))
-
 (defmacro recursively (bindings &body body)
   "Execute body recursively, like Clojure's `loop`/`recur`.
 

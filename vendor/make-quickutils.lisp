@@ -17,6 +17,7 @@
                :alist-to-hash-table
                :map-tree
                :weave
+               :when-let
                :alist-plist
                :equivalence-classes
                :ensure-gethash

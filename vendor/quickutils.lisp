@@ -2,7 +2,7 @@
 ;;;; See http://quickutil.org for details.
 
 ;;;; To regenerate:
-;;;; (qtlc:save-utils-as "quickutils.lisp" :utilities '(:DEFINE-CONSTANT :SET-EQUAL :CURRY :RCURRY :SWITCH :ENSURE-BOOLEAN :WHILE :UNTIL :TREE-MEMBER-P :WITH-GENSYMS :ONCE-ONLY :ZIP :ALIST-TO-HASH-TABLE :MAP-TREE :WEAVE :ALIST-PLIST :EQUIVALENCE-CLASSES :ENSURE-GETHASH :MAP-PRODUCT) :ensure-package T :package "TEMPERANCE.QUICKUTILS")
+;;;; (qtlc:save-utils-as "quickutils.lisp" :utilities '(:DEFINE-CONSTANT :SET-EQUAL :CURRY :RCURRY :SWITCH :ENSURE-BOOLEAN :WHILE :UNTIL :TREE-MEMBER-P :WITH-GENSYMS :ONCE-ONLY :ZIP :ALIST-TO-HASH-TABLE :MAP-TREE :WEAVE :WHEN-LET :ALIST-PLIST :EQUIVALENCE-CLASSES :ENSURE-GETHASH :MAP-PRODUCT) :ensure-package T :package "TEMPERANCE.QUICKUTILS")
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (unless (find-package "TEMPERANCE.QUICKUTILS")
@@ -20,9 +20,9 @@
                                          :SWITCH :ENSURE-BOOLEAN :UNTIL :WHILE
                                          :TREE-MEMBER-P :ONCE-ONLY :TRANSPOSE
                                          :ZIP :ALIST-TO-HASH-TABLE :MAP-TREE
-                                         :WEAVE :SAFE-ENDP :ALIST-PLIST
-                                         :EQUIVALENCE-CLASSES :ENSURE-GETHASH
-                                         :MAPPEND :MAP-PRODUCT))))
+                                         :WEAVE :WHEN-LET :SAFE-ENDP
+                                         :ALIST-PLIST :EQUIVALENCE-CLASSES
+                                         :ENSURE-GETHASH :MAPPEND :MAP-PRODUCT))))
 
   (defun %reevaluate-constant (name value test)
     (if (not (boundp name))
@@ -327,6 +327,68 @@ tuples. Equivalent to `unzip`."
     (apply #'mapcan #'list lists))
   
 
+  (defmacro when-let (bindings &body forms)
+    "Creates new variable bindings, and conditionally executes FORMS.
+
+BINDINGS must be either single binding of the form:
+
+ (variable initial-form)
+
+or a list of bindings of the form:
+
+ ((variable-1 initial-form-1)
+  (variable-2 initial-form-2)
+  ...
+  (variable-n initial-form-n))
+
+All initial-forms are executed sequentially in the specified order. Then all
+the variables are bound to the corresponding values.
+
+If all variables were bound to true values, then FORMS are executed as an
+implicit PROGN."
+    (let* ((binding-list (if (and (consp bindings) (symbolp (car bindings)))
+                             (list bindings)
+                             bindings))
+           (variables (mapcar #'car binding-list)))
+      `(let ,binding-list
+         (when (and ,@variables)
+           ,@forms))))
+
+  (defmacro when-let* (bindings &body forms)
+    "Creates new variable bindings, and conditionally executes FORMS.
+
+BINDINGS must be either single binding of the form:
+
+ (variable initial-form)
+
+or a list of bindings of the form:
+
+ ((variable-1 initial-form-1)
+  (variable-2 initial-form-2)
+  ...
+  (variable-n initial-form-n))
+
+Each initial-form is executed in turn, and the variable bound to the
+corresponding value. Initial-form expressions can refer to variables
+previously bound by the WHEN-LET*.
+
+Execution of WHEN-LET* stops immediately if any initial-form evaluates to NIL.
+If all initial-forms evaluate to true, then FORMS are executed as an implicit
+PROGN."
+    (let ((binding-list (if (and (consp bindings) (symbolp (car bindings)))
+                            (list bindings)
+                            bindings)))
+      (labels ((bind (bindings forms)
+                 (if bindings
+                     `((let (,(car bindings))
+                         (when ,(caar bindings)
+                           ,@(bind (cdr bindings) forms))))
+                     forms)))
+        `(let (,(car binding-list))
+           (when ,(caar binding-list)
+             ,@(bind (cdr binding-list) forms))))))
+  
+
   (declaim (inline safe-endp))
   (defun safe-endp (x)
     (declare (optimize safety))
@@ -418,7 +480,7 @@ Example:
   (export '(define-constant set-equal curry rcurry switch eswitch cswitch
             ensure-boolean while until tree-member-p with-gensyms
             with-unique-names once-only zip alist-to-hash-table map-tree weave
-            alist-plist plist-alist equivalence-classes ensure-gethash
-            map-product)))
+            when-let when-let* alist-plist plist-alist equivalence-classes
+            ensure-gethash map-product)))
 
 ;;;; END OF quickutils.lisp ;;;;
