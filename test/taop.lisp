@@ -6,83 +6,84 @@
   (with-fresh-database
     (%=)
     (%not)
-    (push-logic-frame-with
-      (facts (father abraham isaac)
-             (father haran lot)
-             (father haran milcah)
-             (father haran yiscah)
-             (father terach abraham)
-             (father terach nachor)
-             (father terach haran)
-             (mother sarah isaac)
-             (male isaac)
-             (male lot)
-             (male terach)
-             (male nachor)
-             (male haran)
-             (male abraham)
-             (female sarah)
-             (female milcah)
-             (female yiscah))
+    (push-logic-frame-with t
+      (facts t
+        (father abraham isaac)
+        (father haran lot)
+        (father haran milcah)
+        (father haran yiscah)
+        (father terach abraham)
+        (father terach nachor)
+        (father terach haran)
+        (mother sarah isaac)
+        (male isaac)
+        (male lot)
+        (male terach)
+        (male nachor)
+        (male haran)
+        (male abraham)
+        (female sarah)
+        (female milcah)
+        (female yiscah))
 
-      (rule (parent ?person ?kid) (father ?person ?kid))
-      (rule (parent ?person ?kid) (mother ?person ?kid))
+      (rule t (parent ?person ?kid) (father ?person ?kid))
+      (rule t (parent ?person ?kid) (mother ?person ?kid))
 
-      (rule (father ?person) (father ?person ?))
-      (rule (mother ?person) (mother ?person ?))
-      (rule (parent ?person) (father ?person))
-      (rule (parent ?person) (mother ?person))
+      (rule t (father ?person) (father ?person ?))
+      (rule t (mother ?person) (mother ?person ?))
+      (rule t (parent ?person) (father ?person))
+      (rule t (parent ?person) (mother ?person))
 
-      (rule (grandparent ?person ?grandkid)
+      (rule t (grandparent ?person ?grandkid)
         (parent ?person ?kid)
         (parent ?kid ?grandkid))
 
-      (rule (grandmother ?person ?grandkid)
+      (rule t (grandmother ?person ?grandkid)
         (grandparent ?person ?grandkid)
         (female ?person))
 
-      (rule (grandfather ?person ?grandkid)
+      (rule t (grandfather ?person ?grandkid)
         (grandparent ?person ?grandkid)
         (male ?person))
 
-      (rule (son ?parent ?kid)
+      (rule t (son ?parent ?kid)
         (parent ?parent ?kid)
         (male ?kid))
 
-      (rule (daughter ?parent ?kid)
+      (rule t (daughter ?parent ?kid)
         (parent ?parent ?kid)
         (female ?kid))
 
-      (rule (siblings ?x ?y)
+      (rule t (siblings ?x ?y)
         (parent ?p ?x)
         (parent ?p ?y)
         (not (= ?x ?y)))
 
-      (rule (brother ?bro ?person)
+      (rule t (brother ?bro ?person)
         (siblings ?bro ?person)
         (male ?bro))
 
-      (rule (sister ?sis ?person)
+      (rule t (sister ?sis ?person)
         (siblings ?sis ?person)
         (female ?sis))
 
-      (rule (uncle ?unc ?kid)
+      (rule t (uncle ?unc ?kid)
         (brother ?unc ?parent)
         (parent ?parent ?kid))
 
-      (rule (aunt ?unc ?kid)
+      (rule t (aunt ?unc ?kid)
         (sister ?unc ?parent)
         (parent ?parent ?kid))
 
-      (rule (cousins ?x ?y)
+      (rule t (cousins ?x ?y)
         (parent ?px ?x)
         (parent ?py ?y)
         (siblings ?px ?py))
 
-      (rule (ancestor ?old ?young)
+      (rule t (ancestor ?old ?young)
         (parent ?old ?young))
 
-      (rule (ancestor ?old ?young)
+      (rule t (ancestor ?old ?young)
         (parent ?old ?p)
         (ancestor ?p ?young)))
 
@@ -119,28 +120,30 @@
     (%=)
     (%not)
 
-    (push-logic-frame-with
+    (push-logic-frame-with t
       ;; and gate
 
       ;; (resistor name node-1 node-2)
-      (facts (resistor r1 power n1)
-             (resistor r2 power n2))
+      (facts t
+        (resistor r1 power n1)
+        (resistor r2 power n2))
 
       ;; (transistor name gate source drain)
-      (facts (transistor t1 n2 ground n1)
-             (transistor t2 n3 n4 n2)
-             (transistor t3 n5 ground n4))
+      (facts t
+        (transistor t1 n2 ground n1)
+        (transistor t2 n3 n4 n2)
+        (transistor t3 n5 ground n4))
 
-      (rule (inverter (inverter ?t ?r) ?input ?output)
+      (rule t (inverter (inverter ?t ?r) ?input ?output)
         (transistor ?t ?input ground ?output)
         (resistor ?r power ?output))
 
-      (rule (nand (nand ?t1 ?t2 ?r) ?a ?b ?output)
+      (rule t (nand (nand ?t1 ?t2 ?r) ?a ?b ?output)
         (transistor ?t1 ?a ?x ?output)
         (transistor ?t2 ?b ground ?x)
         (resistor ?r power ?output))
 
-      (rule (and (and ?n ?i) ?a ?b ?output)
+      (rule t (and (and ?n ?i) ?a ?b ?output)
         (nand ?n ?a ?b ?x)
         (inverter ?i ?x ?output)))
 
@@ -149,27 +152,28 @@
        (?a n3 ?b n5 ?out n1 ?g (and (nand t2 t3 r2)
                                     (inverter t1 r1)))))
 
-    (pop-logic-frame)
+    (pop-logic-frame t)
 
-    (push-logic-frame-with
+    (push-logic-frame-with t
       ;; nor gate
-      (facts (resistor r1 power o)
-             (transistor t1 i1 ground o)
-             (transistor t2 i2 ground o)
-             (resistor r2 power no)
-             (transistor t3 o ground no))
+      (facts t
+        (resistor r1 power o)
+        (transistor t1 i1 ground o)
+        (transistor t2 i2 ground o)
+        (resistor r2 power no)
+        (transistor t3 o ground no))
 
-      (rule (inverter (inverter ?t ?r) ?input ?output)
+      (rule t (inverter (inverter ?t ?r) ?input ?output)
         (transistor ?t ?input ground ?output)
         (resistor ?r power ?output))
 
-      (rule (or (or ?t1 ?t2 ?r) ?a ?b ?output)
+      (rule t (or (or ?t1 ?t2 ?r) ?a ?b ?output)
         (transistor ?t1 ?a ground ?output)
         (transistor ?t2 ?b ground ?output)
         (not (= ?a ?b))
         (resistor ?r power ?output))
 
-      (rule (nor (nor ?o ?i) ?a ?b ?output)
+      (rule t (nor (nor ?o ?i) ?a ?b ?output)
         (or ?o ?a ?b ?x)
         (inverter ?i ?x ?output)))
 
@@ -185,38 +189,39 @@
 
 (define-test courses
   (with-fresh-database
-    (push-logic-frame-with
-      (facts (course complexity
-                     (time monday 9 11)
-                     (lecturer david harel)
-                     (location feinberg a))
-             (course lisp
-                     (time monday 10 12)
-                     (lecturer alyssa p hacker)
-                     (location main-hall))
-             (course scheme
-                     (time monday 12 15)
-                     (lecturer alyssa p hacker)
-                     (location online))
-             (course prolog
-                     (time tuesday 12 15)
-                     (lecturer ben bitdiddle)
-                     (location feinberg b))
-             (course haskell
-                     (time wednesday 12 15)
-                     (lecturer ben bitdiddle)
-                     (location online)))
+    (push-logic-frame-with t
+      (facts t
+        (course complexity
+                (time monday 9 11)
+                (lecturer david harel)
+                (location feinberg a))
+        (course lisp
+                (time monday 10 12)
+                (lecturer alyssa p hacker)
+                (location main-hall))
+        (course scheme
+                (time monday 12 15)
+                (lecturer alyssa p hacker)
+                (location online))
+        (course prolog
+                (time tuesday 12 15)
+                (lecturer ben bitdiddle)
+                (location feinberg b))
+        (course haskell
+                (time wednesday 12 15)
+                (lecturer ben bitdiddle)
+                (location online)))
 
-      (rule (lecturer ?who ?course)
+      (rule t (lecturer ?who ?course)
         (course ?course ? ?who ?))
 
-      (rule (teaches-on ?who ?day)
+      (rule t (teaches-on ?who ?day)
         (course ? (time ?day ? ?) ?who ?))
 
-      (rule (teaches-in ?who ?location)
+      (rule t (teaches-in ?who ?location)
         (course ? ? ?who ?location))
 
-      (rule (location-of ?course ?location)
+      (rule t (location-of ?course ?location)
         (course ?course ? ? ?location)))
 
     (should-return
@@ -239,17 +244,18 @@
 (define-test books
   (with-fresh-database
     (%member)
-    (push-logic-frame-with
-      (facts (book paip (list norvig) 1992)
-             (book sicp (list abelson sussman) 1996)
-             (book lol (list hoyte) 2008)
-             (book clos (list keene) 1988))
+    (push-logic-frame-with t
+      (facts t
+        (book paip (list norvig) 1992)
+        (book sicp (list abelson sussman) 1996)
+        (book lol (list hoyte) 2008)
+        (book clos (list keene) 1988))
 
-      (rule (wrote ?who ?title)
+      (rule t (wrote ?who ?title)
         (book ?title ?authors ?)
         (member ?who ?authors))
 
-      (rule (published-in ?who ?year)
+      (rule t (published-in ?who ?year)
         (book ? ?authors ?year)
         (member ?who ?authors)))
 
@@ -264,16 +270,17 @@
 
 (define-test graph
   (with-fresh-database
-    (push-logic-frame-with
-      (facts (edge a b)
-             (edge c d)
-             (edge a c)
-             (edge d e)
-             (edge b d)
-             (edge f g))
+    (push-logic-frame-with t
+      (facts t
+        (edge a b)
+        (edge c d)
+        (edge a c)
+        (edge d e)
+        (edge b d)
+        (edge f g))
 
-      (fact (connected ?node ?node))
-      (rule (connected ?node-1 ?node-2)
+      (fact t (connected ?node ?node))
+      (rule t (connected ?node-1 ?node-2)
         (edge ?node-1 ?link)
         (connected ?link ?node-2)))
 

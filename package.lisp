@@ -1,3 +1,23 @@
+(defpackage #:temperance.internal
+  (:use #:cl))
+
+(in-package #:temperance.internal)
+
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defun external-symbols (package)
+    (let ((symbols nil))
+      (do-external-symbols (s (find-package package) symbols)
+        (push s symbols)))))
+
+(defmacro defpackage-inheriting (name parent-packages &rest args)
+  `(defpackage ,name
+     ,@args
+     ,@(loop :for parent-package :in parent-packages
+             :collect `(:use ,parent-package)
+             :collect `(:export ,@(external-symbols parent-package)))))
+
+
 (defpackage #:temperance.utils
   (:use
     #:cl
@@ -64,8 +84,8 @@
     #:temperance.utils)
   (:export
     #:make-database
-    #:reset-database
-    #:with-database
+    #:reset-standard-database
+
     #:with-fresh-database
 
     #:invoke-rule
@@ -99,42 +119,6 @@
     #:?
     #:!))
 
-(defpackage #:temperance
-  (:use #:cl #:temperance.wam)
-  (:export
-    #:make-database
-    #:with-database
-    #:with-fresh-database
 
-    #:invoke-rule
-    #:invoke-fact
-    #:invoke-facts
-
-    #:rule
-    #:fact
-    #:facts
-
-    #:push-logic-frame
-    #:pop-logic-frame
-    #:finalize-logic-frame
-    #:push-logic-frame-with
-
-    #:invoke-query
-    #:invoke-query-all
-    #:invoke-query-map
-    #:invoke-query-do
-    #:invoke-query-find
-    #:invoke-prove
-
-    #:query
-    #:query-all
-    #:query-map
-    #:query-do
-    #:query-find
-    #:prove
-
-    #:call
-    #:?
-    #:!
-
-    ))
+(defpackage-inheriting #:temperance (#:temperance.wam)
+  (:use #:cl))

@@ -2,13 +2,18 @@
 
 
 ;;;; Database
-(defvar *standard-database* nil)
+(defvar *standard-database* (make-wam))
+
+(defun ensure-database (database-designator)
+  (etypecase database-designator
+    ((eql t) *standard-database*)
+    (wam database-designator)))
 
 
 (defun make-database ()
   (make-wam))
 
-(defun reset-database ()
+(defun reset-standard-database ()
   (setf *standard-database* (make-database)))
 
 
@@ -39,77 +44,76 @@
 
 
 ;;;; Assertion
-(defun invoke-rule (head &rest body)
-  (assert *standard-database* (*standard-database*) "No database.")
-  (wam-logic-frame-add-clause! *standard-database*
+(defun invoke-rule (database head &rest body)
+  (wam-logic-frame-add-clause! (ensure-database database)
                                (list* (normalize-term head)
                                       (mapcar #'normalize-term body)))
   nil)
 
-(defun invoke-fact (fact)
-  (invoke-rule fact)
+(defun invoke-fact (database fact)
+  (invoke-rule database fact)
   nil)
 
-(defun invoke-facts (&rest facts)
-  (mapc #'invoke-fact facts)
+(defun invoke-facts (database &rest facts)
+  (loop :for fact :in facts
+        :do (invoke-fact database fact))
   nil)
 
 
-(defmacro rule (head &body body)
-  `(invoke-rule ',head ,@(loop :for term :in body :collect `',term)))
+(defmacro rule (database head &body body)
+  `(invoke-rule ,database
+                ',head ,@(loop :for term :in body :collect `',term)))
 
-(defmacro fact (fact)
-  `(invoke-fact ',fact))
+(defmacro fact (database fact)
+  `(invoke-fact ,database ',fact))
 
-(defmacro facts (&body facts)
-  `(progn
-     ,@(loop :for f :in facts :collect `(fact ,f))))
+(defmacro facts (database &body facts)
+  (once-only (database)
+    `(progn
+      ,@(loop :for f :in facts :collect `(fact ,database ,f)))))
 
 
 ;;;; Logic Frames
-(defun push-logic-frame ()
-  (assert *standard-database* (*standard-database*) "No database.")
-  (wam-push-logic-frame! *standard-database*))
+(defun push-logic-frame (database)
+  (wam-push-logic-frame! (ensure-database database)))
 
-(defun pop-logic-frame ()
-  (assert *standard-database* (*standard-database*) "No database.")
-  (wam-pop-logic-frame! *standard-database*))
+(defun pop-logic-frame (database)
+  (wam-pop-logic-frame! (ensure-database database)))
 
-(defun finalize-logic-frame ()
-  (assert *standard-database* (*standard-database*) "No database.")
-  (wam-finalize-logic-frame! *standard-database*))
+(defun finalize-logic-frame (database)
+  (wam-finalize-logic-frame! (ensure-database database)))
 
-(defmacro push-logic-frame-with (&body body)
-  `(prog2
-     (push-logic-frame)
-     (progn ,@body)
-     (finalize-logic-frame)))
+(defmacro push-logic-frame-with (database &body body)
+  (once-only (database)
+    `(prog2
+      (push-logic-frame ,database)
+      (progn ,@body)
+      (finalize-logic-frame ,database))))
 
 
 ;;;; Querying
-(defun perform-aot-query (code size vars result-function)
-  (assert *standard-database* (*standard-database*) "No database.")
-  (run-aot-compiled-query *standard-database* code size vars
+(defun perform-aot-query (database code size vars result-function)
+  (run-aot-compiled-query (ensure-database database) code size vars
                           :result-function result-function))
 
-(defun perform-query (terms result-function)
-  (assert *standard-database* (*standard-database*) "No database.")
-  (run-query *standard-database* (mapcar #'normalize-term terms)
+(defun perform-query (database terms result-function)
+  (run-query (ensure-database database)
+             (mapcar #'normalize-term terms)
              :result-function result-function))
 
 
 (defmacro define-invocation ((name aot-name) arglist &body body)
-  (with-gensyms (terms data code size vars)
+  (with-gensyms (code size vars)
     `(progn
-      (defun ,name ,(append arglist `(&rest ,terms))
+      (defun ,name (database ,@arglist &rest terms)
         (macrolet ((invoke (result-function)
-                     `(perform-query ,',terms ,result-function)))
+                     `(perform-query database terms ,result-function)))
           ,@body))
-      (defun ,aot-name ,(append arglist `(,data))
-        (destructuring-bind (,code ,size ,vars) ,data
+      (defun ,aot-name (database ,@arglist data)
+        (destructuring-bind (,code ,size ,vars) data
           (macrolet ((invoke (result-function)
-                       `(perform-aot-query ,',code ,',size ,',vars
-                                           ,result-function)))
+                       `(perform-aot-query database ,',code ,',size ,',vars
+                         ,result-function)))
             ,@body))))))
 
 
@@ -165,23 +169,23 @@
 (defun quote-terms (terms)
   (loop :for term :in terms :collect `',term))
 
-(defmacro query (&rest terms)
-  `(invoke-query ,@(quote-terms terms)))
+(defmacro query (database &rest terms)
+  `(invoke-query ,database ,@(quote-terms terms)))
 
-(defmacro query-all (&rest terms)
-  `(invoke-query-all ,@(quote-terms terms)))
+(defmacro query-all (database &rest terms)
+  `(invoke-query-all ,database ,@(quote-terms terms)))
 
-(defmacro query-map (function &rest terms)
-  `(invoke-query-map ,function ,@(quote-terms terms)))
+(defmacro query-map (database function &rest terms)
+  `(invoke-query-map ,database ,function ,@(quote-terms terms)))
 
-(defmacro query-do (function &rest terms)
-  `(invoke-query-do ,function ,@(quote-terms terms)))
+(defmacro query-do (database function &rest terms)
+  `(invoke-query-do ,database ,function ,@(quote-terms terms)))
 
-(defmacro query-find (predicate &rest terms)
-  `(invoke-query-find ,predicate ,@(quote-terms terms)))
+(defmacro query-find (database predicate &rest terms)
+  `(invoke-query-find ,database ,predicate ,@(quote-terms terms)))
 
-(defmacro prove (&rest terms)
-  `(invoke-prove ,@(quote-terms terms)))
+(defmacro prove (database &rest terms)
+  `(invoke-prove ,database ,@(quote-terms terms)))
 
 
 ;;;; Chili Dogs
@@ -209,12 +213,17 @@
       form)))
 
 
-(define-invocation-compiler-macro invoke-query      invoke-query-aot ())
-(define-invocation-compiler-macro invoke-query-all  invoke-query-all-aot ())
-(define-invocation-compiler-macro invoke-query-map  invoke-query-map-aot (function))
-(define-invocation-compiler-macro invoke-query-do   invoke-query-do-aot (function))
-(define-invocation-compiler-macro invoke-query-find invoke-query-find-aot (predicate))
-(define-invocation-compiler-macro invoke-prove      invoke-prove-aot ())
+(define-invocation-compiler-macro invoke-query invoke-query-aot (database))
+
+(define-invocation-compiler-macro invoke-query-all invoke-query-all-aot (database))
+
+(define-invocation-compiler-macro invoke-query-map invoke-query-map-aot (database function))
+
+(define-invocation-compiler-macro invoke-query-do invoke-query-do-aot (database function))
+
+(define-invocation-compiler-macro invoke-query-find invoke-query-find-aot (database predicate))
+
+(define-invocation-compiler-macro invoke-prove invoke-prove-aot (database))
 
 
 ;;;; Debugging

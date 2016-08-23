@@ -25,7 +25,7 @@
 (defmacro should-fail (&body queries)
   `(progn
      ,@(loop :for query :in queries :collect
-             `(is (results= nil (query-all ,query))))))
+             `(is (results= nil (query-all t ,query))))))
 
 (defmacro should-return (&body queries)
   `(progn
@@ -37,26 +37,27 @@
                                ((equal results '(fail))
                                 nil)
                                (t results))
-                           (query-all ,query))))))
+                           (query-all t ,query))))))
 
 
 ;;;; Prolog
 (defun %= ()
-  (push-logic-frame-with
-    (fact (= ?x ?x))))
+  (push-logic-frame-with t
+    (fact t (= ?x ?x))))
 
 (defun %not ()
-  (push-logic-frame-with
-    (rule (not ?x) (call ?x) ! fail)
-    (fact (not ?x))))
+  (push-logic-frame-with t
+    (rule t (not ?x) (call ?x) ! fail)
+    (fact t (not ?x))))
+
 (defun %append ()
-  (push-logic-frame-with
-    (fact (append nil ?l ?l))
-    (rule (append (list* ?x ?rest) ?l (list* ?x ?result))
+  (push-logic-frame-with t
+    (fact t (append nil ?l ?l))
+    (rule t (append (list* ?x ?rest) ?l (list* ?x ?result))
       (append ?rest ?l ?result))))
 
 (defun %member ()
-  (push-logic-frame-with
-    (fact (member ?x (list* ?x ?)))
-    (rule (member ?x (list* ? ?rest))
+  (push-logic-frame-with t
+    (fact t (member ?x (list* ?x ?)))
+    (rule t (member ?x (list* ? ?rest))
       (member ?x ?rest))))

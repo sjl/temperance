@@ -9,9 +9,9 @@
 (define-test p1
   ;; Find the last element of a list.
   (with-fresh-database
-    (push-logic-frame-with
-      (fact (last ?x (list ?x)))
-      (rule (last ?x (list* ? ?tail))
+    (push-logic-frame-with t
+      (fact t (last ?x (list ?x)))
+      (rule t (last ?x (list* ? ?tail))
         (last ?x ?tail)))
 
     (should-return
@@ -33,9 +33,9 @@
 (define-test p2
   ;; Find the last but one element of a list.
   (with-fresh-database
-    (push-logic-frame-with
-      (fact (last-but-one ?x (list ?x ?)))
-      (rule (last-but-one ?x (list* ? ?tail))
+    (push-logic-frame-with t
+      (fact t (last-but-one ?x (list ?x ?)))
+      (rule t (last-but-one ?x (list* ? ?tail))
         (last-but-one ?x ?tail)))
 
     (should-return
@@ -57,12 +57,12 @@
 
 
 (defun %reverse ()
-  (push-logic-frame-with
-    (fact (reverse-acc nil ?acc ?acc))
-    (rule (reverse-acc (list* ?x ?tail) ?acc ?reversed)
+  (push-logic-frame-with t
+    (fact t (reverse-acc nil ?acc ?acc))
+    (rule t (reverse-acc (list* ?x ?tail) ?acc ?reversed)
       (reverse-acc ?tail (list* ?x ?acc) ?reversed))
 
-    (rule (reverse ?l ?r)
+    (rule t (reverse ?l ?r)
       (reverse-acc ?l nil ?r))))
 
 (define-test p5
@@ -87,8 +87,8 @@
   ;; Find out whether a list is a palindrome.
   (with-fresh-database
     (%reverse)
-    (push-logic-frame-with
-      (rule (palindrome ?l)
+    (push-logic-frame-with t
+      (rule t (palindrome ?l)
         (reverse ?l ?l)))
 
     (should-return
@@ -107,18 +107,18 @@
     (%not)
     (%append)
 
-    (push-logic-frame-with
-      (fact (is-list nil))
-      (fact (is-list (list* ? ?)))
+    (push-logic-frame-with t
+      (fact t (is-list nil))
+      (fact t (is-list (list* ? ?)))
 
-      (fact (flatten nil nil))
+      (fact t (flatten nil nil))
 
-      (rule (flatten (list* ?atom ?tail)
-                     (list* ?atom ?flat-tail))
+      (rule t (flatten (list* ?atom ?tail)
+                       (list* ?atom ?flat-tail))
         (not (is-list ?atom))
         (flatten ?tail ?flat-tail))
 
-      (rule (flatten (list* ?head ?tail) ?flattened)
+      (rule t (flatten (list* ?head ?tail) ?flattened)
         (is-list ?head)
         (flatten ?head ?flat-head)
         (flatten ?tail ?flat-tail)
@@ -150,14 +150,14 @@
     (%=)
     (%not)
 
-    (push-logic-frame-with
-      (fact (compress nil nil))
-      (fact (compress (list ?x) (list ?x)))
+    (push-logic-frame-with t
+      (fact t (compress nil nil))
+      (fact t (compress (list ?x) (list ?x)))
 
-      (rule (compress (list* ?x ?x ?rest) ?result)
+      (rule t (compress (list* ?x ?x ?rest) ?result)
         (compress (list* ?x ?rest) ?result))
 
-      (rule (compress (list* ?x ?y ?rest) (list* ?x ?result))
+      (rule t (compress (list* ?x ?y ?rest) (list* ?x ?result))
         (not (= ?x ?y))
         (compress (list* ?y ?rest) ?result)))
 
@@ -185,17 +185,17 @@
 ;     (%=)
 ;     (%not)
 
-;     (push-logic-frame-with
-;       (fact (pack nil nil))
-;       (fact (pack (list ?x) (list (list ?x))))
+;     (push-logic-frame-with t
+;       (fact t (pack nil nil))
+;       (fact t (pack (list ?x) (list (list ?x))))
 
-;       (rule (pack (list* ?x ?tail)
+;       (rule t (pack (list* ?x ?tail)
 ;                   (list* (list ?x) ?ptail))
 ;         (pack ?tail ?ptail)
 ;         (= ?ptail (list* (list* ?y ?) ?))
 ;         (not (= ?x ?y)))
 
-;       (rule (pack (list* ?h ?tail)
+;       (rule t (pack (list* ?h ?tail)
 ;                   (list* (list* ?h ?h ?hs) ?more))
 ;         (pack ?tail (list* (list* ?h ?hs) ?more))))
 
@@ -214,9 +214,9 @@
 (define-test p14
   ;; Duplicate the elements of a list.
   (with-fresh-database
-    (push-logic-frame-with
-      (fact (duplicate nil nil))
-      (rule (duplicate (list* ?x ?rest) (list* ?x ?x ?rest-dup))
+    (push-logic-frame-with t
+      (fact t (duplicate nil nil))
+      (rule t (duplicate (list* ?x ?rest) (list* ?x ?x ?rest-dup))
         (duplicate ?rest ?rest-dup)))
 
     (should-return
