@@ -9,6 +9,7 @@ exec ros -Q -- $0 "$@"
 (ql:quickload :unix-opts :silent t)
 (ql:quickload :split-sequence :silent t)
 (ql:quickload :losh :silent t)
+#+sbcl (require :sb-sprof)
 
 (defmacro shut-up (&body body)
   `(let ((*standard-output* (make-broadcast-stream))
@@ -37,6 +38,44 @@ exec ros -Q -- $0 "$@"
     #:temperance))
 
 (in-package #:temperance.contrib.gdl-benchmark)
+
+
+;;;; Config -------------------------------------------------------------------
+(defparameter *verbose* nil)
+(defparameter *profile* nil)
+
+
+;;;; Profiling ----------------------------------------------------------------
+#+sbcl
+(defmacro with-profiling (&body body)
+  ; (declare (optimize (speed 1) (debug 1) (safety 1)))
+  `(progn
+    (sb-ext:gc :full t)
+    (require :sb-sprof)
+    ; (sb-sprof::profile-call-counts "TEMPERANCE.WAM")
+    ; (sb-sprof::profile-call-counts "TEMPERANCE.CIRCLE")
+    ; (sb-sprof::profile-call-counts "TEMPERANCE.CONTRIB.GDL-BENCHMARK")
+    (sb-sprof::with-profiling (:max-samples 50000
+                               :reset t
+                               ; :mode :alloc
+                               :mode :cpu
+                               :sample-interval 0.006
+                               :alloc-interval 1)
+      ,@body)
+    (with-open-file (*standard-output* "gdl.prof"
+                                       :direction :output
+                                       :if-exists :supersede)
+      (sb-sprof:report :type :graph
+                       :sort-by :cumulative-samples
+                       :sort-order :ascending)
+      (sb-sprof:report :type :flat
+                       :min-percent 0.5))
+    nil))
+
+
+#-sbcl
+(defmacro with-profiling (&body body)
+  `(progn ,@body nil))
 
 
 ;;;; Benchmarking -------------------------------------------------------------
@@ -203,36 +242,6 @@ exec ros -Q -- $0 "$@"
         :finally (format t "#simulations: ~D~%" simulation-count)))
 
 
-; def minimax(state, depth):
-;     global nb_legals, nb_updates
-;     if checkTimeout(): return False
-
-;     # check for termination condition
-;     if state.isTerminal():
-;         if checkTimeout(): return False
-;         # compute goal values
-;         evalgoals(state)
-;         return True
-;     if depth <= 0:
-;         return False
-    
-;     isTerminal = True
-
-;     # compute all possible joint moves (combinations of legal moves of all players)
-;     moves = state.getMoves()
-;     nb_legals+=1
-;     if checkTimeout(): return False
-
-;     # for each joint move
-;     for move in moves:
-;         # go to the successor state
-;         successor = state.getSuccessor(move)
-;         nb_updates+=1
-;         # search the successor state (recursively)
-;         isTerminal = minimax(successor, depth-1) and isTerminal # order matters here
-;         if checkTimeout(): return False
-;     return isTerminal
-
 (defun minimax (state depth)
   ;; I know this is horrible, but I wanted to do as straight a port of the other
   ;; benchmarks as possible to minimize differences between benchmarks.
@@ -337,12 +346,16 @@ exec ros -Q -- $0 "$@"
 
 (defun run (modes limit gdl-file trace-file)
   (build-database (read-gdl gdl-file))
-  (dolist (mode modes)
-    (run-trace (build-traces (read-trace trace-file))
-               (ecase mode
-                 (:mc (curry #'run-monte-carlo limit))
-                 (:dfs (curry #'run-dfs limit))
-                 (:fdfs (curry #'fixed-depth-dfs limit))))))
+  (flet ((%run ()
+           (dolist (mode modes)
+             (run-trace (build-traces (read-trace trace-file))
+                        (ecase mode
+                          (:mc (curry #'run-monte-carlo limit))
+                          (:dfs (curry #'run-dfs limit))
+                          (:fdfs (curry #'fixed-depth-dfs limit)))))))
+    (if *profile*
+      (with-profiling (%run))
+      (%run))))
 
 
 ;;;; CLI ----------------------------------------------------------------------
@@ -362,6 +375,10 @@ exec ros -Q -- $0 "$@"
    :description "print this help text"
    :short #\h
    :long "help")
+  (:name :profile
+   :description "profile the run and dump the report to gdl.prof"
+   :short #\p
+   :long "profile")
   (:name :verbose
    :description "verbose output"
    :short #\v
@@ -380,8 +397,6 @@ exec ros -Q -- $0 "$@"
                  extra base propositions.
 
   TRACE-FILE     Path to the corresponding trace file."))
-
-(defparameter *verbose* nil)
 
 
 (defun usage ()
@@ -418,7 +433,8 @@ exec ros -Q -- $0 "$@"
   (multiple-value-bind (options arguments)
       (opts:get-opts argv)
 
-    (setf *verbose* (getf options :verbose))
+    (setf *verbose* (getf options :verbose)
+          *profile* (getf options :profile))
 
     (when (getf options :help)
       (usage)
