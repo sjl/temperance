@@ -2,7 +2,7 @@
 ;;;; See http://quickutil.org for details.
 
 ;;;; To regenerate:
-;;;; (qtlc:save-utils-as "quickutils.lisp" :utilities '(:DEFINE-CONSTANT :SET-EQUAL :CURRY :RCURRY :SWITCH :ENSURE-BOOLEAN :WHILE :UNTIL :TREE-MEMBER-P :WITH-GENSYMS :ONCE-ONLY :ZIP :ALIST-TO-HASH-TABLE :MAP-TREE :WEAVE :WHEN-LET :ALIST-PLIST :EQUIVALENCE-CLASSES :ENSURE-GETHASH :MAP-PRODUCT) :ensure-package T :package "TEMPERANCE.QUICKUTILS")
+;;;; (qtlc:save-utils-as "quickutils.lisp" :utilities '(:ALIST-PLIST :ALIST-TO-HASH-TABLE :CURRY :DEFINE-CONSTANT :ENSURE-BOOLEAN :ENSURE-GETHASH :ENSURE-KEYWORD :EQUIVALENCE-CLASSES :MAP-PRODUCT :MAP-TREE :ONCE-ONLY :RCURRY :READ-FILE-INTO-STRING :SET-EQUAL :SWITCH :TREE-MEMBER-P :UNTIL :WEAVE :WHEN-LET :WHILE :WITH-GENSYMS :ZIP) :ensure-package T :package "TEMPERANCE.QUICKUTILS")
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (unless (find-package "TEMPERANCE.QUICKUTILS")
@@ -13,65 +13,52 @@
 (in-package "TEMPERANCE.QUICKUTILS")
 
 (when (boundp '*utilities*)
-  (setf *utilities* (union *utilities* '(:DEFINE-CONSTANT :SET-EQUAL
-                                         :MAKE-GENSYM-LIST :ENSURE-FUNCTION
-                                         :CURRY :RCURRY :STRING-DESIGNATOR
-                                         :WITH-GENSYMS :EXTRACT-FUNCTION-NAME
-                                         :SWITCH :ENSURE-BOOLEAN :UNTIL :WHILE
-                                         :TREE-MEMBER-P :ONCE-ONLY :TRANSPOSE
-                                         :ZIP :ALIST-TO-HASH-TABLE :MAP-TREE
-                                         :WEAVE :WHEN-LET :SAFE-ENDP
-                                         :ALIST-PLIST :EQUIVALENCE-CLASSES
-                                         :ENSURE-GETHASH :MAPPEND :MAP-PRODUCT))))
+  (setf *utilities* (union *utilities* '(:SAFE-ENDP :ALIST-PLIST
+                                         :ALIST-TO-HASH-TABLE :MAKE-GENSYM-LIST
+                                         :ENSURE-FUNCTION :CURRY
+                                         :DEFINE-CONSTANT :ENSURE-BOOLEAN
+                                         :ENSURE-GETHASH :ENSURE-KEYWORD
+                                         :EQUIVALENCE-CLASSES :MAPPEND
+                                         :MAP-PRODUCT :MAP-TREE :ONCE-ONLY
+                                         :RCURRY :WITH-OPEN-FILE*
+                                         :WITH-INPUT-FROM-FILE
+                                         :READ-FILE-INTO-STRING :SET-EQUAL
+                                         :STRING-DESIGNATOR :WITH-GENSYMS
+                                         :EXTRACT-FUNCTION-NAME :SWITCH
+                                         :TREE-MEMBER-P :UNTIL :WEAVE :WHEN-LET
+                                         :WHILE :TRANSPOSE :ZIP))))
 
-  (defun %reevaluate-constant (name value test)
-    (if (not (boundp name))
-        value
-        (let ((old (symbol-value name))
-              (new value))
-          (if (not (constantp name))
-              (prog1 new
-                (cerror "Try to redefine the variable as a constant."
-                        "~@<~S is an already bound non-constant variable ~
-                       whose value is ~S.~:@>" name old))
-              (if (funcall test old new)
-                  old
-                  (restart-case
-                      (error "~@<~S is an already defined constant whose value ~
-                              ~S is not equal to the provided initial value ~S ~
-                              under ~S.~:@>" name old new test)
-                    (ignore ()
-                      :report "Retain the current value."
-                      old)
-                    (continue ()
-                      :report "Try to redefine the constant."
-                      new)))))))
-
-  (defmacro define-constant (name initial-value &key (test ''eql) documentation)
-    "Ensures that the global variable named by `name` is a constant with a value
-that is equal under `test` to the result of evaluating `initial-value`. `test` is a
-function designator that defaults to `eql`. If `documentation` is given, it
-becomes the documentation string of the constant.
-
-Signals an error if `name` is already a bound non-constant variable.
-
-Signals an error if `name` is already a constant variable whose value is not
-equal under `test` to result of evaluating `initial-value`."
-    `(defconstant ,name (%reevaluate-constant ',name ,initial-value ,test)
-       ,@(when documentation `(,documentation))))
+  (declaim (inline safe-endp))
+  (defun safe-endp (x)
+    (declare (optimize safety))
+    (endp x))
   
 
-  (defun set-equal (list1 list2 &key (test #'eql) (key nil keyp))
-    "Returns true if every element of `list1` matches some element of `list2` and
-every element of `list2` matches some element of `list1`. Otherwise returns false."
-    (let ((keylist1 (if keyp (mapcar key list1) list1))
-          (keylist2 (if keyp (mapcar key list2) list2)))
-      (and (dolist (elt keylist1 t)
-             (or (member elt keylist2 :test test)
-                 (return nil)))
-           (dolist (elt keylist2 t)
-             (or (member elt keylist1 :test test)
-                 (return nil))))))
+  (defun alist-plist (alist)
+    "Returns a property list containing the same keys and values as the
+association list ALIST in the same order."
+    (let (plist)
+      (dolist (pair alist)
+        (push (car pair) plist)
+        (push (cdr pair) plist))
+      (nreverse plist)))
+
+  (defun plist-alist (plist)
+    "Returns an association list containing the same keys and values as the
+property list PLIST in the same order."
+    (let (alist)
+      (do ((tail plist (cddr tail)))
+          ((safe-endp tail) (nreverse alist))
+        (push (cons (car tail) (cadr tail)) alist))))
+  
+
+  (defun alist-to-hash-table (kv-pairs)
+    "Create a hash table populated with `kv-pairs`."
+    (let ((hashtab (make-hash-table :test #'equal)))
+      (loop 
+        :for (i j) :in kv-pairs
+        :do (setf (gethash i hashtab) j)
+        :finally (return hashtab))))
   
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defun make-gensym-list (length &optional (x "G"))
@@ -117,6 +104,169 @@ it is called with to `function`."
            (apply ,fun ,@curries more)))))
   
 
+  (defun %reevaluate-constant (name value test)
+    (if (not (boundp name))
+        value
+        (let ((old (symbol-value name))
+              (new value))
+          (if (not (constantp name))
+              (prog1 new
+                (cerror "Try to redefine the variable as a constant."
+                        "~@<~S is an already bound non-constant variable ~
+                       whose value is ~S.~:@>" name old))
+              (if (funcall test old new)
+                  old
+                  (restart-case
+                      (error "~@<~S is an already defined constant whose value ~
+                              ~S is not equal to the provided initial value ~S ~
+                              under ~S.~:@>" name old new test)
+                    (ignore ()
+                      :report "Retain the current value."
+                      old)
+                    (continue ()
+                      :report "Try to redefine the constant."
+                      new)))))))
+
+  (defmacro define-constant (name initial-value &key (test ''eql) documentation)
+    "Ensures that the global variable named by `name` is a constant with a value
+that is equal under `test` to the result of evaluating `initial-value`. `test` is a
+function designator that defaults to `eql`. If `documentation` is given, it
+becomes the documentation string of the constant.
+
+Signals an error if `name` is already a bound non-constant variable.
+
+Signals an error if `name` is already a constant variable whose value is not
+equal under `test` to result of evaluating `initial-value`."
+    `(defconstant ,name (%reevaluate-constant ',name ,initial-value ,test)
+       ,@(when documentation `(,documentation))))
+  
+
+  (defun ensure-boolean (x)
+    "Convert `x` into a Boolean value."
+    (and x t))
+  
+
+  (defmacro ensure-gethash (key hash-table &optional default)
+    "Like `gethash`, but if `key` is not found in the `hash-table` saves the `default`
+under key before returning it. Secondary return value is true if key was
+already in the table."
+    `(multiple-value-bind (value ok) (gethash ,key ,hash-table)
+       (if ok
+           (values value ok)
+           (values (setf (gethash ,key ,hash-table) ,default) nil))))
+  
+
+  (defun ensure-keyword (x)
+    "Ensure that a keyword is returned for the string designator `x`."
+    (values (intern (string x) :keyword)))
+  
+
+  (defun equivalence-classes (equiv seq)
+    "Partition the sequence `seq` into a list of equivalence classes
+defined by the equivalence relation `equiv`."
+    (let ((classes nil))
+      (labels ((find-equivalence-class (x)
+                 (member-if (lambda (class)
+                              (funcall equiv x (car class)))
+                            classes))
+               
+               (add-to-class (x)
+                 (let ((class (find-equivalence-class x)))
+                   (if class
+                       (push x (car class))
+                       (push (list x) classes)))))
+        (declare (dynamic-extent (function find-equivalence-class)
+                                 (function add-to-class))
+                 (inline find-equivalence-class
+                         add-to-class))
+        
+        ;; Partition into equivalence classes.
+        (map nil #'add-to-class seq)
+        
+        ;; Return the classes.
+        classes)))
+  
+
+  (defun mappend (function &rest lists)
+    "Applies `function` to respective element(s) of each `list`, appending all the
+all the result list to a single list. `function` must return a list."
+    (loop for results in (apply #'mapcar function lists)
+          append results))
+  
+
+  (defun map-product (function list &rest more-lists)
+    "Returns a list containing the results of calling `function` with one argument
+from `list`, and one from each of `more-lists` for each combination of arguments.
+In other words, returns the product of `list` and `more-lists` using `function`.
+
+Example:
+
+    (map-product 'list '(1 2) '(3 4) '(5 6))
+     => ((1 3 5) (1 3 6) (1 4 5) (1 4 6)
+         (2 3 5) (2 3 6) (2 4 5) (2 4 6))"
+    (labels ((%map-product (f lists)
+               (let ((more (cdr lists))
+                     (one (car lists)))
+                 (if (not more)
+                     (mapcar f one)
+                     (mappend (lambda (x)
+                                (%map-product (curry f x) more))
+                              one)))))
+      (%map-product (ensure-function function) (cons list more-lists))))
+  
+
+  (defun map-tree (function tree)
+    "Map `function` to each of the leave of `tree`."
+    (check-type tree cons)
+    (labels ((rec (tree)
+               (cond
+                 ((null tree) nil)
+                 ((atom tree) (funcall function tree))
+                 ((consp tree)
+                  (cons (rec (car tree))
+                        (rec (cdr tree)))))))
+      (rec tree)))
+  
+
+  (defmacro once-only (specs &body forms)
+    "Evaluates `forms` with symbols specified in `specs` rebound to temporary
+variables, ensuring that each initform is evaluated only once.
+
+Each of `specs` must either be a symbol naming the variable to be rebound, or of
+the form:
+
+    (symbol initform)
+
+Bare symbols in `specs` are equivalent to
+
+    (symbol symbol)
+
+Example:
+
+    (defmacro cons1 (x) (once-only (x) `(cons ,x ,x)))
+      (let ((y 0)) (cons1 (incf y))) => (1 . 1)"
+    (let ((gensyms (make-gensym-list (length specs) "ONCE-ONLY"))
+          (names-and-forms (mapcar (lambda (spec)
+                                     (etypecase spec
+                                       (list
+                                        (destructuring-bind (name form) spec
+                                          (cons name form)))
+                                       (symbol
+                                        (cons spec spec))))
+                                   specs)))
+      ;; bind in user-macro
+      `(let ,(mapcar (lambda (g n) (list g `(gensym ,(string (car n)))))
+              gensyms names-and-forms)
+         ;; bind in final expansion
+         `(let (,,@(mapcar (lambda (g n)
+                             ``(,,g ,,(cdr n)))
+                           gensyms names-and-forms))
+            ;; bind in user-macro
+            ,(let ,(mapcar (lambda (n g) (list (car n) g))
+                    names-and-forms gensyms)
+               ,@forms)))))
+  
+
   (defun rcurry (function &rest arguments)
     "Returns a function that applies the arguments it is called
 with and `arguments` to `function`."
@@ -125,6 +275,71 @@ with and `arguments` to `function`."
       (lambda (&rest more)
         (declare (dynamic-extent more))
         (multiple-value-call fn (values-list more) (values-list arguments)))))
+  
+
+  (defmacro with-open-file* ((stream filespec &key direction element-type
+                                                   if-exists if-does-not-exist external-format)
+                             &body body)
+    "Just like `with-open-file`, but `nil` values in the keyword arguments mean to use
+the default value specified for `open`."
+    (once-only (direction element-type if-exists if-does-not-exist external-format)
+      `(with-open-stream
+           (,stream (apply #'open ,filespec
+                           (append
+                            (when ,direction
+                              (list :direction ,direction))
+                            (when ,element-type
+                              (list :element-type ,element-type))
+                            (when ,if-exists
+                              (list :if-exists ,if-exists))
+                            (when ,if-does-not-exist
+                              (list :if-does-not-exist ,if-does-not-exist))
+                            (when ,external-format
+                              (list :external-format ,external-format)))))
+         ,@body)))
+  
+
+  (defmacro with-input-from-file ((stream-name file-name &rest args
+                                                         &key (direction nil direction-p)
+                                                         &allow-other-keys)
+                                  &body body)
+    "Evaluate `body` with `stream-name` to an input stream on the file
+`file-name`. `args` is sent as is to the call to `open` except `external-format`,
+which is only sent to `with-open-file` when it's not `nil`."
+    (declare (ignore direction))
+    (when direction-p
+      (error "Can't specifiy :DIRECTION for WITH-INPUT-FROM-FILE."))
+    `(with-open-file* (,stream-name ,file-name :direction :input ,@args)
+       ,@body))
+  
+
+  (defun read-file-into-string (pathname &key (buffer-size 4096) external-format)
+    "Return the contents of the file denoted by `pathname` as a fresh string.
+
+The `external-format` parameter will be passed directly to `with-open-file`
+unless it's `nil`, which means the system default."
+    (with-input-from-file
+        (file-stream pathname :external-format external-format)
+      (let ((*print-pretty* nil))
+        (with-output-to-string (datum)
+          (let ((buffer (make-array buffer-size :element-type 'character)))
+            (loop
+              :for bytes-read = (read-sequence buffer file-stream)
+              :do (write-sequence buffer datum :start 0 :end bytes-read)
+              :while (= bytes-read buffer-size)))))))
+  
+
+  (defun set-equal (list1 list2 &key (test #'eql) (key nil keyp))
+    "Returns true if every element of `list1` matches some element of `list2` and
+every element of `list2` matches some element of `list1`. Otherwise returns false."
+    (let ((keylist1 (if keyp (mapcar key list1) list1))
+          (keylist2 (if keyp (mapcar key list2) list2)))
+      (and (dolist (elt keylist1 t)
+             (or (member elt keylist2 :test test)
+                 (return nil)))
+           (dolist (elt keylist2 t)
+             (or (member elt keylist1 :test test)
+                 (return nil))))))
   
 
   (deftype string-designator ()
@@ -221,24 +436,6 @@ returns the values of `default` if no keys match."
     (generate-switch-body whole object clauses test key '(cerror "Return NIL from CSWITCH.")))
   
 
-  (defun ensure-boolean (x)
-    "Convert `x` into a Boolean value."
-    (and x t))
-  
-
-  (defmacro until (expression &body body)
-    "Executes `body` until `expression` is true."
-    `(do ()
-         (,expression)
-       ,@body))
-  
-
-  (defmacro while (expression &body body)
-    "Executes `body` while `expression` is true."
-    `(until (not ,expression)
-       ,@body))
-  
-
   (defun tree-member-p (item tree &key (test #'eql))
     "Returns `t` if `item` is in `tree`, `nil` otherwise."
     (labels ((rec (tree)
@@ -249,76 +446,11 @@ returns the values of `default` if no keys match."
       (rec tree)))
   
 
-  (defmacro once-only (specs &body forms)
-    "Evaluates `forms` with symbols specified in `specs` rebound to temporary
-variables, ensuring that each initform is evaluated only once.
-
-Each of `specs` must either be a symbol naming the variable to be rebound, or of
-the form:
-
-    (symbol initform)
-
-Bare symbols in `specs` are equivalent to
-
-    (symbol symbol)
-
-Example:
-
-    (defmacro cons1 (x) (once-only (x) `(cons ,x ,x)))
-      (let ((y 0)) (cons1 (incf y))) => (1 . 1)"
-    (let ((gensyms (make-gensym-list (length specs) "ONCE-ONLY"))
-          (names-and-forms (mapcar (lambda (spec)
-                                     (etypecase spec
-                                       (list
-                                        (destructuring-bind (name form) spec
-                                          (cons name form)))
-                                       (symbol
-                                        (cons spec spec))))
-                                   specs)))
-      ;; bind in user-macro
-      `(let ,(mapcar (lambda (g n) (list g `(gensym ,(string (car n)))))
-              gensyms names-and-forms)
-         ;; bind in final expansion
-         `(let (,,@(mapcar (lambda (g n)
-                             ``(,,g ,,(cdr n)))
-                           gensyms names-and-forms))
-            ;; bind in user-macro
-            ,(let ,(mapcar (lambda (n g) (list (car n) g))
-                    names-and-forms gensyms)
-               ,@forms)))))
-  
-
-  (defun transpose (lists)
-    "Analog to matrix transpose for a list of lists given by `lists`."
-    (apply #'mapcar #'list lists))
-  
-
-  (defun zip (&rest lists)
-    "Take a tuple of lists and turn them into a list of
-tuples. Equivalent to `unzip`."
-    (transpose lists))
-  
-
-  (defun alist-to-hash-table (kv-pairs)
-    "Create a hash table populated with `kv-pairs`."
-    (let ((hashtab (make-hash-table :test #'equal)))
-      (loop 
-        :for (i j) :in kv-pairs
-        :do (setf (gethash i hashtab) j)
-        :finally (return hashtab))))
-  
-
-  (defun map-tree (function tree)
-    "Map `function` to each of the leave of `tree`."
-    (check-type tree cons)
-    (labels ((rec (tree)
-               (cond
-                 ((null tree) nil)
-                 ((atom tree) (funcall function tree))
-                 ((consp tree)
-                  (cons (rec (car tree))
-                        (rec (cdr tree)))))))
-      (rec tree)))
+  (defmacro until (expression &body body)
+    "Executes `body` until `expression` is true."
+    `(do ()
+         (,expression)
+       ,@body))
   
 
   (defun weave (&rest lists)
@@ -389,98 +521,27 @@ PROGN."
              ,@(bind (cdr binding-list) forms))))))
   
 
-  (declaim (inline safe-endp))
-  (defun safe-endp (x)
-    (declare (optimize safety))
-    (endp x))
+  (defmacro while (expression &body body)
+    "Executes `body` while `expression` is true."
+    `(until (not ,expression)
+       ,@body))
   
 
-  (defun alist-plist (alist)
-    "Returns a property list containing the same keys and values as the
-association list ALIST in the same order."
-    (let (plist)
-      (dolist (pair alist)
-        (push (car pair) plist)
-        (push (cdr pair) plist))
-      (nreverse plist)))
-
-  (defun plist-alist (plist)
-    "Returns an association list containing the same keys and values as the
-property list PLIST in the same order."
-    (let (alist)
-      (do ((tail plist (cddr tail)))
-          ((safe-endp tail) (nreverse alist))
-        (push (cons (car tail) (cadr tail)) alist))))
+  (defun transpose (lists)
+    "Analog to matrix transpose for a list of lists given by `lists`."
+    (apply #'mapcar #'list lists))
   
 
-  (defun equivalence-classes (equiv seq)
-    "Partition the sequence `seq` into a list of equivalence classes
-defined by the equivalence relation `equiv`."
-    (let ((classes nil))
-      (labels ((find-equivalence-class (x)
-                 (member-if (lambda (class)
-                              (funcall equiv x (car class)))
-                            classes))
-               
-               (add-to-class (x)
-                 (let ((class (find-equivalence-class x)))
-                   (if class
-                       (push x (car class))
-                       (push (list x) classes)))))
-        (declare (dynamic-extent (function find-equivalence-class)
-                                 (function add-to-class))
-                 (inline find-equivalence-class
-                         add-to-class))
-        
-        ;; Partition into equivalence classes.
-        (map nil #'add-to-class seq)
-        
-        ;; Return the classes.
-        classes)))
-  
-
-  (defmacro ensure-gethash (key hash-table &optional default)
-    "Like `gethash`, but if `key` is not found in the `hash-table` saves the `default`
-under key before returning it. Secondary return value is true if key was
-already in the table."
-    `(multiple-value-bind (value ok) (gethash ,key ,hash-table)
-       (if ok
-           (values value ok)
-           (values (setf (gethash ,key ,hash-table) ,default) nil))))
-  
-
-  (defun mappend (function &rest lists)
-    "Applies `function` to respective element(s) of each `list`, appending all the
-all the result list to a single list. `function` must return a list."
-    (loop for results in (apply #'mapcar function lists)
-          append results))
-  
-
-  (defun map-product (function list &rest more-lists)
-    "Returns a list containing the results of calling `function` with one argument
-from `list`, and one from each of `more-lists` for each combination of arguments.
-In other words, returns the product of `list` and `more-lists` using `function`.
-
-Example:
-
-    (map-product 'list '(1 2) '(3 4) '(5 6))
-     => ((1 3 5) (1 3 6) (1 4 5) (1 4 6)
-         (2 3 5) (2 3 6) (2 4 5) (2 4 6))"
-    (labels ((%map-product (f lists)
-               (let ((more (cdr lists))
-                     (one (car lists)))
-                 (if (not more)
-                     (mapcar f one)
-                     (mappend (lambda (x)
-                                (%map-product (curry f x) more))
-                              one)))))
-      (%map-product (ensure-function function) (cons list more-lists))))
+  (defun zip (&rest lists)
+    "Take a tuple of lists and turn them into a list of
+tuples. Equivalent to `unzip`."
+    (transpose lists))
   
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (export '(define-constant set-equal curry rcurry switch eswitch cswitch
-            ensure-boolean while until tree-member-p with-gensyms
-            with-unique-names once-only zip alist-to-hash-table map-tree weave
-            when-let when-let* alist-plist plist-alist equivalence-classes
-            ensure-gethash map-product)))
+  (export '(alist-plist plist-alist alist-to-hash-table curry define-constant
+            ensure-boolean ensure-gethash ensure-keyword equivalence-classes
+            map-product map-tree once-only rcurry read-file-into-string
+            set-equal switch eswitch cswitch tree-member-p until weave when-let
+            when-let* while with-gensyms with-unique-names zip)))
 
 ;;;; END OF quickutils.lisp ;;;;

@@ -15,6 +15,7 @@ exec ros -Q -- $0 "$@"
 (defpackage #:temperance.contrib.gdl-benchmark
   (:use
     #:cl
+    #:cl-arrows
     #:losh
     #:temperance.quickutils
     #:temperance))
@@ -23,11 +24,133 @@ exec ros -Q -- $0 "$@"
 
 
 ;;;; Benchmarking -------------------------------------------------------------
+(defun read-file (path)
+  (with-open-file (file path :direction :input)
+    (loop :for form = (read file nil 'eof)
+          :until (eq form 'eof)
+          :collect form)))
+
+(defun read-gdl (path)
+  (read-file path))
+
+(defun read-trace (path)
+  ;; (moves m1 m2 ...) -> (m1 m2 ...)
+  (mapcar #'rest (read-file path)))
+
+
+(defun load-gdl-preamble ()
+  (push-logic-frame-with t
+    (rule t (not ?x) (call ?x) ! fail)
+    (fact t (not ?x))
+
+    (rule t (or ?x ?y) (call ?x))
+    (rule t (or ?x ?y) (call ?y))
+
+    (rule t (distinct ?x ?x) ! fail)
+    (fact t (distinct ?x ?y))))
+
+(defun build-clause (clause)
+  (if (and (consp clause)
+           (eq (first clause) '<=))
+    (destructuring-bind (arrow head . body)
+        clause
+      (declare (ignore arrow))
+      (apply #'invoke-rule t head body))
+    (invoke-fact t clause)))
+
+(defun build-database (gdl)
+  (reset-standard-database)
+  (load-gdl-preamble)
+  (push-logic-frame-with t
+    (mapc #'build-clause gdl)))
+
+
+(defun normalize-state (state)
+  ;; TODO: should this be excluded from the benchmark?
+  (remove-duplicates state :test 'equal))
+
+(defun initial-state ()
+  (normalize-state
+    (query-map t (lambda (r) (getf r '?what))
+               (init ?what))))
+
+(defun terminalp ()
+  (prove t terminal))
+
+(defun roles ()
+  (query-map t (lambda (r) (getf r '?role))
+             (role ?role)))
+
+(defun goal-values ()
+  (remove-duplicates (query-all t (goal ?role ?goal))
+                     :test 'equal))
+
+
+(defun next-state ()
+  (normalize-state
+    (query-map t (lambda (r) (getf r '?what))
+               (next ?what))))
+
+
+(defun apply-state (state)
+  (push-logic-frame-with t
+    (loop :for fact :in state
+          :do (invoke-fact t `(true ,fact)))))
+
+(defun apply-moves (moves)
+  (push-logic-frame-with t
+    (loop :for (role . action) :in moves
+          :do (invoke-fact t `(does ,role ,action)))))
+
+(defun clear-state ()
+  (pop-logic-frame t))
+
+(defun clear-moves ()
+  (pop-logic-frame t))
+
+
+(defun move= (move1 move2)
+  (equal move1 move2))
+
+(defun move-role= (move1 move2)
+  (eq (car move1) (car move2)))
+
+
+(defun legal-moves ()
+  (let* ((individual-moves
+           (remove-duplicates
+             (query-map t (lambda (move)
+                            (cons (getf move '?role)
+                                  (getf move '?action)))
+                        (legal ?role ?action))
+             :test #'move=))
+         (player-moves
+           (equivalence-classes #'move-role= individual-moves))
+         (joint-moves
+           (apply #'map-product #'list player-moves)))
+    joint-moves))
+
+
+(defun build-traces (traces)
+  (loop
+    :with roles = (roles) ;; ugly to depend on the logic here but whatever idc
+    :for trace :in traces
+        :collect (loop :for move :in trace
+                       :for role :in roles
+                       :collect (cons role move))))
+
+
 (defun run (modes limit gdl-file trace-file)
-  (print modes)
-  (print limit)
-  (print gdl-file)
-  (print trace-file))
+  (declare (ignore modes limit))
+  (build-database (read-gdl gdl-file))
+  (build-traces ())
+  (print (roles))
+  (print (build-traces (read-trace trace-file)))
+  (print (initial-state))
+  (print (terminalp))
+  (apply-state (initial-state))
+  (print (legal-moves))
+  )
 
 
 ;;;; CLI ----------------------------------------------------------------------
@@ -72,36 +195,50 @@ exec ros -Q -- $0 "$@"
 (defun usage ()
   (let ((prog (program-name)))
     (opts:describe
-      :prefix (format nil "~A - benchmark Temperance for GDL reasoning" prog)
+      :prefix (format nil "~A - Benchmark Temperance for GDL reasoning." prog)
       :suffix *required-options*
       :usage-of prog
       :args "SEARCH-MODES LIMIT GDL-FILE TRACE-FILE")))
 
 (defun die (message &rest args)
+  (terpri)
   (apply #'format *error-output* message args)
   #+sbcl (sb-ext:exit :code 1)
   #-sbcl (quit))
 
 
+(defun parse-modes (modes)
+  (-<> modes
+    (split-sequence:split-sequence #\space <>
+                                   :remove-empty-subseqs t)
+    (mapcar #'string-upcase <>)
+    (mapcar #'ensure-keyword <>)))
+
+(defun parse-limit (limit)
+  (handler-case
+      (parse-integer limit)
+    (parse-error (e)
+      (declare (ignore e))
+      (die "ERROR: limit '~A' is not an integer.~%" limit))))
+
+
 (defun main (&rest argv)
-  (block nil
-    (multiple-value-bind (options arguments)
-        (opts:get-opts argv)
+  (multiple-value-bind (options arguments)
+      (opts:get-opts argv)
 
-      (setf *verbose* (getf options :verbose))
-      (when (or (getf options :help)
-                (not (= 4 (length arguments))))
-        (usage)
-        (return))
+    (setf *verbose* (getf options :verbose))
 
-      (destructuring-bind (modes limit gdl-file trace-file) arguments
-        (run (split-sequence:split-sequence #\space modes
-                                            :remove-empty-subseqs t)
-             (handler-case
-                 (parse-integer limit)
-               (parse-error (e)
-                 (declare (ignore e))
-                 (die "ERROR: limit '~A' is not an integer~%" limit)))
-             gdl-file
-             trace-file)))))
+    (when (getf options :help)
+      (usage)
+      (return-from main))
+
+    (when (not (= 4 (length arguments)))
+      (usage)
+      (die "ERROR: All arguments are required.~%"))
+
+    (destructuring-bind (modes limit gdl-file trace-file) arguments
+      (run (parse-modes modes)
+           (parse-limit limit)
+           gdl-file
+           trace-file))))
 

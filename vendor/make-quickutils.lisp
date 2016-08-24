@@ -2,26 +2,32 @@
 
 (qtlc:save-utils-as
   "quickutils.lisp"
-  :utilities '(:define-constant
-               :set-equal
-               :curry
-               :rcurry
-               :switch
-               :ensure-boolean
-               :while
-               :until
-               :tree-member-p
-               :with-gensyms
-               :once-only
-               :zip
+  :utilities '(
+
+               :alist-plist
                :alist-to-hash-table
+               :curry
+               :define-constant
+               :ensure-boolean
+               :ensure-gethash
+               :ensure-keyword
+               :equivalence-classes
+               :map-product
                :map-tree
+               :once-only
+               :rcurry
+               :read-file-into-string
+               :set-equal
+               :switch
+               :tree-member-p
+               :until
                :weave
                :when-let
-               :alist-plist
-               :equivalence-classes
-               :ensure-gethash
-               :map-product)
+               :while
+               :with-gensyms
+               :zip
+
+               )
   :package "TEMPERANCE.QUICKUTILS")
 
 (quit)
