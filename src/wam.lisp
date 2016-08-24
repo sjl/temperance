@@ -138,10 +138,12 @@
 ;;; value is bound to.  Unbound variables contain their own store index as
 ;;; a value.
 ;;;
-;;; FUNCTOR cell values are a pointer to a `(fname . arity)` cons.
+;;; FUNCTOR cell values are a pointer to a Lisp symbol.  The next cell after
+;;; a FUNCTOR cell is always a LISP-OBJECT cell with the fuctor's arity.
 ;;;
 ;;; CONSTANT cells are the same as functor cells, except that they always happen
-;;; to refer to functors with an arity of zero.
+;;; to refer to functors with an arity of zero and therefore don't need to be
+;;; followed by another cell for the arity.
 ;;;
 ;;; LIST cell values are an index into the store, pointing at the first of two
 ;;; consecutive cells.  The first cell is the car of the list, the second one is
@@ -296,8 +298,7 @@
 
 ;;;; Heap
 ;;; The WAM heap is all the memory left in the store after the local registers
-;;; and stack have been accounted for.  Because the store is adjustable and the
-;;; heap lives at the end of it, the heap can grow if necessary.
+;;; and stack have been accounted for.
 ;;;
 ;;; We reserve the first address in the heap as a sentinel, as an "unset" value
 ;;; for various pointers into the heap.

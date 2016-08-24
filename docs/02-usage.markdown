@@ -6,6 +6,7 @@ Usage
 ## Hello, Temperance
 ## Databases
 ## Rules
+## Anonymous Variables
 ## Queries
 ## Lists
 ## Logic Frames
