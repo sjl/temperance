@@ -5,9 +5,22 @@ exec ros -Q -- $0 "$@"
 |#
 
 ;;;; Dependencies -------------------------------------------------------------
-(ql:quickload 'unix-opts :silent t)
-(ql:quickload 'split-sequence :silent t)
-(ql:quickload 'temperance :silent t)
+(ql:quickload :uiop :silent t)
+(ql:quickload :unix-opts :silent t)
+(ql:quickload :split-sequence :silent t)
+(ql:quickload :losh :silent t)
+(ql:quickload :temperance :silent t)
+
+;;;; Package ------------------------------------------------------------------
+(defpackage #:temperance.contrib.gdl-benchmark
+  (:use
+    #:cl
+    #:losh
+    #:temperance.quickutils
+    #:temperance))
+
+(in-package #:temperance.contrib.gdl-benchmark)
+
 
 ;;;; Benchmarking -------------------------------------------------------------
 (defun run (modes limit gdl-file trace-file)
