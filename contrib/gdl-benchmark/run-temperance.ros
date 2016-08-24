@@ -9,7 +9,23 @@ exec ros -Q -- $0 "$@"
 (ql:quickload :unix-opts :silent t)
 (ql:quickload :split-sequence :silent t)
 (ql:quickload :losh :silent t)
-(ql:quickload :temperance :silent t)
+
+(defmacro shut-up (&body body)
+  `(let ((*standard-output* (make-broadcast-stream))
+         (*error-output* (make-broadcast-stream)))
+     ,@body))
+
+
+(defun load-temperance ()
+  (if (string= "YES" (uiop:getenv "PLEASE_SEGFAULT"))
+    (declaim (optimize (debug 0) (safety 0) (speed 3)))
+    (declaim (optimize (debug 1) (safety 1) (speed 3))))
+  (shut-up
+    (asdf:load-system :temperance :force t))
+  (declaim (optimize (debug 3) (safety 1) (speed 1))))
+
+(load-temperance)
+
 
 ;;;; Package ------------------------------------------------------------------
 (defpackage #:temperance.contrib.gdl-benchmark
@@ -140,17 +156,193 @@ exec ros -Q -- $0 "$@"
                        :collect (cons role move))))
 
 
+(defvar *update-count* 0)
+(defvar *legal-move-count* 0)
+(defvar *goal-state-count* 0)
+
+(defvar *deadline* nil)
+
+(defun calculate-deadline (seconds)
+  (setf *deadline* (+ (get-internal-real-time)
+                      (* internal-time-units-per-second seconds))))
+
+(defun time-exceeded-p ()
+  (and *deadline* (> (get-internal-real-time) *deadline*)))
+
+
+(defun evaluate-goals ()
+  (goal-values)
+  (incf *goal-state-count*))
+
+
+(defun run-random-simulation (state)
+  (apply-state state)
+  (if (terminalp)
+    (progn
+      (evaluate-goals)
+      (clear-state))
+    (let ((move (random-elt (legal-moves))))
+      (incf *legal-move-count*)
+      (apply-moves move)
+      (let ((next (next-state)))
+        (incf *update-count*)
+        (clear-moves)
+        (clear-state)
+        (run-random-simulation next)))))
+
+
+(defun run-monte-carlo (limit state)
+  (format t "Searching with Monte-Carlo search for ~D seconds.~%" limit)
+  (calculate-deadline limit)
+  (loop :for simulation-count :from 0
+        :until (time-exceeded-p)
+        :do (progn
+              (when (dividesp simulation-count 1000)
+                (format t "#simulations: ~D~%" simulation-count))
+              (run-random-simulation state))
+        :finally (format t "#simulations: ~D~%" simulation-count)))
+
+
+; def minimax(state, depth):
+;     global nb_legals, nb_updates
+;     if checkTimeout(): return False
+
+;     # check for termination condition
+;     if state.isTerminal():
+;         if checkTimeout(): return False
+;         # compute goal values
+;         evalgoals(state)
+;         return True
+;     if depth <= 0:
+;         return False
+    
+;     isTerminal = True
+
+;     # compute all possible joint moves (combinations of legal moves of all players)
+;     moves = state.getMoves()
+;     nb_legals+=1
+;     if checkTimeout(): return False
+
+;     # for each joint move
+;     for move in moves:
+;         # go to the successor state
+;         successor = state.getSuccessor(move)
+;         nb_updates+=1
+;         # search the successor state (recursively)
+;         isTerminal = minimax(successor, depth-1) and isTerminal # order matters here
+;         if checkTimeout(): return False
+;     return isTerminal
+
+(defun minimax (state depth)
+  ;; I know this is horrible, but I wanted to do as straight a port of the other
+  ;; benchmarks as possible to minimize differences between benchmarks.
+  (block nil
+    (when (time-exceeded-p) (return))
+
+    (apply-state state)
+
+    (when (terminalp)
+      (when (time-exceeded-p) (clear-state) (return))
+      (evaluate-goals)
+      (clear-state)
+      (return t))
+
+    (when (<= depth 0)
+      (clear-state)
+      (return))
+
+    (loop
+      :with terminal = t
+      :with moves = (prog1 (legal-moves)
+                      (incf *legal-move-count*)
+                      (when (time-exceeded-p) (clear-state) (return)))
+      :for move :in moves
+      :for successor = (prog2 (apply-moves move)
+                              (next-state)
+                              (clear-moves)
+                              (incf *update-count*))
+      :do (setf terminal (and (prog2
+                                (clear-state)
+                                (minimax successor (1- depth))
+                                (apply-state state))
+                              terminal))
+      :do (when (time-exceeded-p) (clear-state) (return))
+      :finally (progn
+                 (clear-state)
+                 (return terminal)))))
+
+
+(defun run-dfs (limit state)
+  (format t "Searching with DFS for at most ~D seconds.~%" limit)
+  (loop
+    :with finished = nil
+    :with deadline = (calculate-deadline limit)
+    :for depth :from 0
+    :until (or (> (get-internal-real-time) deadline)
+               finished)
+    :do (setf finished (minimax state depth))))
+
+
+(defun fixed-depth-dfs (limit state)
+  (setf *deadline* nil)
+  (loop
+    :with finished = nil
+    :for depth :from 0 :to limit
+    :until finished
+    :do (setf finished (minimax state depth))))
+
+(defun run-trace (trace algorithm)
+  (setf *update-count* 0
+        *legal-move-count* 0
+        *goal-state-count* 0)
+  (let ((start (get-internal-real-time)))
+    (recursively ((state (initial-state))
+                  (trace trace)
+                  (step 1))
+      (flet
+          ((handle-terminal ()
+             (clear-state)
+             (if trace
+               (progn
+                 (format t "ERROR: Terminal state with trace of ~S remaining.~%"
+                         trace)
+                 (format t "Offending state:~%~{    ~S~%~}~%" state))
+               (evaluate-goals)))
+           (handle-non-terminal ()
+             (when (null trace)
+               (format t "ERROR: Non-terminal state with no trace remaining.~%")
+               (clear-state)
+               (return-from run-trace))
+             (format t "Step ~D~%" step)
+             (apply-moves (first trace))
+             (let ((next (next-state)))
+               (clear-moves)
+               (clear-state)
+               (funcall algorithm state)
+               (incf *update-count*)
+               (format t "MOVE ~D #legals: ~D, #updates: ~D, #goals: ~D~%"
+                       step *legal-move-count* *update-count* *goal-state-count*)
+               (recur next
+                      (rest trace)
+                      (1+ step)))))
+        (apply-state state)
+        (if (terminalp)
+          (handle-terminal)
+          (handle-non-terminal))))
+
+    (format t "FINAL #legals: ~D, #updates: ~D, #goals: ~D, seconds: ~F~%"
+            *legal-move-count* *update-count* *goal-state-count*
+            (/ (- (get-internal-real-time) start)
+               internal-time-units-per-second))))
+
 (defun run (modes limit gdl-file trace-file)
-  (declare (ignore modes limit))
   (build-database (read-gdl gdl-file))
-  (build-traces ())
-  (print (roles))
-  (print (build-traces (read-trace trace-file)))
-  (print (initial-state))
-  (print (terminalp))
-  (apply-state (initial-state))
-  (print (legal-moves))
-  )
+  (dolist (mode modes)
+    (run-trace (build-traces (read-trace trace-file))
+               (ecase mode
+                 (:mc (curry #'run-monte-carlo limit))
+                 (:dfs (curry #'run-dfs limit))
+                 (:fdfs (curry #'fixed-depth-dfs limit))))))
 
 
 ;;;; CLI ----------------------------------------------------------------------
@@ -236,6 +428,7 @@ exec ros -Q -- $0 "$@"
       (usage)
       (die "ERROR: All arguments are required.~%"))
 
+    (in-package :temperance.contrib.gdl-benchmark)
     (destructuring-bind (modes limit gdl-file trace-file) arguments
       (run (parse-modes modes)
            (parse-limit limit)

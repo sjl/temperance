@@ -43,3 +43,22 @@ Run the binary just like you would any of the others in the suite:
 
 [Roswell]: https://github.com/roswell/roswell
 [SBCL]: http://www.sbcl.org/
+
+Performance
+-----------
+
+The benchmark script ensures that Temperance will be compiled with sane
+optimization settings: `(debug 1) (safety 1) (speed 3)`.
+
+If you want to throw caution to the wind and see how fast it can get, you can
+set the `PLEASE_SEGFAULT` environment variable to `YES` **when building**:
+
+    cd ~/.roswell/local-projects/temperance/contrib/gdl-benchmark/
+
+    ros use sbcl
+    PLEASE_SEGFAULT=YES ros build run-temperance.ros
+
+This must be done when *building*.  The variable has no effect when running the
+binary.
+
+In practice this results in a speed increase of around 20%.
