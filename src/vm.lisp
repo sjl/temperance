@@ -57,7 +57,7 @@
 
 
 ;;;; "Ancillary" Functions
-(declaim (inline deref unbind! trail!))
+; (declaim (inline deref unbind! trail! backtrack!))
 
 
 (defun backtrack! (wam)
