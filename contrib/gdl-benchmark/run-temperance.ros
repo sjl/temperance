@@ -1,0 +1,94 @@
+#!/bin/sh
+#|-*- mode:lisp -*-|#
+#|
+exec ros -Q -- $0 "$@"
+|#
+
+;;;; Dependencies -------------------------------------------------------------
+(ql:quickload 'unix-opts :silent t)
+(ql:quickload 'split-sequence :silent t)
+(ql:quickload 'temperance :silent t)
+
+;;;; Benchmarking -------------------------------------------------------------
+(defun run (modes limit gdl-file trace-file)
+  (print modes)
+  (print limit)
+  (print gdl-file)
+  (print trace-file))
+
+
+;;;; CLI ----------------------------------------------------------------------
+(defun program-name ()
+  ;; dammit roswell
+  (let ((ros-opts (uiop:getenv "ROS_OPTS")))
+    (if ros-opts
+      (read-from-string (second (assoc "script"
+                                       (let ((*read-eval*))
+                                         (read-from-string ros-opts))
+                                       :test 'equal)))
+      (first (opts:argv)))))
+
+
+(opts:define-opts
+  (:name :help
+   :description "print this help text"
+   :short #\h
+   :long "help")
+  (:name :verbose
+   :description "verbose output"
+   :short #\v
+   :long "verbose"))
+
+
+(defparameter *required-options*
+  (format nil "Required parameters:
+
+  SEARCH-MODES   A space-separated list of one or more of {dfs, fdfs, mc}.
+
+  LIMIT          A positive integer denoting the playclock limit (for dfs/mc)
+                 or depth limit (for fdfs).
+
+  GDL-FILE       Path to the GDL file to run.  Does NOT need the version with the
+                 extra base propositions.
+
+  TRACE-FILE     Path to the corresponding trace file."))
+
+(defparameter *verbose* nil)
+
+
+(defun usage ()
+  (let ((prog (program-name)))
+    (opts:describe
+      :prefix (format nil "~A - benchmark Temperance for GDL reasoning" prog)
+      :suffix *required-options*
+      :usage-of prog
+      :args "SEARCH-MODES LIMIT GDL-FILE TRACE-FILE")))
+
+(defun die (message &rest args)
+  (apply #'format *error-output* message args)
+  #+sbcl (sb-ext:exit :code 1)
+  #-sbcl (quit))
+
+
+(defun main (&rest argv)
+  (block nil
+    (multiple-value-bind (options arguments)
+        (opts:get-opts argv)
+
+      (setf *verbose* (getf options :verbose))
+      (when (or (getf options :help)
+                (not (= 4 (length arguments))))
+        (usage)
+        (return))
+
+      (destructuring-bind (modes limit gdl-file trace-file) arguments
+        (run (split-sequence:split-sequence #\space modes
+                                            :remove-empty-subseqs t)
+             (handler-case
+                 (parse-integer limit)
+               (parse-error (e)
+                 (declare (ignore e))
+                 (die "ERROR: limit '~A' is not an integer~%" limit)))
+             gdl-file
+             trace-file)))))
+

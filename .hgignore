@@ -5,3 +5,4 @@ scratch.lisp
 STATUS
 bench-results.txt
 profile.out
+contrib/gdl-benchmark/run-temperance
