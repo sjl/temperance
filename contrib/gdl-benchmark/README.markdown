@@ -35,11 +35,11 @@ Build the benchmarking binary with your chosen Lisp:
     cd ~/.roswell/local-projects/temperance/contrib/gdl-benchmark/
 
     ros use sbcl
-    ros build run-temperance.ros
+    ros build run_temperance.ros
 
 Run the binary just like you would any of the others in the suite:
 
-    ~/.roswell/local-projects/temperance/contrib/gdl-benchmark/run-temperance 'dfs mc' 10 .../foo.gdl .../foo.trace
+    ~/.roswell/local-projects/temperance/contrib/gdl-benchmark/run_temperance 'dfs mc' 10 .../foo.gdl .../foo.trace
 
 [Roswell]: https://github.com/roswell/roswell
 [SBCL]: http://www.sbcl.org/
@@ -56,7 +56,7 @@ set the `PLEASE_SEGFAULT` environment variable to `YES` **when building**:
     cd ~/.roswell/local-projects/temperance/contrib/gdl-benchmark/
 
     ros use sbcl
-    PLEASE_SEGFAULT=YES ros build run-temperance.ros
+    PLEASE_SEGFAULT=YES ros build run_temperance.ros
 
 This must be done when *building*.  The variable has no effect when running the
 binary.

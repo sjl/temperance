@@ -148,6 +148,7 @@ exec ros -Q -- $0 "$@"
 
 
 (defun apply-state (state)
+  ; (sleep 0.00002)
   (push-logic-frame-with t
     (loop :for fact :in state
           :do (invoke-fact t `(true ,fact)))))
