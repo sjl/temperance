@@ -2,7 +2,7 @@
 ;;;; See http://quickutil.org for details.
 
 ;;;; To regenerate:
-;;;; (qtlc:save-utils-as "quickutils.lisp" :utilities '(:ALIST-PLIST :ALIST-TO-HASH-TABLE :CURRY :DEFINE-CONSTANT :ENSURE-BOOLEAN :ENSURE-GETHASH :ENSURE-KEYWORD :EQUIVALENCE-CLASSES :MAP-PRODUCT :MAP-TREE :ONCE-ONLY :RCURRY :READ-FILE-INTO-STRING :SET-EQUAL :SWITCH :TREE-MEMBER-P :UNTIL :WEAVE :WHEN-LET :WHILE :WITH-GENSYMS :ZIP) :ensure-package T :package "TEMPERANCE.QUICKUTILS")
+;;;; (qtlc:save-utils-as "quickutils.lisp" :utilities '(:ALIST-PLIST :ALIST-TO-HASH-TABLE :COMPOSE :CURRY :DEFINE-CONSTANT :ENSURE-BOOLEAN :ENSURE-GETHASH :ENSURE-KEYWORD :EQUIVALENCE-CLASSES :MAP-PRODUCT :MAP-TREE :ONCE-ONLY :RCURRY :READ-FILE-INTO-STRING :SET-EQUAL :SWITCH :TREE-MEMBER-P :UNTIL :WEAVE :WHEN-LET :WHILE :WITH-GENSYMS :ZIP) :ensure-package T :package "TEMPERANCE.QUICKUTILS")
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (unless (find-package "TEMPERANCE.QUICKUTILS")
@@ -15,7 +15,7 @@
 (when (boundp '*utilities*)
   (setf *utilities* (union *utilities* '(:SAFE-ENDP :ALIST-PLIST
                                          :ALIST-TO-HASH-TABLE :MAKE-GENSYM-LIST
-                                         :ENSURE-FUNCTION :CURRY
+                                         :ENSURE-FUNCTION :COMPOSE :CURRY
                                          :DEFINE-CONSTANT :ENSURE-BOOLEAN
                                          :ENSURE-GETHASH :ENSURE-KEYWORD
                                          :EQUIVALENCE-CLASSES :MAPPEND
@@ -83,6 +83,35 @@ it must be a function name and its `fdefinition` is returned."
         function-designator
         (fdefinition function-designator)))
   )                                        ; eval-when
+
+  (defun compose (function &rest more-functions)
+    "Returns a function composed of `function` and `more-functions` that applies its ;
+arguments to to each in turn, starting from the rightmost of `more-functions`,
+and then calling the next one with the primary value of the last."
+    (declare (optimize (speed 3) (safety 1) (debug 1)))
+    (reduce (lambda (f g)
+              (let ((f (ensure-function f))
+                    (g (ensure-function g)))
+                (lambda (&rest arguments)
+                  (declare (dynamic-extent arguments))
+                  (funcall f (apply g arguments)))))
+            more-functions
+            :initial-value function))
+
+  (define-compiler-macro compose (function &rest more-functions)
+    (labels ((compose-1 (funs)
+               (if (cdr funs)
+                   `(funcall ,(car funs) ,(compose-1 (cdr funs)))
+                   `(apply ,(car funs) arguments))))
+      (let* ((args (cons function more-functions))
+             (funs (make-gensym-list (length args) "COMPOSE")))
+        `(let ,(loop for f in funs for arg in args
+                     collect `(,f (ensure-function ,arg)))
+           (declare (optimize (speed 3) (safety 1) (debug 1)))
+           (lambda (&rest arguments)
+             (declare (dynamic-extent arguments))
+             ,(compose-1 funs))))))
+  
 
   (defun curry (function &rest arguments)
     "Returns a function that applies `arguments` and the arguments
@@ -538,10 +567,11 @@ tuples. Equivalent to `unzip`."
     (transpose lists))
   
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (export '(alist-plist plist-alist alist-to-hash-table curry define-constant
-            ensure-boolean ensure-gethash ensure-keyword equivalence-classes
-            map-product map-tree once-only rcurry read-file-into-string
-            set-equal switch eswitch cswitch tree-member-p until weave when-let
-            when-let* while with-gensyms with-unique-names zip)))
+  (export '(alist-plist plist-alist alist-to-hash-table compose curry
+            define-constant ensure-boolean ensure-gethash ensure-keyword
+            equivalence-classes map-product map-tree once-only rcurry
+            read-file-into-string set-equal switch eswitch cswitch
+            tree-member-p until weave when-let when-let* while with-gensyms
+            with-unique-names zip)))
 
 ;;;; END OF quickutils.lisp ;;;;

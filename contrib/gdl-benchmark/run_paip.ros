@@ -9,6 +9,7 @@ exec ros -Q -- $0 "$@"
 (ql:quickload :unix-opts :silent t)
 (ql:quickload :split-sequence :silent t)
 (ql:quickload :losh :silent t)
+(ql:quickload :paiprolog :silent t)
 (ql:quickload :temperance :silent t)
 #+sbcl (require :sb-sprof)
 
@@ -18,25 +19,24 @@ exec ros -Q -- $0 "$@"
      ,@body))
 
 
-(defun load-temperance ()
+(defun load-paip ()
   (if (string= "YES" (uiop:getenv "PLEASE_SEGFAULT"))
     (declaim (optimize (debug 0) (safety 0) (speed 3)))
     (declaim (optimize (debug 1) (safety 1) (speed 3))))
   (shut-up
-    (asdf:load-system :temperance :force t))
+    (asdf:load-system :paiprolog :force t))
   (declaim (optimize (debug 3) (safety 1) (speed 1))))
 
-(load-temperance)
+(load-paip)
 
 
 ;;;; Package ------------------------------------------------------------------
 (defpackage #:temperance.contrib.gdl-benchmark
   (:use
     #:cl
-    #:cl-arrows
     #:losh
     #:temperance.quickutils
-    #:temperance))
+    #:paiprolog))
 
 (in-package #:temperance.contrib.gdl-benchmark)
 
@@ -80,6 +80,7 @@ exec ros -Q -- $0 "$@"
 
 
 ;;;; Benchmarking -------------------------------------------------------------
+(defvar *roles* nil)
 (defun read-file (path)
   (with-open-file (file path :direction :input)
     (loop :for form = (read file nil 'eof)
@@ -94,31 +95,37 @@ exec ros -Q -- $0 "$@"
   (mapcar #'rest (read-file path)))
 
 
+(defun paip-assert-dynamic (head body)
+  (paiprolog::add-clause
+    (paiprolog::make-anonymous (list* head body))))
+
 (defun load-gdl-preamble ()
-  (push-logic-frame-with t
-    (rule t (not ?x) (call ?x) ! fail)
-    (fact t (not ?x))
-
-    (rule t (or ?x ?y) (call ?x))
-    (rule t (or ?x ?y) (call ?y))
-
-    (rule t (distinct ?x ?x) ! fail)
-    (fact t (distinct ?x ?y))))
+  (<- (not ?x) (call ?x) ! fail)
+  (<- (not ?x))
+  ; (<- (or ?x ?y) (call ?x))
+  ; (<- (or ?x ?y) (call ?y))
+  (<- (distinct ?x ?x) ! fail)
+  (<- (distinct ?x ?y)))
 
 (defun build-clause (clause)
-  (if (and (consp clause)
-           (eq (first clause) '<=))
-    (destructuring-bind (arrow head . body)
-        clause
-      (declare (ignore arrow))
-      (apply #'invoke-rule t head body))
-    (invoke-fact t clause)))
+  (cond ((and (consp clause)
+              (eq (first clause) '<=))
+         (destructuring-bind (arrow head . body)
+             clause
+           (declare (ignore arrow))
+           (paip-assert-dynamic head body)))
+        ((and (consp clause)
+              (eq (first clause) 'role))
+         ;; the jank is real
+         (push (second clause) *roles*)
+         (paip-assert-dynamic clause nil))
+        (t (paip-assert-dynamic clause nil))))
 
 (defun build-database (gdl)
-  (reset-standard-database)
+  (setf *roles* nil)
   (load-gdl-preamble)
-  (push-logic-frame-with t
-    (mapc #'build-clause gdl)))
+  (mapc #'build-clause gdl)
+  (setf *roles* (reverse *roles*))) ; please kill me
 
 
 (defun normalize-state (state)
@@ -127,43 +134,39 @@ exec ros -Q -- $0 "$@"
 
 (defun initial-state ()
   (normalize-state
-    (query-map t (lambda (r) (getf r '?what))
-               (init ?what))))
+    (prolog-collect (?what) (init ?what))))
 
 (defun terminalp ()
-  (prove t terminal))
+  (prolog terminal (lisp (return-from terminalp t))))
 
 (defun roles ()
-  (query-map t (lambda (r) (getf r '?role))
-             (role ?role)))
+  (prolog-collect (?role) (role ?role)))
 
 (defun goal-values ()
-  (remove-duplicates (query-all t (goal ?role ?goal))
+  (remove-duplicates (prolog-collect (?role ?goal) (goal ?role ?goal))
                      :test 'equal))
 
 
 (defun next-state ()
   (normalize-state
-    (query-map t (lambda (r) (getf r '?what))
-               (next ?what))))
+    (prolog-collect (?what) (next ?what))))
 
 
 (defun apply-state (state)
   ; (sleep 0.00002)
-  (push-logic-frame-with t
-    (loop :for fact :in state
-          :do (invoke-fact t `(true ,fact)))))
+  (loop :for fact :in state
+        :do (paip-assert-dynamic `(true ,fact) nil)))
 
 (defun apply-moves (moves)
-  (push-logic-frame-with t
-    (loop :for (role . action) :in moves
-          :do (invoke-fact t `(does ,role ,action)))))
+  (loop :for (role action) :in moves
+        :do (paip-assert-dynamic `(does ,role ,action) nil)))
+
 
 (defun clear-state ()
-  (pop-logic-frame t))
+  (<-- (true nothing-at-all)))
 
 (defun clear-moves ()
-  (pop-logic-frame t))
+  (<-- (does noone anything-ever)))
 
 
 (defun move= (move1 move2)
@@ -176,10 +179,8 @@ exec ros -Q -- $0 "$@"
 (defun legal-moves ()
   (let* ((individual-moves
            (remove-duplicates
-             (query-map t (lambda (move)
-                            (cons (getf move '?role)
-                                  (getf move '?action)))
-                        (legal ?role ?action))
+             (prolog-collect (?role ?action)
+                             (legal ?role ?action))
              :test #'move=))
          (player-moves
            (equivalence-classes #'move-role= individual-moves))
@@ -190,11 +191,11 @@ exec ros -Q -- $0 "$@"
 
 (defun build-traces (traces)
   (loop
-    :with roles = (roles) ;; ugly to depend on the logic here but whatever idc
+    :with roles = *roles*
     :for trace :in traces
         :collect (loop :for move :in trace
                        :for role :in roles
-                       :collect (cons role move))))
+                       :collect (list role move))))
 
 
 (defvar *update-count* 0)
@@ -212,6 +213,8 @@ exec ros -Q -- $0 "$@"
 
 
 (defun evaluate-goals ()
+  ; (sb-ext:enable-debugger)
+  ; (break)
   (goal-values)
   (incf *goal-state-count*))
 
@@ -300,7 +303,9 @@ exec ros -Q -- $0 "$@"
     :with finished = nil
     :for depth :from 0 :to limit
     :until finished
+    ; :do (format t "depth ~D~%" depth)
     :do (setf finished (minimax state depth))))
+
 
 (defun run-trace (trace algorithm)
   (setf *update-count* 0
@@ -325,6 +330,7 @@ exec ros -Q -- $0 "$@"
                (clear-state)
                (return-from run-trace))
              (format t "Step ~D~%" step)
+             ; (format t "Performing ~S~%" (first trace))
              (apply-moves (first trace))
              (let ((next (next-state)))
                (clear-moves)
@@ -404,7 +410,7 @@ exec ros -Q -- $0 "$@"
 (defun usage ()
   (let ((prog (program-name)))
     (opts:describe
-      :prefix (format nil "~A - Benchmark Temperance for GDL reasoning." prog)
+      :prefix (format nil "~A - Benchmark PAIProlog (interpreted) for GDL reasoning." prog)
       :suffix *required-options*
       :usage-of prog
       :args "SEARCH-MODES LIMIT GDL-FILE TRACE-FILE")))
@@ -417,11 +423,10 @@ exec ros -Q -- $0 "$@"
 
 
 (defun parse-modes (modes)
-  (-<> modes
-    (split-sequence:split-sequence #\space <>
-                                   :remove-empty-subseqs t)
-    (mapcar #'string-upcase <>)
-    (mapcar #'ensure-keyword <>)))
+  (mapcar (compose #'ensure-keyword #'string-upcase)
+          (split-sequence:split-sequence
+            #\space modes
+            :remove-empty-subseqs t)))
 
 (defun parse-limit (limit)
   (handler-case
@@ -432,24 +437,30 @@ exec ros -Q -- $0 "$@"
 
 
 (defun main (&rest argv)
-  (multiple-value-bind (options arguments)
-      (opts:get-opts argv)
+  (handler-bind
+    (#+sbcl (sb-kernel:redefinition-warning #'muffle-warning)
+     #+sbcl (sb-ext:compiler-note #'muffle-warning))
 
-    (setf *verbose* (getf options :verbose)
-          *profile* (getf options :profile))
+    (multiple-value-bind (options arguments)
+        (opts:get-opts argv)
 
-    (when (getf options :help)
-      (usage)
-      (return-from main))
+      (setf *verbose* (getf options :verbose)
+            *profile* (getf options :profile))
 
-    (when (not (= 4 (length arguments)))
-      (usage)
-      (die "ERROR: All arguments are required.~%"))
+      (when (getf options :help)
+        (usage)
+        (return-from main))
 
-    (in-package :temperance.contrib.gdl-benchmark)
-    (destructuring-bind (modes limit gdl-file trace-file) arguments
-      (run (parse-modes modes)
-           (parse-limit limit)
-           gdl-file
-           trace-file))))
+      (when (not (= 4 (length arguments)))
+        (usage)
+        (die "ERROR: All arguments are required.~%"))
 
+      (in-package :temperance.contrib.gdl-benchmark)
+      (destructuring-bind (modes limit gdl-file trace-file) arguments
+        (run (parse-modes modes)
+             (parse-limit limit)
+             gdl-file
+             trace-file)))))
+
+
+;;;; Scratch ------------------------------------------------------------------

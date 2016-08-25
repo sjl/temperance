@@ -6,4 +6,5 @@ STATUS
 bench-results.txt
 profile.out
 contrib/gdl-benchmark/run_temperance
+contrib/gdl-benchmark/run_paip
 contrib/gdl-benchmark/gdl.prof

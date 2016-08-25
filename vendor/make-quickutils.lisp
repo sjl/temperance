@@ -6,6 +6,7 @@
 
                :alist-plist
                :alist-to-hash-table
+               :compose
                :curry
                :define-constant
                :ensure-boolean

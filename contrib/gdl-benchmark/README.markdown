@@ -62,3 +62,16 @@ This must be done when *building*.  The variable has no effect when running the
 binary.
 
 In practice this results in a speed increase of around 20%.
+
+PAIProlog
+---------
+
+A separate benchmark script that uses PAIProlog instead of Temperance is
+included.
+
+    cd ~/.roswell/local-projects/temperance/contrib/gdl-benchmark/
+
+    ros use sbcl
+    ros build paip.ros
+    ~/.roswell/local-projects/temperance/contrib/gdl-benchmark/run_paip 'dfs mc' 10 .../foo.gdl .../foo.trace
+
