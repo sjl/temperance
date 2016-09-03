@@ -2,6 +2,7 @@
 
 ;;;; Config
 (defvar *step* nil)
+(defvar *trace* nil)
 
 
 ;;;; Utilities
@@ -462,12 +463,21 @@
 (declaim (inline %%procedure-call %%dynamic-procedure-call))
 
 
+(defun dump-trace (wam functor arity)
+  (format t "; => (~A/~D ~{~S~^ ~})~%" functor arity
+          (extract-things wam (loop :for i :from 0 :below arity :collect i)))
+  (finish-output))
+
 (defun %%procedure-call (wam functor arity program-counter-increment is-tail)
   (let* ((target (wam-code-label wam functor arity)))
     (if (not target)
       ;; Trying to call an unknown procedure.
       (backtrack! wam)
       (progn
+        (policy-cond:policy-if (or (> debug 0) (< speed 3))
+          (when (member functor *trace*)
+            (dump-trace wam functor arity))
+          nil)
         (when (not is-tail)
           (setf (wam-continuation-pointer wam) ; CP <- next instruction
                 (+ (wam-program-counter wam) program-counter-increment)))

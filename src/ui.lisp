@@ -240,3 +240,12 @@
     (format t "~%;;;; QUERY CODE =========================~%")
     (dump-wam-query-code *standard-database*)))
 
+(defmacro trace-predicate (functor)
+  `(pushnew ',functor *trace*))
+
+(defmacro untrace-predicate (functor)
+  `(setf *trace* (remove ',functor *trace*)))
+
+(defun untrace-all ()
+  (setf *trace* nil))
+
