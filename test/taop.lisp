@@ -290,3 +290,109 @@
       ((connected f g) empty)
       ((connected e f) fail)
       ((connected g f) fail))))
+
+
+(define-test relational-databases
+  (with-fresh-database
+    (%not)
+    (push-logic-frame-with t
+      (facts t
+        (r a b 1)
+        (r a a 2)
+        (r b b 0)
+
+        (s a b 1)
+        (s a a 0)
+        (s b b 2))
+
+      ;; union
+      (rule t (r-union-s ?x1 ?x2 ?x3) (r ?x1 ?x2 ?x3))
+      (rule t (r-union-s ?x1 ?x2 ?x3) (s ?x1 ?x2 ?x3))
+
+      ;; difference
+      (rule t (r-diff-s ?x1 ?x2 ?x3)
+        (r ?x1 ?x2 ?x3)
+        (not (s ?x1 ?x2 ?x3)))
+
+      (rule t (r-diff-s ?x1 ?x2 ?x3)
+        (s ?x1 ?x2 ?x3)
+        (not (r ?x1 ?x2 ?x3)))
+
+      ;; cartesian product
+      (rule t (r-cart-s ?x1 ?x2 ?x3 ?x4 ?x5 ?x6)
+        (r ?x1 ?x2 ?x3)
+        (s ?x4 ?x5 ?x6))
+
+      ;; projection
+      (rule t (r-proj-13 ?x1 ?x3)
+        (r ?x1 ? ?x3))
+
+      ;; selection
+      (facts t
+        (odd 1)
+        (even 0)
+        (even 2))
+
+      (rule t (r-sel-odd ?x1 ?x2 ?x3)
+        (r ?x1 ?x2 ?x3)
+        (odd ?x3))
+
+      (rule t (s-sel-even ?x1 ?x2 ?x3)
+        (s ?x1 ?x2 ?x3)
+        (even ?x3))
+
+      ;; intersection
+      (rule t (r-intersect-s ?x1 ?x2 ?x3)
+        (r ?x1 ?x2 ?x3)
+        (s ?x1 ?x2 ?x3))
+
+      ;; natural join
+      (rule t (r-join-s ?r1 ?r2 ?s1 ?s2 ?n)
+        (r ?r1 ?r2 ?n)
+        (s ?s1 ?s2 ?n)))
+
+    (should-return
+      ((r-union-s ?x ?y ?z)
+       (?x a ?y b ?z 1)
+       (?x a ?y a ?z 2)
+       (?x b ?y b ?z 0)
+       (?x a ?y a ?z 0)
+       (?x b ?y b ?z 2))
+
+      ((r-diff-s ?x ?y ?z)
+       (?x a ?y a ?z 2)
+       (?x b ?y b ?z 0)
+       (?x a ?y a ?z 0)
+       (?x b ?y b ?z 2))
+
+      ((r-cart-s ?p ?q ?r ?x ?y ?z)
+       (?p a ?q b ?r 1 ?x a ?y b ?z 1)
+       (?p a ?q b ?r 1 ?x a ?y a ?z 0)
+       (?p a ?q b ?r 1 ?x b ?y b ?z 2)
+
+       (?p a ?q a ?r 2 ?x a ?y b ?z 1)
+       (?p a ?q a ?r 2 ?x a ?y a ?z 0)
+       (?p a ?q a ?r 2 ?x b ?y b ?z 2)
+
+       (?p b ?q b ?r 0 ?x a ?y b ?z 1)
+       (?p b ?q b ?r 0 ?x a ?y a ?z 0)
+       (?p b ?q b ?r 0 ?x b ?y b ?z 2))
+
+      ((r-proj-13 ?x ?y)
+       (?x a ?y 1)
+       (?x a ?y 2)
+       (?x b ?y 0))
+
+      ((r-sel-odd ?x ?y ?z)
+       (?x a ?y b ?z 1))
+      ((s-sel-even ?x ?y ?z)
+       (?x a ?y a ?z 0)
+       (?x b ?y b ?z 2))
+
+      ((r-intersect-s ?x ?y ?z)
+       (?x a ?y b ?z 1))
+
+      ((r-join-s ?r1 ?r2 ?s1 ?s2 ?n)
+       (?r1 b ?r2 b ?s1 a ?s2 a ?n 0)
+       (?r1 a ?r2 b ?s1 a ?s2 b ?n 1)
+       (?r1 a ?r2 a ?s1 b ?s2 b ?n 2)))))
