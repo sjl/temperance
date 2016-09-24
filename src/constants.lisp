@@ -8,10 +8,9 @@
      (define-constant ,count-symbol ,(length symbols))))
 
 
-(define-constant +code-word-size+ 60
-  :documentation "Size (in bits) of each word in the code store.")
-
-(define-constant +code-limit+ (expt 2 +code-word-size+)
+(define-constant +code-limit+ most-positive-fixnum
+  ;; We want this to be a fixnum, because we're going to store "pointers" into
+  ;; the code store and we want them to be unboxed when possible.
   :documentation "Maximum size of the WAM code store.")
 
 (define-constant +code-sentinel+ (1- +code-limit+)

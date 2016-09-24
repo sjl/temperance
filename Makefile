@@ -5,7 +5,7 @@ docfiles = $(shell ls docs/*.markdown)
 apidoc = docs/03-reference.markdown
 
 # Testing ---------------------------------------------------------------------
-test: test-sbcl test-ccl test-ecl
+test: test-sbcl test-ccl test-ecl test-abcl
 
 test-sbcl:
 	echo; figlet -kf computer 'SBCL' | sed -Ee 's/ +$$//' | tr -s '\n' | lolcat --freq=0.25; echo
@@ -18,6 +18,10 @@ test-ccl:
 test-ecl:
 	echo; figlet -kf roman 'ECL' | sed -Ee 's/ +$$//' | tr -s '\n' | lolcat --freq=0.25; echo
 	ros run -L ecl --load test/run.lisp
+
+test-abcl:
+	echo; figlet -kf broadway 'ABCL' | sed -Ee 's/ +$$//' | tr -s '\n' | lolcat --freq=0.25; echo
+	abcl --load test/run.lisp
 
 
 # Quickutils ------------------------------------------------------------------
