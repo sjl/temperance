@@ -140,6 +140,13 @@
               nil))
     (nreverse results)))
 
+(define-invocation (invoke-query-for invoke-query-for-aot) (variable)
+  (let ((results nil))
+    (invoke (lambda (result)
+              (push (getf result variable) results)
+              nil))
+    (nreverse results)))
+
 (define-invocation (invoke-query-do invoke-query-do-aot) (function)
   (invoke (lambda (result)
             (funcall function result)
@@ -177,6 +184,9 @@
 
 (defmacro query-map (database function &rest terms)
   `(invoke-query-map ,database ,function ,@(quote-terms terms)))
+
+(defmacro query-for (database variable &rest terms)
+  `(invoke-query-for ,database ',variable ,@(quote-terms terms)))
 
 (defmacro query-do (database function &rest terms)
   `(invoke-query-do ,database ,function ,@(quote-terms terms)))
@@ -218,6 +228,8 @@
 (define-invocation-compiler-macro invoke-query-all invoke-query-all-aot (database))
 
 (define-invocation-compiler-macro invoke-query-map invoke-query-map-aot (database function))
+
+(define-invocation-compiler-macro invoke-query-for invoke-query-for-aot (database variable))
 
 (define-invocation-compiler-macro invoke-query-do invoke-query-do-aot (database function))
 

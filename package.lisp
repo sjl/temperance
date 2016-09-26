@@ -82,6 +82,7 @@
     #:invoke-query
     #:invoke-query-all
     #:invoke-query-map
+    #:invoke-query-for
     #:invoke-query-do
     #:invoke-query-find
     #:invoke-prove
@@ -89,6 +90,7 @@
     #:query
     #:query-all
     #:query-map
+    #:query-for
     #:query-do
     #:query-find
     #:prove
