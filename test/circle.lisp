@@ -1,4 +1,4 @@
-(in-package #:temperance-test.circle)
+(in-package :temperance-test.circle)
 
 (defmacro is-circle-contents (circle values)
   `(is (equal ,values

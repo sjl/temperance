@@ -1,4 +1,4 @@
-(asdf:defsystem #:temperance
+(asdf:defsystem :temperance
   :name "temperance"
   :description "A logic programming library for Common Lisp."
 
@@ -8,10 +8,10 @@
   :license "MIT/X11"
   :version "0.0.1"
 
-  :depends-on (#:cl-arrows
-               #:policy-cond)
+  :depends-on (:cl-arrows
+               :policy-cond)
 
-  :in-order-to ((asdf:test-op (asdf:test-op #:temperance-test)))
+  :in-order-to ((asdf:test-op (asdf:test-op :temperance-test)))
 
   :serial t
   :components ((:module "vendor"
@@ -43,15 +43,15 @@
                  (:file "ui")
                  (:file "temperance")))))
 
-(asdf:defsystem #:temperance-test
+(asdf:defsystem :temperance-test
   :name "temperance-test"
   :description "Test suite for Temperance."
 
   :author "Steve Losh <steve@stevelosh.com>"
   :license "MIT/X11"
 
-  :depends-on (#:temperance
-               #:1am)
+  :depends-on (:temperance
+               :1am)
 
   :perform (asdf:test-op
              (op system)

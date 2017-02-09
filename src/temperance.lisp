@@ -1,4 +1,4 @@
-(in-package #:temperance)
+(in-package :temperance)
 
 (defun hello ()
   1)

@@ -1,4 +1,4 @@
-(in-package #:temperance-test.wam)
+(in-package :temperance-test.wam)
 
 ;;;; Setup
 (defun make-test-database ()

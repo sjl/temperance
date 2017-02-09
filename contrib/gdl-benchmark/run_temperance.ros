@@ -30,15 +30,15 @@ exec ros -Q -- $0 "$@"
 
 
 ;;;; Package ------------------------------------------------------------------
-(defpackage #:temperance.contrib.gdl-benchmark
+(defpackage :temperance.contrib.gdl-benchmark
   (:use
-    #:cl
-    #:cl-arrows
-    #:losh
-    #:temperance.quickutils
-    #:temperance))
+    :cl
+    :cl-arrows
+    :losh
+    :temperance.quickutils
+    :temperance))
 
-(in-package #:temperance.contrib.gdl-benchmark)
+(in-package :temperance.contrib.gdl-benchmark)
 
 
 ;;;; Config -------------------------------------------------------------------

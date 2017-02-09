@@ -1,4 +1,4 @@
-(in-package #:temperance)
+(in-package :temperance)
 
 ; (deftype cell-type () ; todo: pick one of these...
 ;   `(integer 0 ,(1- +number-of-cell-types+)))

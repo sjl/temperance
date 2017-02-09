@@ -1,4 +1,4 @@
-(in-package #:temperance)
+(in-package :temperance)
 
 (defmacro define-constants (count-symbol &rest symbols)
   `(progn
