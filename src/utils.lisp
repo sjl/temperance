@@ -1,4 +1,4 @@
-(in-package #:temperance.utils)
+(in-package :temperance.utils)
 
 (defmacro push-if-new (thing place
                        &environment env
@@ -54,7 +54,7 @@
                 ,@body))
       (recur ,@(mapcar #'extract-val bindings)))))
 
-(defmacro aref-or-init (array index default-form)
+(defmacro ensure-aref (array index default-form)
   "Get `index` in `array`, initializing if necessary.
 
   If `index` is non-nil in `array`: return its value without evaluating
@@ -64,11 +64,9 @@
   returning it.
 
   "
-  ;; TODO: think up a less shitty name for this
   (once-only (index array)
     `(or (aref ,array ,index)
-      (setf (aref ,array ,index) ,default-form))))
-
+       (setf (aref ,array ,index) ,default-form))))
 
 (defun megabytes (n)
   "Return the number of 64-bit words in `n` megabytes."

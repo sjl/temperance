@@ -634,8 +634,8 @@
       (values (gethash functor atable)))))
 
 (defun (setf wam-code-label) (new-value wam functor arity)
-  (setf (gethash functor (aref-or-init (wam-code-labels wam) arity
-                                       (make-hash-table :test 'eq)))
+  (setf (gethash functor (ensure-aref (wam-code-labels wam) arity
+                                      (make-hash-table :test 'eq)))
         new-value))
 
 (defun wam-code-label-remove! (wam functor arity)

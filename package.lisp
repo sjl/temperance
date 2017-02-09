@@ -9,7 +9,7 @@
     #:recur
     #:megabytes
     #:ecase/tree
-    #:aref-or-init
+    #:ensure-aref
     #:define-lookup
     #:queue
     #:make-queue
@@ -64,6 +64,7 @@
     #:make-database
     #:reset-standard-database
 
+    #:with-database
     #:with-fresh-database
 
     #:invoke-rule
