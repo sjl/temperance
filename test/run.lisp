@@ -8,7 +8,7 @@
   (ql:quickload 'temperance)
   ;; Recompile to ensure we get the right optimize declarations...
   (asdf:load-system 'temperance :force t)
-  (ql:quickload 'temperance-test))
+  (ql:quickload 'temperance.test))
 
 (time (prog1
           (asdf:test-system 'temperance)

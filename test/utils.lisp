@@ -1,4 +1,4 @@
-(in-package :temperance-test.utils)
+(in-package :temperance.test.utils)
 
 
 ;;;; Utils

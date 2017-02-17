@@ -1,4 +1,4 @@
-(in-package :temperance-test.99)
+(in-package :temperance.test.99)
 
 ;;;; 99 Prolog Problems
 ;;; http://www.ic.unicamp.br/~meidanis/courses/mc336/2009s2/prolog/problemas/

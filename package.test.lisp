@@ -1,7 +1,7 @@
-(defpackage :temperance-test
+(defpackage :temperance.test
   (:use :cl :1am))
 
-(defpackage :temperance-test.utils
+(defpackage :temperance.test.utils
   (:use
     :cl
     :1am
@@ -20,11 +20,11 @@
     :%append
     :%member))
 
-(defpackage :temperance-test.wam
+(defpackage :temperance.test.wam
   (:use
     :cl
     :1am
-    :temperance-test.utils
+    :temperance.test.utils
     :temperance.quickutils
     :temperance)
   (:import-from :temperance
@@ -42,11 +42,11 @@
     :query
     :query-all))
 
-(defpackage :temperance-test.99
+(defpackage :temperance.test.99
   (:use
     :cl
     :1am
-    :temperance-test.utils
+    :temperance.test.utils
     :temperance.quickutils
     :temperance)
   (:import-from :temperance
@@ -62,11 +62,11 @@
     :query
     :query-all))
 
-(defpackage :temperance-test.taop
+(defpackage :temperance.test.taop
   (:use
     :cl
     :1am
-    :temperance-test.utils
+    :temperance.test.utils
     :temperance.quickutils
     :temperance)
   (:import-from :temperance
@@ -82,9 +82,9 @@
     :query
     :query-all))
 
-(defpackage :temperance-test.circle
+(defpackage :temperance.test.circle
   (:use
     :cl
     :1am
-    :temperance-test.utils
+    :temperance.test.utils
     :temperance.circle))
