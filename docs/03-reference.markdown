@@ -123,6 +123,12 @@ don't touch it.
       &BODY
       BODY)
 
+### `WITH-DATABASE` (macro)
+
+    (WITH-DATABASE DATABASE
+      &BODY
+      BODY)
+
 ### `WITH-FRESH-DATABASE` (macro)
 
     (WITH-FRESH-DATABASE

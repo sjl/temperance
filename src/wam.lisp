@@ -107,8 +107,8 @@
 
 (defmethod print-object ((wam wam) stream)
   (print-unreadable-object
-      (wam stream :type t :identity t)
-    (format stream "an wam")))
+      (wam stream :identity t)
+    (format stream "Temperance Database")))
 
 
 (defun make-wam (&key
