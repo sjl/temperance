@@ -62,6 +62,8 @@
     :temperance.utils)
   (:export
     :make-database
+
+    :*standard-database*
     :reset-standard-database
 
     :with-database
@@ -99,4 +101,5 @@
     :call
     :?
     :!))
+
 

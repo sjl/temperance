@@ -1,8 +1,9 @@
 (in-package :temperance)
 
 
-;;;; Database
-(defvar *standard-database* (make-wam))
+;;;; Database -----------------------------------------------------------------
+(defvar *standard-database* (make-wam)
+  "The standard database used when `t` is supplied as a database designator.")
 
 (defun ensure-database (database-designator)
   (etypecase database-designator
@@ -11,21 +12,25 @@
 
 
 (defun make-database ()
+  "Create and return a fresh database."
   (make-wam))
 
 (defun reset-standard-database ()
+  "Reset `*standard-database*` to a new, fresh database."
   (setf *standard-database* (make-database)))
 
 
 (defmacro with-database (database &body body)
+  "Execute `body` with `*standard-database*` bound to `database`."
   `(let ((*standard-database* ,database))
      ,@body))
 
 (defmacro with-fresh-database (&body body)
+  "Execute `body` with `*standard-database*` bound to a new, fresh database."
   `(with-database (make-database) ,@body))
 
 
-;;;; Normalization
+;;;; Normalization ------------------------------------------------------------
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defun normalize-term (term)
     ;; Normally a rule consists of a head terms and many body terms, like so:
@@ -43,47 +48,160 @@
       term)))
 
 
-;;;; Assertion
+;;;; Assertion ----------------------------------------------------------------
 (defun invoke-rule (database head &rest body)
+  "Add a logical rule to `database` with the given `head` and `body`.
+
+  The `rule` macro is a nicer interface, but this function can be useful if you
+  need to build rules dynamically at runtime.
+
+  Example:
+
+    ; Sally like anyone who likes cats
+    (invoke-rule t '(likes sally ?who)
+      '(likes ?who cats))
+
+  "
   (wam-logic-frame-add-clause! (ensure-database database)
                                (list* (normalize-term head)
                                       (mapcar #'normalize-term body)))
   nil)
 
 (defun invoke-fact (database fact)
+  "Add a logical fact to `database`.
+
+  The `fact` macro is a nicer interface, but this function can be useful if you
+  need to build rules dynamically at runtime.
+
+  Examples:
+
+    (invoke-fact t '(successor 0 1))
+
+    (defun add-cat-lover (name)
+      (invoke-fact t `(likes ,name cats)))
+
+  "
   (invoke-rule database fact)
   nil)
 
 (defun invoke-facts (database &rest facts)
+  "Add zero or more logical facts to `database`.
+
+  The `facts` macro is a nicer interface, but this function can be useful if you
+  need to build rules dynamically at runtime.
+
+  Examples:
+
+    (invoke-facts t
+                  '(successor 0 1)
+                  '(successor 1 2)
+                  '(successor 2 3))
+
+  "
   (loop :for fact :in facts
         :do (invoke-fact database fact))
   nil)
 
 
 (defmacro rule (database head &body body)
+  "Add a logical rule to `database` with the given `head` and `body`.
+
+  `head` and `body` will be wrapped in `(quote ...)`.  If you need to
+  dynamically construct rules at runtime, see `invoke-rule`.
+
+  Example:
+
+    ; Sally like anyone who likes cats
+    (rule t (likes sally ?who)
+      (likes ?who cats))
+
+  "
+
   `(invoke-rule ,database
                 ',head ,@(loop :for term :in body :collect `',term)))
 
 (defmacro fact (database fact)
+  "Add a logical fact to `database`.
+
+  `fact` will be wrapped in `(quote ...)`.  If you need to dynamically construct
+  facts at runtime, see `invoke-fact`.
+
+  Examples:
+
+    (fact t (likes kim cats))
+    (fact t (likes sjl cats))
+
+  "
   `(invoke-fact ,database ',fact))
 
 (defmacro facts (database &body facts)
+  "Add zero or more logical facts to `database`.
+
+  Each fact in `facts` will be wrapped in `(quote ...)`.  If you need to
+  dynamically construct facts at runtime, see `invoke-facts`.
+
+  Examples:
+
+    (facts t
+      (successor 0 1)
+      (successor 1 2)
+      (successor 2 3))
+
+  "
   (once-only (database)
     `(progn
       ,@(loop :for f :in facts :collect `(fact ,database ,f)))))
 
 
-;;;; Logic Frames
+;;;; Logic Frames -------------------------------------------------------------
 (defun push-logic-frame (database)
+  "Push a new, open logic frame onto `database`.
+
+  An error will be signaled if there is already an unfinalized logic frame on
+  the top of the stack.
+
+  "
   (wam-push-logic-frame! (ensure-database database)))
 
 (defun pop-logic-frame (database)
+  "Pop off the top logic frame of `database`'s logic stack.
+
+  An error will be signaled if the logic stack is empty or the top frame is
+  unfinalized.
+
+  "
   (wam-pop-logic-frame! (ensure-database database)))
 
 (defun finalize-logic-frame (database)
+  "Finalize the top logic frame of `database`'s logic stack.
+
+  An error will be signaled if the logic stack is empty or the top frame is
+  already finalized.
+
+  "
   (wam-finalize-logic-frame! (ensure-database database)))
 
 (defmacro push-logic-frame-with (database &body body)
+  "Push a new logic frame onto `database`, run `body`, and finalize it.
+
+  This is a convenience macro for the common process of pushing a logic frame,
+  adding some stuff to it, and finalizing it right away.
+
+  Example:
+
+    (push-logic-frame-with t
+      (rule t (likes sally ?who)
+        (likes ?who cats))
+      (facts t
+        (likes kim cats)
+        (likes sjl cats)
+        (likes bob dogs)))
+
+    (query-all t (likes sally ?who))
+    ; =>
+    ((?who kim) (?who sjl))
+
+  "
   (once-only (database)
     `(prog2
       (push-logic-frame ,database)
@@ -91,7 +209,7 @@
       (finalize-logic-frame ,database))))
 
 
-;;;; Querying
+;;;; Querying -----------------------------------------------------------------
 (defun perform-aot-query (database code size vars result-function)
   (run-aot-compiled-query (ensure-database database) code size vars
                           :result-function result-function))
@@ -198,7 +316,7 @@
   `(invoke-prove ,database ,@(quote-terms terms)))
 
 
-;;;; Chili Dogs
+;;;; Chili Dogs ---------------------------------------------------------------
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defun make-aot-data-form (terms)
     (with-gensyms (code size vars)
@@ -238,7 +356,7 @@
 (define-invocation-compiler-macro invoke-prove invoke-prove-aot (database))
 
 
-;;;; Debugging
+;;;; Debugging ----------------------------------------------------------------
 (defun dump (&optional full-code)
   (dump-wam-full *standard-database*)
   (when full-code
