@@ -2,7 +2,7 @@
   :description "Test suite for Temperance."
 
   :author "Steve Losh <steve@stevelosh.com>"
-  :license "MIT/X11"
+  :license "MIT"
 
   :depends-on (:temperance
                :1am)

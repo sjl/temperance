@@ -22,7 +22,7 @@ for.
 [wam]: https://en.wikipedia.org/wiki/Warren_Abstract_Machine
 [ggp]: https://en.wikipedia.org/wiki/General_game_playing
 
-* **License:** MIT/X11
+* **License:** MIT
 * **Documentation:** <http://sjl.bitbucket.org/temperance/>
 * **Mercurial:** <http://bitbucket.org/sjl/temperance/>
 * **Git:** <http://github.com/sjl/temperance/>
