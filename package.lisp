@@ -1,9 +1,10 @@
 (defpackage :temperance.utils
   (:use
     :cl
-    :cl-arrows
     :temperance.quickutils)
   (:export
+    :-<>
+    :<>
     :push-if-new
     :recursively
     :recur
@@ -56,7 +57,6 @@
 (defpackage :temperance
   (:use
     :cl
-    :cl-arrows
     :temperance.circle
     :temperance.quickutils
     :temperance.utils)

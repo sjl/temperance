@@ -324,9 +324,9 @@
         (let* ((,code (allocate-query-holder)))
           (multiple-value-bind (,vars ,size)
               (compile-query-into
-                ,code ',(->> terms
-                          (mapcar #'eval)
-                          (mapcar #'normalize-term)))
+                ,code ',(-<> terms
+                          (mapcar #'eval <>)
+                          (mapcar #'normalize-term <>)))
             (list ,code ,size ,vars)))
         t))))
 

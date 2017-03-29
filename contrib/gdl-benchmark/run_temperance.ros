@@ -33,9 +33,9 @@ exec ros -Q -- $0 "$@"
 (defpackage :temperance.contrib.gdl-benchmark
   (:use
     :cl
-    :cl-arrows
     :losh
     :temperance.quickutils
+    :temperance.utils
     :temperance))
 
 (in-package :temperance.contrib.gdl-benchmark)

@@ -129,7 +129,7 @@
   "Tokenize `term` as a program term, returning its tokens."
   (let ((tree (parse-top-level term)))
     (allocate-registers tree clause-props :nead t)
-    (-> tree flatten-program tokenize-assignments)))
+    (-<> tree flatten-program tokenize-assignments)))
 
 (defun tokenize-query-term (term clause-props &key in-nead is-tail)
   "Tokenize `term` as a query term, returning its tokens."

@@ -7,8 +7,7 @@
   :license "MIT"
   :version "1.0.0"
 
-  :depends-on (:cl-arrows
-               :policy-cond)
+  :depends-on (:policy-cond)
 
   :in-order-to ((asdf:test-op (asdf:test-op :temperance.test)))
 

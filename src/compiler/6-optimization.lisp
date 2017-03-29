@@ -103,9 +103,9 @@
 
 
 (defun optimize-instructions (instructions)
-  (->> instructions
-    (optimize-constants)
-    (optimize-void-runs)))
+  (-<> instructions
+    optimize-constants
+    optimize-void-runs))
 
 
 
