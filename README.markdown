@@ -8,7 +8,7 @@
 Temperance is a logic programming library for Common Lisp.
 
 **Temperance is still in development, don't actually try to use this for
-anything important yet.  It should be stable by the end of 2016.**
+anything important yet.**
 
 ![I don't know what that means](https://i.imgur.com/EWPGAHa.gif)
 
@@ -29,7 +29,7 @@ for.
 [ggp]: https://en.wikipedia.org/wiki/General_game_playing
 
 * **License:** MIT
-* **Documentation:** <http://sjl.bitbucket.org/temperance/>
+* **Documentation:** <https://sjl.bitbucket.io/temperance/>
 * **Mercurial:** <http://bitbucket.org/sjl/temperance/>
 * **Git:** <http://github.com/sjl/temperance/>
 * **Issues:** <http://github.com/sjl/temperance/issues/>
