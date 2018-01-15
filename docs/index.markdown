@@ -1,7 +1,7 @@
 Temperance is a logic programming library for Common Lisp.
 
 **Temperance is still in development, don't actually try to use this for
-anything important yet.  It should be stable by the end of 2016.**
+anything important yet.**
 
 <img src="https://i.imgur.com/EWPGAHa.gif"
      style="border: 1px solid #222; margin: 15px 0px 10px; width: 100%;"/>

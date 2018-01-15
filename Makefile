@@ -33,7 +33,7 @@ vendor/quickutils.lisp: vendor/make-quickutils.lisp
 
 # Documentation ---------------------------------------------------------------
 $(apidoc): $(sourcefiles) docs/api.lisp
-	sbcl-rlwrap --noinform --load docs/api.lisp  --eval '(quit)'
+	sbcl --noinform --load docs/api.lisp  --eval '(quit)'
 
 docs: docs/build/index.html
 
