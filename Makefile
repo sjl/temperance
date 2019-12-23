@@ -41,7 +41,7 @@ docs/build/index.html: $(docfiles) $(apidoc)
 	cd docs && ~/.virtualenvs/d/bin/d
 
 pubdocs: docs/build/index.html
-	hg -R ~/src/sjl.bitbucket.org pull -u
-	rsync --delete -a ./docs/build/ ~/src/sjl.bitbucket.org/temperance
-	hg -R ~/src/sjl.bitbucket.org commit -Am 'temperance: Update site.'
-	hg -R ~/src/sjl.bitbucket.org push
+	hg -R ~/src/docs.stevelosh.com pull -u
+	rsync --delete -a ./docs/build/ ~/src/docs.stevelosh.com/temperance
+	hg -R ~/src/docs.stevelosh.com commit -Am 'temperance: Update site.'
+	hg -R ~/src/docs.stevelosh.com push

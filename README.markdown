@@ -29,7 +29,6 @@ for.
 [ggp]: https://en.wikipedia.org/wiki/General_game_playing
 
 * **License:** MIT
-* **Documentation:** <https://sjl.bitbucket.io/temperance/>
-* **Mercurial:** <http://bitbucket.org/sjl/temperance/>
-* **Git:** <http://github.com/sjl/temperance/>
-* **Issues:** <http://github.com/sjl/temperance/issues/>
+* **Documentation:** <https://docs.stevelosh.com/temperance/>
+* **Mercurial:** <https://hg.sr.ht/~sjl/temperance/>
+* **Git:** <https://github.com/sjl/temperance/>

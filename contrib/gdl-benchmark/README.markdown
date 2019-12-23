@@ -23,12 +23,12 @@ clone them elsewhere and symlink them if you prefer:
     cd ~/.roswell/local-projects/
 
     # Mercurial
-    hg clone http://bitbucket.org/sjl/temperance
-    hg clone http://bitbucket.org/sjl/cl-losh
+    hg clone https://hg.sr.ht/~sjl/temperance
+    hg clone https://hg.sr.ht/~sjl/cl-losh
 
     # Git
-    git clone http://github.com/sjl/temperance
-    git clone http://github.com/sjl/cl-losh
+    git clone https://github.com/sjl/temperance
+    git clone https://github.com/sjl/cl-losh
 
 Build the benchmarking binary with your chosen Lisp:
 
