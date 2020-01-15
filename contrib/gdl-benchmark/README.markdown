@@ -23,8 +23,8 @@ clone them elsewhere and symlink them if you prefer:
     cd ~/.roswell/local-projects/
 
     # Mercurial
-    hg clone https://hg.sr.ht/~sjl/temperance
-    hg clone https://hg.sr.ht/~sjl/cl-losh
+    hg clone https://hg.stevelosh.com/temperance
+    hg clone https://hg.stevelosh.com/cl-losh
 
     # Git
     git clone https://github.com/sjl/temperance

@@ -24,5 +24,5 @@ for.
 
 * **License:** MIT
 * **Documentation:** <http://docs.stevelosh.com/temperance/>
-* **Mercurial:** <https://hg.sr.ht/~sjl/temperance/>
+* **Mercurial:** <https://hg.stevelosh.com/temperance/>
 * **Git:** <https://github.com/sjl/temperance/>
