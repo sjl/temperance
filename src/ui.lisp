@@ -203,10 +203,10 @@
 
   "
   (once-only (database)
-    `(prog2
-      (push-logic-frame ,database)
-      (progn ,@body)
-      (finalize-logic-frame ,database))))
+    `(unwind-protect (progn
+                       (push-logic-frame ,database)
+                       ,@body)
+       (finalize-logic-frame ,database))))
 
 
 ;;;; Querying -----------------------------------------------------------------
